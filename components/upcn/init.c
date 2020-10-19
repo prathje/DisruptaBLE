@@ -44,11 +44,10 @@ void start_tasks(const struct upcn_cmdline_options *const opt)
 	LOGF("INIT: Configured to use EID \"%s\" and BPv%d",
 	     opt->eid, opt->bundle_version);
 
-	if (opt->mbs) {
+	if (opt->mbs && opt->mbs < ROUTER_GLOBAL_MBS) {
 		struct router_config rc = router_get_config();
 
-		if (opt->mbs <= SIZE_MAX)
-			rc.global_mbs = (size_t)opt->mbs;
+		rc.global_mbs = (size_t)opt->mbs;
 		router_update_config(rc);
 	}
 

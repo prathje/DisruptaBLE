@@ -16,8 +16,6 @@
 #define QUOTE(s) #s
 #define STR(s) QUOTE(s)
 
-static struct upcn_cmdline_options global_cmd_opts;
-
 /**
  * Helper function for parsing a 64-bit unsigned integer from a given C-string.
  */
@@ -34,31 +32,21 @@ static void print_help_text(void);
 
 const struct upcn_cmdline_options *parse_cmdline(int argc, char *argv[])
 {
-	// For now, we use a global variable. (Because why not?)
-	// Though, this may be refactored easily.
-	struct upcn_cmdline_options *result = &global_cmd_opts;
 	int opt;
+	int option_index = 0;
+	struct upcn_cmdline_options *const result =
+		(struct upcn_cmdline_options *)malloc(sizeof(struct upcn_cmdline_options));
 
-	// If we override sth., first deallocate
-	if (result->eid)
-		free(result->eid);
-	if (result->cla_options)
-		free(result->cla_options);
-
-	// Set default values
-	result->aap_socket = NULL;
-	result->aap_node = NULL;
-	result->aap_service = NULL;
 	result->bundle_version = DEFAULT_BUNDLE_VERSION;
 	result->status_reporting = false;
 	result->exit_immediately = false;
 	result->lifetime = DEFAULT_BUNDLE_LIFETIME;
-	// The following values cannot be 0
-	result->mbs = 0;
-	// The strings are set afterwards if not provided as an option
+	result->mbs = ROUTER_GLOBAL_MBS;
+	result->aap_socket = NULL;
+	result->aap_node = NULL;
+	result->aap_service = NULL;
 	result->eid = NULL;
 	result->cla_options = NULL;
-	int option_index = 0;
 
 	if (!argv || argc <= 1)
 		goto finish;
@@ -155,7 +143,7 @@ finish:
 	    !result->aap_node &&
 	    !result->aap_service)
 		result->aap_socket = strdup(DEFAULT_AAP_SOCKET);
-	// prefere Unix domain socket over TCP
+	// prefer Unix domain socket over TCP
 	else if (result->aap_socket &&
 		(result->aap_node || result->aap_service))
 		result->aap_node = result->aap_service = NULL;
