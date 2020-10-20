@@ -27,70 +27,98 @@ enum bundle_handling_result {
 	BUNDLE_HRESULT_BLOCK_DISCARDED,
 };
 
-// TODO: Move static state into context struct passed into functions
-
-static QueueIdentifier_t out_queue;
-static const char *local_eid;
-static bool status_reporting;
-
-static struct reassembly_list {
+struct reassembly_list {
 	struct reassembly_bundle_list {
 		struct bundle *bundle;
 		struct reassembly_bundle_list *next;
 	} *bundle_list;
 	struct reassembly_list *next;
-} *reassembly_list;
+};
 
-static struct known_bundle_list {
+struct known_bundle_list {
 	struct bundle_unique_identifier id;
 	uint64_t deadline;
 	struct known_bundle_list *next;
-} *known_bundle_list;
+};
+
+struct bundle_processor_context {
+	QueueIdentifier_t out_queue;
+	const char *local_eid;
+	bool status_reporting;
+	struct reassembly_list *reassembly_list;
+	struct known_bundle_list *known_bundle_list;
+};
 
 /* DECLARATIONS */
 
-static inline void handle_signal(const struct bundle_processor_signal signal);
+static inline void handle_signal(struct bundle_processor_context *const ctx,
+	const struct bundle_processor_signal signal);
 
-static void bundle_dispatch(struct bundle *bundle);
-static bool bundle_endpoint_is_local(struct bundle *bundle);
-static void bundle_forward(struct bundle *bundle);
-static void bundle_forwarding_scheduled(struct bundle *bundle);
-static void bundle_forwarding_success(struct bundle *bundle);
+static void bundle_dispatch(struct bundle_processor_context *const ctx,
+	struct bundle *bundle);
+static bool bundle_endpoint_is_local(const char *local_eid,
+	struct bundle *bundle);
+static void bundle_forward(struct bundle_processor_context *const ctx,
+	struct bundle *bundle);
+static void bundle_forwarding_scheduled(
+	struct bundle_processor_context *const ctx, struct bundle *bundle);
+static void bundle_forwarding_success(
+	struct bundle_processor_context *const ctx, struct bundle *bundle);
 static void bundle_forwarding_contraindicated(
-	struct bundle *bundle, enum bundle_status_report_reason reason);
+	struct bundle_processor_context *const ctx, struct bundle *bundle,
+	enum bundle_status_report_reason reason);
 static void bundle_forwarding_failed(
-	struct bundle *bundle, enum bundle_status_report_reason reason);
-static void bundle_expired(struct bundle *bundle);
-static void bundle_receive(struct bundle *bundle);
+	struct bundle_processor_context *const ctx, struct bundle *bundle,
+	enum bundle_status_report_reason reason);
+static void bundle_expired(struct bundle_processor_context *const ctx,
+	struct bundle *bundle);
+static void bundle_receive(struct bundle_processor_context *const ctx,
+	struct bundle *bundle);
 static enum bundle_handling_result handle_unknown_block_flags(
+	struct bundle_processor_context *const ctx,
 	struct bundle *bundle, enum bundle_block_flags flags);
-static void bundle_deliver_local(struct bundle *bundle);
-static void bundle_attempt_reassembly(struct bundle *bundle);
-static void bundle_deliver_adu(struct bundle_adu data);
-static void bundle_custody_accept(struct bundle *bundle);
+static void bundle_deliver_local(
+	struct bundle_processor_context *const ctx, struct bundle *bundle);
+static void bundle_attempt_reassembly(
+	struct bundle_processor_context *const ctx, struct bundle *bundle);
+static void bundle_deliver_adu(struct bundle_processor_context *const ctx,
+	struct bundle_adu data);
+static void bundle_custody_accept(
+	struct bundle_processor_context *const ctx, struct bundle *bundle);
 static void bundle_custody_success(struct bundle *bundle);
 static void bundle_custody_failure(
 	struct bundle *bundle, enum bundle_custody_signal_reason reason);
 static void bundle_delete(
-	struct bundle *bundle, enum bundle_status_report_reason reason);
+	struct bundle_processor_context *const ctx, struct bundle *bundle,
+	enum bundle_status_report_reason reason);
 static void bundle_discard(struct bundle *bundle);
 static void bundle_handle_custody_signal(
 	struct bundle_administrative_record *signal);
-static void bundle_dangling(struct bundle *bundle);
-static bool hop_count_validation(struct bundle *bundle);
-static const char *get_agent_id(const char *dest_eid);
-static bool bundle_record_add_and_check_known(const struct bundle *bundle);
-static bool bundle_reassembled_is_known(const struct bundle *bundle);
-static void bundle_add_reassembled_as_known(const struct bundle *bundle);
+static void bundle_dangling(struct bundle_processor_context *const ctx,
+	struct bundle *bundle);
+static bool hop_count_validation(struct bundle_processor_context *const ctx,
+	struct bundle *bundle);
+static const char *get_agent_id(const char *local_eid, const char *dest_eid);
+static bool bundle_record_add_and_check_known(
+	struct bundle_processor_context *const ctx, const struct bundle *bundle);
+static bool bundle_reassembled_is_known(
+	struct bundle_processor_context *const ctx, const struct bundle *bundle);
+static void bundle_add_reassembled_as_known(
+	struct bundle_processor_context *const ctx, const struct bundle *bundle);
 
 static void send_status_report(
+	struct bundle_processor_context *const ctx,
 	struct bundle *bundle,
 	const enum bundle_status_report_status_flags status,
 	const enum bundle_status_report_reason reason);
-static void send_custody_signal(struct bundle *bundle,
+static void send_custody_signal(
+	struct bundle_processor_context *const ctx,
+	struct bundle *bundle,
 	const enum bundle_custody_signal_type,
 	const enum bundle_custody_signal_reason reason);
-static enum upcn_result send_bundle(bundleid_t bundle, uint16_t timeout);
+static enum upcn_result send_bundle(
+	struct bundle_processor_context *const ctx,
+	bundleid_t bundle, uint16_t timeout);
 static struct bundle_block *find_block_by_type(struct bundle_block_list *blocks,
 	enum bundle_block_type type);
 
@@ -128,27 +156,29 @@ void bundle_processor_task(void * const param)
 {
 	struct bundle_processor_task_parameters *p =
 		(struct bundle_processor_task_parameters *)param;
+	struct bundle_processor_context ctx;
 	struct bundle_processor_signal signal;
 
-	out_queue = p->router_signaling_queue;
-	local_eid = p->local_eid;
-	status_reporting = p->status_reporting;
+	ctx.out_queue = p->router_signaling_queue;
+	ctx.local_eid = p->local_eid;
+	ctx.status_reporting = p->status_reporting;
 
-	custody_manager_init(p->local_eid);
+	custody_manager_init(ctx.local_eid);
 
 	LOGF("BundleProcessor: BPA initialized for \"%s\", status reports %s",
-	     p->local_eid, p->status_reporting ? "enabled" : "disabled");
+	     ctx.local_eid, ctx.status_reporting ? "enabled" : "disabled");
 
 	for (;;) {
 		if (hal_queue_receive(p->signaling_queue, &signal,
 			-1) == UPCN_OK
 		) {
-			handle_signal(signal);
+			handle_signal(&ctx, signal);
 		}
 	}
 }
 
-static inline void handle_signal(const struct bundle_processor_signal signal)
+static inline void handle_signal(struct bundle_processor_context *const ctx,
+	const struct bundle_processor_signal signal)
 {
 	struct bundle *b = bundle_storage_get(signal.bundle);
 
@@ -159,29 +189,29 @@ static inline void handle_signal(const struct bundle_processor_signal signal)
 	}
 	switch (signal.type) {
 	case BP_SIGNAL_BUNDLE_INCOMING:
-		bundle_receive(b);
+		bundle_receive(ctx, b);
 		break;
 	case BP_SIGNAL_BUNDLE_ROUTED:
-		bundle_forwarding_scheduled(b);
+		bundle_forwarding_scheduled(ctx, b);
 		break;
 	case BP_SIGNAL_FORWARDING_CONTRAINDICATED:
-		bundle_forwarding_contraindicated(b, signal.reason);
+		bundle_forwarding_contraindicated(ctx, b, signal.reason);
 		break;
 	case BP_SIGNAL_BUNDLE_EXPIRED:
-		bundle_expired(b);
+		bundle_expired(ctx, b);
 		break;
 	case BP_SIGNAL_RESCHEDULE_BUNDLE:
-		bundle_dangling(b);
+		bundle_dangling(ctx, b);
 		break;
 	case BP_SIGNAL_TRANSMISSION_SUCCESS:
-		bundle_forwarding_success(b);
+		bundle_forwarding_success(ctx, b);
 		break;
 	case BP_SIGNAL_TRANSMISSION_FAILURE:
-		bundle_forwarding_failed(b,
+		bundle_forwarding_failed(ctx, b,
 			BUNDLE_SR_REASON_TRANSMISSION_CANCELED);
 		break;
 	case BP_SIGNAL_BUNDLE_LOCAL_DISPATCH:
-		bundle_dispatch(b);
+		bundle_dispatch(ctx, b);
 		break;
 	default:
 		LOGF("BundleProcessor: Invalid signal (%d) detected",
@@ -194,19 +224,21 @@ static inline void handle_signal(const struct bundle_processor_signal signal)
 /* BUNDLE HANDLING */
 
 /* 5.3 */
-static void bundle_dispatch(struct bundle *bundle)
+static void bundle_dispatch(struct bundle_processor_context *const ctx,
+	struct bundle *bundle)
 {
 	/* 5.3-1 */
-	if (bundle_endpoint_is_local(bundle)) {
-		bundle_deliver_local(bundle);
+	if (bundle_endpoint_is_local(ctx->local_eid, bundle)) {
+		bundle_deliver_local(ctx, bundle);
 		return;
 	}
 	/* 5.3-2 */
-	bundle_forward(bundle);
+	bundle_forward(ctx, bundle);
 }
 
 /* 5.3-1 */
-static bool bundle_endpoint_is_local(struct bundle *bundle)
+static bool bundle_endpoint_is_local(const char *local_eid,
+	struct bundle *bundle)
 {
 	const size_t local_len = strlen(local_eid);
 	const size_t dest_len = strlen(bundle->destination);
@@ -222,23 +254,25 @@ static bool bundle_endpoint_is_local(struct bundle *bundle)
 }
 
 /* 5.4 */
-static void bundle_forward(struct bundle *bundle)
+static void bundle_forward(struct bundle_processor_context *const ctx,
+	struct bundle *bundle)
 {
 	/* 4.3.4. Hop Count (BPv7-bis) */
 	/* TODO: Is this the correct point to perform the hop-count check? */
-	if (!hop_count_validation(bundle))
+	if (!hop_count_validation(ctx, bundle))
 		return;
 
 	/* 5.4-1 */
 	bundle_add_rc(bundle, BUNDLE_RET_CONSTRAINT_FORWARD_PENDING);
 	bundle_rem_rc(bundle, BUNDLE_RET_CONSTRAINT_DISPATCH_PENDING, 0);
 	/* 5.4-2 */
-	send_bundle(bundle->id, 0);
+	send_bundle(ctx, bundle->id, 0);
 	/* For steps after 5.4-2, see below */
 }
 
 /* 5.4-4 */
-static void bundle_forwarding_scheduled(struct bundle *bundle)
+static void bundle_forwarding_scheduled(
+	struct bundle_processor_context *const ctx, struct bundle *bundle)
 {
 	/* 5.4-4 */
 	/* Custody may have already been accepted if we are re-scheduling */
@@ -250,17 +284,18 @@ static void bundle_forwarding_scheduled(struct bundle *bundle)
 		&& bundle->protocol_version == 6
 	) {
 		/* bundle_receive already checked if bundle is acceptable */
-		bundle_custody_accept(bundle);
+		bundle_custody_accept(ctx, bundle);
 	}
 	/* 5.4-5 is done by contact manager / ground station task */
 }
 
 /* 5.4-6 */
-static void bundle_forwarding_success(struct bundle *bundle)
+static void bundle_forwarding_success(
+	struct bundle_processor_context *const ctx, struct bundle *bundle)
 {
 	if (HAS_FLAG(bundle->proc_flags, BUNDLE_FLAG_REPORT_FORWARDING)) {
 		/* See 5.4-6: reason code vs. unidirectional links */
-		send_status_report(bundle,
+		send_status_report(ctx, bundle,
 			BUNDLE_SR_FLAG_BUNDLE_FORWARDED,
 			BUNDLE_SR_REASON_NO_INFO);
 	}
@@ -270,17 +305,19 @@ static void bundle_forwarding_success(struct bundle *bundle)
 
 /* 5.4.1 */
 static void bundle_forwarding_contraindicated(
+	struct bundle_processor_context *const ctx,
 	struct bundle *bundle, enum bundle_status_report_reason reason)
 {
 	/* 5.4.1-1: For now, we declare forwarding failure everytime */
-	bundle_forwarding_failed(bundle, reason);
+	bundle_forwarding_failed(ctx, bundle, reason);
 	/* 5.4.1-2 (a): At the moment, custody transfer is declared as failed */
 	/* 5.4.1-2 (b): Will not be handled */
 }
 
 /* 5.4.2 */
 static void bundle_forwarding_failed(
-	struct bundle *bundle, enum bundle_status_report_reason reason)
+	struct bundle_processor_context *const ctx, struct bundle *bundle,
+	enum bundle_status_report_reason reason)
 {
 	enum bundle_custody_signal_reason cs_reason;
 
@@ -300,21 +337,23 @@ static void bundle_forwarding_failed(
 					? BUNDLE_CS_REASON_NO_INFO
 					: (enum bundle_custody_signal_reason)
 						reason);
-			send_custody_signal(bundle, BUNDLE_CS_TYPE_REFUSAL,
+			send_custody_signal(ctx, bundle, BUNDLE_CS_TYPE_REFUSAL,
 				cs_reason);
 		}
 	}
-	bundle_delete(bundle, reason);
+	bundle_delete(ctx, bundle, reason);
 }
 
 /* 5.5 */
-static void bundle_expired(struct bundle *bundle)
+static void bundle_expired(struct bundle_processor_context *const ctx,
+	struct bundle *bundle)
 {
-	bundle_delete(bundle, BUNDLE_SR_REASON_LIFETIME_EXPIRED);
+	bundle_delete(ctx, bundle, BUNDLE_SR_REASON_LIFETIME_EXPIRED);
 }
 
 /* 5.6 */
-static void bundle_receive(struct bundle *bundle)
+static void bundle_receive(struct bundle_processor_context *const ctx,
+	struct bundle *bundle)
 {
 	struct bundle_block_list **e;
 	enum bundle_handling_result res;
@@ -323,21 +362,21 @@ static void bundle_receive(struct bundle *bundle)
 	bundle_add_rc(bundle, BUNDLE_RET_CONSTRAINT_DISPATCH_PENDING);
 	/* 5.6-2 Request reception */
 	if (HAS_FLAG(bundle->proc_flags, BUNDLE_FLAG_REPORT_RECEPTION))
-		send_status_report(bundle,
+		send_status_report(ctx, bundle,
 			BUNDLE_SR_FLAG_BUNDLE_RECEIVED,
 			BUNDLE_SR_REASON_NO_INFO);
 	/* Check lifetime - TODO: support Bundle Age block */
 	if (bundle->creation_timestamp != 0 &&
 			bundle_get_expiration_time(bundle) <
 			hal_time_get_timestamp_s()) {
-		bundle_delete(bundle, BUNDLE_SR_REASON_LIFETIME_EXPIRED);
+		bundle_delete(ctx, bundle, BUNDLE_SR_REASON_LIFETIME_EXPIRED);
 		return;
 	}
 	/* 5.6-3 Handle blocks */
 	e = &bundle->blocks;
 	while (*e != NULL) {
 		if ((*e)->data->type != BUNDLE_BLOCK_TYPE_PAYLOAD) {
-			res = handle_unknown_block_flags(
+			res = handle_unknown_block_flags(ctx,
 				bundle, (*e)->data->flags);
 			switch (res) {
 			case BUNDLE_HRESULT_OK:
@@ -345,7 +384,7 @@ static void bundle_receive(struct bundle *bundle)
 					BUNDLE_V6_BLOCK_FLAG_FWD_UNPROC;
 				break;
 			case BUNDLE_HRESULT_DELETED:
-				bundle_delete(bundle,
+				bundle_delete(ctx, bundle,
 					BUNDLE_SR_REASON_BLOCK_UNINTELLIGIBLE);
 				return;
 			case BUNDLE_HRESULT_BLOCK_DISCARDED:
@@ -364,7 +403,7 @@ static void bundle_receive(struct bundle *bundle)
 	) {
 		if (custody_manager_has_redundant_bundle(bundle)) {
 			/* 5.6-4 */
-			send_custody_signal(bundle, BUNDLE_CS_TYPE_REFUSAL,
+			send_custody_signal(ctx, bundle, BUNDLE_CS_TYPE_REFUSAL,
 				BUNDLE_CS_REASON_REDUNDANT_RECEPTION);
 			bundle_rem_rc(bundle,
 				BUNDLE_RET_CONSTRAINT_DISPATCH_PENDING, 1);
@@ -373,23 +412,24 @@ static void bundle_receive(struct bundle *bundle)
 			/* to check if we want to reject custody before */
 			/* dispatching the bundle. */
 			/* In that case, the bundle would be deleted. */
-			send_custody_signal(bundle, BUNDLE_CS_TYPE_REFUSAL,
+			send_custody_signal(ctx, bundle, BUNDLE_CS_TYPE_REFUSAL,
 				BUNDLE_CS_REASON_DEPLETED_STORAGE);
-			bundle_delete(bundle,
+			bundle_delete(ctx, bundle,
 				BUNDLE_SR_REASON_DEPLETED_STORAGE);
 		}
 	} else {
 		/* 5.6-5 */
-		bundle_dispatch(bundle);
+		bundle_dispatch(ctx, bundle);
 	}
 }
 
 /* 5.6-3 */
 static enum bundle_handling_result handle_unknown_block_flags(
+	struct bundle_processor_context *const ctx,
 	struct bundle *bundle, enum bundle_block_flags flags)
 {
 	if (HAS_FLAG(flags, BUNDLE_BLOCK_FLAG_REPORT_IF_UNPROC)) {
-		send_status_report(bundle,
+		send_status_report(ctx, bundle,
 			BUNDLE_SR_FLAG_BUNDLE_RECEIVED,
 			BUNDLE_SR_REASON_BLOCK_UNINTELLIGIBLE);
 	}
@@ -401,12 +441,13 @@ static enum bundle_handling_result handle_unknown_block_flags(
 }
 
 /* 5.7 */
-static void bundle_deliver_local(struct bundle *bundle)
+static void bundle_deliver_local(struct bundle_processor_context *const ctx,
+	struct bundle *bundle)
 {
 	bundle_rem_rc(bundle, BUNDLE_RET_CONSTRAINT_DISPATCH_PENDING, 0);
 
 	/* Check and record knowledge of bundle */
-	if (bundle_record_add_and_check_known(bundle)) {
+	if (bundle_record_add_and_check_known(ctx, bundle)) {
 		LOGF("Bundle #%d was already delivered, dropping it",
 		     bundle->id);
 		// NOTE: We cannot have custody as the CM checks for duplicates
@@ -416,29 +457,29 @@ static void bundle_deliver_local(struct bundle *bundle)
 
 	/* Report successful delivery, if applicable */
 	if (HAS_FLAG(bundle->proc_flags, BUNDLE_FLAG_REPORT_DELIVERY)) {
-		send_status_report(bundle,
+		send_status_report(ctx, bundle,
 			BUNDLE_SR_FLAG_BUNDLE_DELIVERED,
 			BUNDLE_SR_REASON_NO_INFO);
 	}
 
 	if (!HAS_FLAG(bundle->proc_flags, BUNDLE_FLAG_ADMINISTRATIVE_RECORD) &&
-			get_agent_id(bundle->destination) == NULL) {
+			get_agent_id(ctx->local_eid, bundle->destination) == NULL) {
 		// If it is no admin. record and we have no agent to deliver#
 		// it to, drop it.
 		LOGF("BundleProcessor: Received bundle not destined for any registered EID (from = %s, to = %s), dropping...",
 		     bundle->source, bundle->destination);
-		bundle_delete(bundle, BUNDLE_SR_REASON_DEST_EID_UNINTELLIGIBLE);
+		bundle_delete(ctx, bundle, BUNDLE_SR_REASON_DEST_EID_UNINTELLIGIBLE);
 		return;
 	}
 
 	if (HAS_FLAG(bundle->proc_flags, BUNDLE_FLAG_IS_FRAGMENT)) {
 		bundle_add_rc(bundle, BUNDLE_RET_CONSTRAINT_REASSEMBLY_PENDING);
-		bundle_attempt_reassembly(bundle);
+		bundle_attempt_reassembly(ctx, bundle);
 	} else {
 		struct bundle_adu adu = bundle_to_adu(bundle);
 
 		bundle_discard(bundle);
-		bundle_deliver_adu(adu);
+		bundle_deliver_adu(ctx, adu);
 	}
 }
 
@@ -451,8 +492,10 @@ static bool may_reassemble(const struct bundle *b1, const struct bundle *b2)
 	);
 }
 
-static void add_to_reassembly_bundle_list(struct reassembly_list *item,
-					  struct bundle *bundle)
+static void add_to_reassembly_bundle_list(
+	struct bundle_processor_context *const ctx,
+	struct reassembly_list *item,
+	struct bundle *bundle)
 {
 	struct reassembly_bundle_list **cur_entry = &item->bundle_list;
 
@@ -469,7 +512,7 @@ static void add_to_reassembly_bundle_list(struct reassembly_list *item,
 		sizeof(struct reassembly_bundle_list)
 	);
 	if (!new_entry) {
-		bundle_delete(bundle, BUNDLE_SR_REASON_DEPLETED_STORAGE);
+		bundle_delete(ctx, bundle, BUNDLE_SR_REASON_DEPLETED_STORAGE);
 		return;
 	}
 	new_entry->bundle = bundle;
@@ -477,7 +520,8 @@ static void add_to_reassembly_bundle_list(struct reassembly_list *item,
 	*cur_entry = new_entry;
 }
 
-static void try_reassemble(struct reassembly_list **slot)
+static void try_reassemble(struct bundle_processor_context *const ctx,
+	struct reassembly_list **slot)
 {
 	struct reassembly_list *const e = *slot;
 	struct reassembly_bundle_list *eb;
@@ -519,7 +563,7 @@ static void try_reassemble(struct reassembly_list **slot)
 		b = eb->bundle;
 
 		if (!added_as_known) {
-			bundle_add_reassembled_as_known(b);
+			bundle_add_reassembled_as_known(ctx, b);
 			added_as_known = true;
 		}
 
@@ -554,14 +598,15 @@ static void try_reassemble(struct reassembly_list **slot)
 	free(e);
 
 	// Deliver ADU
-	bundle_deliver_adu(adu);
+	bundle_deliver_adu(ctx, adu);
 }
 
-static void bundle_attempt_reassembly(struct bundle *bundle)
+static void bundle_attempt_reassembly(
+	struct bundle_processor_context *const ctx, struct bundle *bundle)
 {
-	struct reassembly_list **r_list_e = &reassembly_list;
+	struct reassembly_list **r_list_e = &ctx->reassembly_list;
 
-	if (bundle_reassembled_is_known(bundle)) {
+	if (bundle_reassembled_is_known(ctx, bundle)) {
 		LOGF("Original bundle for #%d was already delivered, dropping",
 		     bundle->id);
 		// Already delivered the original bundle
@@ -578,8 +623,8 @@ static void bundle_attempt_reassembly(struct bundle *bundle)
 		struct reassembly_list *const e = *r_list_e;
 
 		if (may_reassemble(e->bundle_list->bundle, bundle)) {
-			add_to_reassembly_bundle_list(e, bundle);
-			try_reassemble(r_list_e);
+			add_to_reassembly_bundle_list(ctx, e, bundle);
+			try_reassemble(ctx, r_list_e);
 			return;
 		}
 	}
@@ -590,17 +635,18 @@ static void bundle_attempt_reassembly(struct bundle *bundle)
 	);
 
 	if (!new_list) {
-		bundle_delete(bundle, BUNDLE_SR_REASON_DEPLETED_STORAGE);
+		bundle_delete(ctx, bundle, BUNDLE_SR_REASON_DEPLETED_STORAGE);
 		return;
 	}
 	new_list->bundle_list = NULL;
 	new_list->next = NULL;
-	add_to_reassembly_bundle_list(new_list, bundle);
+	add_to_reassembly_bundle_list(ctx, new_list, bundle);
 	*r_list_e = new_list;
-	try_reassemble(r_list_e);
+	try_reassemble(ctx, r_list_e);
 }
 
-static void bundle_deliver_adu(struct bundle_adu adu)
+static void bundle_deliver_adu(struct bundle_processor_context *const ctx,
+	struct bundle_adu adu)
 {
 	struct bundle_administrative_record *record;
 
@@ -617,7 +663,7 @@ static void bundle_deliver_adu(struct bundle_adu adu)
 		return;
 	}
 
-	const char *agent_id = get_agent_id(adu.destination);
+	const char *agent_id = get_agent_id(ctx->local_eid, adu.destination);
 
 	ASSERT(agent_id != NULL);
 	LOGF("BundleProcessor: Received local bundle -> \"%s\"; len(PL) = %d B",
@@ -626,7 +672,8 @@ static void bundle_deliver_adu(struct bundle_adu adu)
 }
 
 /* 5.10 */
-static void bundle_custody_accept(struct bundle *bundle)
+static void bundle_custody_accept(
+	struct bundle_processor_context *const ctx, struct bundle *bundle)
 {
 	if (custody_manager_accept(bundle) != UPCN_OK) {
 		/* TODO */
@@ -642,10 +689,10 @@ static void bundle_custody_accept(struct bundle *bundle)
 		/* then this report should be generated by simply turning on */
 		/* the "Reporting node accepted custody of bundle" flag */
 		/* in that earlier report's status flags byte. */
-		send_status_report(bundle, BUNDLE_SR_FLAG_CUSTODY_TRANSFER,
+		send_status_report(ctx, bundle, BUNDLE_SR_FLAG_CUSTODY_TRANSFER,
 			BUNDLE_SR_REASON_NO_INFO);
 	}
-	send_custody_signal(bundle, BUNDLE_CS_TYPE_ACCEPTANCE,
+	send_custody_signal(ctx, bundle, BUNDLE_CS_TYPE_ACCEPTANCE,
 		BUNDLE_CS_REASON_NO_INFO);
 }
 
@@ -674,7 +721,7 @@ static void bundle_custody_failure(
 
 /* 5.13 (RFC 5050) */
 /* 5.14 (BPv7-bis) */
-static void bundle_delete(
+static void bundle_delete(struct bundle_processor_context *const ctx,
 	struct bundle *bundle, enum bundle_status_report_reason reason)
 {
 	bool generate_report = false;
@@ -690,7 +737,7 @@ static void bundle_delete(
 	}
 
 	if (generate_report)
-		send_status_report(bundle,
+		send_status_report(ctx, bundle,
 			BUNDLE_SR_FLAG_BUNDLE_DELETED, reason);
 
 	bundle->ret_constraints &= BUNDLE_RET_CONSTRAINT_NONE;
@@ -720,7 +767,8 @@ static void bundle_handle_custody_signal(
 }
 
 /* RE-SCHEDULING */
-static void bundle_dangling(struct bundle *bundle)
+static void bundle_dangling(struct bundle_processor_context *const ctx,
+	struct bundle *bundle)
 {
 	uint8_t resched = 0;
 
@@ -736,43 +784,46 @@ static void bundle_dangling(struct bundle *bundle)
 		break;
 	}
 	/* Send it to the router task again after evaluating policy. */
-	if (!resched || send_bundle(bundle->id, FAILED_FORWARD_TIMEOUT)
+	if (!resched || send_bundle(ctx, bundle->id, FAILED_FORWARD_TIMEOUT)
 			== UPCN_FAIL
 	) {
-		bundle_delete(bundle, BUNDLE_SR_REASON_TRANSMISSION_CANCELED);
+		bundle_delete(ctx, bundle, BUNDLE_SR_REASON_TRANSMISSION_CANCELED);
 	}
 }
 
 /* HELPERS */
 
 static void send_status_report(
+	struct bundle_processor_context *const ctx,
 	struct bundle *bundle,
 	const enum bundle_status_report_status_flags status,
 	const enum bundle_status_report_reason reason)
 {
-	if (!status_reporting)
+	if (!ctx->status_reporting)
 		return;
 
 	/* If the report-to EID is the null endpoint or upcn itself we do not */
 	/* need to create a status report */
 	if (strcmp(bundle->destination, "dtn:none") == 0
-		|| strcmp(bundle->destination, local_eid) == 0)
+		|| strcmp(bundle->destination, ctx->local_eid) == 0)
 		return;
 
 	struct bundle_status_report report = {
 		.status = status,
 		.reason = reason
 	};
-	struct bundle *b = generate_status_report(bundle, &report, local_eid);
+	struct bundle *b = generate_status_report(bundle, &report, ctx->local_eid);
 
 	if (b != NULL) {
 		bundle_add_rc(b, BUNDLE_RET_CONSTRAINT_DISPATCH_PENDING);
 		bundle_storage_add(b);
-		bundle_forward(b);
+		bundle_forward(ctx, b);
 	}
 }
 
-static void send_custody_signal(struct bundle *bundle,
+static void send_custody_signal(
+	struct bundle_processor_context *const ctx,
+	struct bundle *bundle,
 	const enum bundle_custody_signal_type type,
 	const enum bundle_custody_signal_reason reason)
 {
@@ -784,7 +835,7 @@ static void send_custody_signal(struct bundle *bundle,
 	struct bundle_list *signals = generate_custody_signal(
 		bundle,
 		&signal,
-		local_eid
+		ctx->local_eid
 	);
 
 	/* Walk through all signals and forward them to their destination */
@@ -792,7 +843,7 @@ static void send_custody_signal(struct bundle *bundle,
 		bundle_add_rc(signals->data,
 			BUNDLE_RET_CONSTRAINT_DISPATCH_PENDING);
 		bundle_storage_add(signals->data);
-		bundle_forward(signals->data);
+		bundle_forward(ctx, signals->data);
 
 		/* Free current list entry (but not the bundle itself) */
 		next = signals->next;
@@ -801,7 +852,8 @@ static void send_custody_signal(struct bundle *bundle,
 	}
 }
 
-static enum upcn_result send_bundle(bundleid_t bundle, uint16_t timeout)
+static enum upcn_result send_bundle(struct bundle_processor_context *const ctx,
+	bundleid_t bundle, uint16_t timeout)
 {
 	struct router_signal signal = {
 		.type = ROUTER_SIGNAL_ROUTE_BUNDLE,
@@ -810,10 +862,10 @@ static enum upcn_result send_bundle(bundleid_t bundle, uint16_t timeout)
 	};
 
 	if (timeout == 0) {
-		hal_queue_push_to_back(out_queue, &signal);
+		hal_queue_push_to_back(ctx->out_queue, &signal);
 		return UPCN_OK;
 	}
-	return hal_queue_try_push_to_back(out_queue,
+	return hal_queue_try_push_to_back(ctx->out_queue,
 					  &signal,
 					  timeout);
 }
@@ -843,7 +895,8 @@ static struct bundle_block *find_block_by_type(struct bundle_block_list *blocks,
  *
  * @return false if the hop count exeeds the hop limit, true otherwise
  */
-static bool hop_count_validation(struct bundle *bundle)
+static bool hop_count_validation(
+	struct bundle_processor_context *const ctx, struct bundle *bundle)
 {
 	struct bundle_block *block = find_block_by_type(bundle->blocks,
 		BUNDLE_BLOCK_TYPE_HOP_COUNT);
@@ -865,7 +918,7 @@ static bool hop_count_validation(struct bundle *bundle)
 
 	/* Hop count exeeded, delete bundle */
 	if (hop_count.count >= hop_count.limit) {
-		bundle_delete(bundle, BUNDLE_SR_REASON_HOP_LIMIT_EXCEEDED);
+		bundle_delete(ctx, bundle, BUNDLE_SR_REASON_HOP_LIMIT_EXCEEDED);
 		return false;
 	}
 
@@ -895,7 +948,7 @@ static bool hop_count_validation(struct bundle *bundle)
  * Get the agent identifier for local bundle delivery.
  * The agent identifier should follow the local EID behind a slash ('/').
  */
-static const char *get_agent_id(const char *dest_eid)
+static const char *get_agent_id(const char *const local_eid, const char *dest_eid)
 {
 	const size_t local_len = strlen(local_eid);
 	const size_t dest_len = strlen(dest_eid);
@@ -914,9 +967,10 @@ static const char *get_agent_id(const char *dest_eid)
 }
 
 // Checks whether we know the bundle. If not, adds it to the list.
-static bool bundle_record_add_and_check_known(const struct bundle *bundle)
+static bool bundle_record_add_and_check_known(
+	struct bundle_processor_context *const ctx, const struct bundle *bundle)
 {
-	struct known_bundle_list **cur_entry = &known_bundle_list;
+	struct known_bundle_list **cur_entry = &ctx->known_bundle_list;
 	uint64_t cur_time = hal_time_get_timestamp_s();
 	const uint64_t bundle_deadline = bundle_get_expiration_time(bundle);
 
@@ -955,9 +1009,10 @@ static bool bundle_record_add_and_check_known(const struct bundle *bundle)
 	return false;
 }
 
-static bool bundle_reassembled_is_known(const struct bundle *bundle)
+static bool bundle_reassembled_is_known(
+	struct bundle_processor_context *const ctx, const struct bundle *bundle)
 {
-	struct known_bundle_list **cur_entry = &known_bundle_list;
+	struct known_bundle_list **cur_entry = &ctx->known_bundle_list;
 	const uint64_t bundle_deadline = bundle_get_expiration_time(bundle);
 
 	while (*cur_entry != NULL) {
@@ -977,9 +1032,10 @@ static bool bundle_reassembled_is_known(const struct bundle *bundle)
 	return false;
 }
 
-static void bundle_add_reassembled_as_known(const struct bundle *bundle)
+static void bundle_add_reassembled_as_known(
+	struct bundle_processor_context *const ctx, const struct bundle *bundle)
 {
-	struct known_bundle_list **cur_entry = &known_bundle_list;
+	struct known_bundle_list **cur_entry = &ctx->known_bundle_list;
 	const uint64_t bundle_deadline = bundle_get_expiration_time(bundle);
 
 	while (*cur_entry != NULL) {
