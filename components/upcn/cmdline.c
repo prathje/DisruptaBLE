@@ -145,8 +145,11 @@ finish:
 		result->aap_socket = strdup(DEFAULT_AAP_SOCKET);
 	// prefer Unix domain socket over TCP
 	else if (result->aap_socket &&
-		(result->aap_node || result->aap_service))
+		(result->aap_node || result->aap_service)) {
+		free(result->aap_node);
+		free(result->aap_service);
 		result->aap_node = result->aap_service = NULL;
+	}
 	// set default TCP sevice port
 	else if (result->aap_node && !result->aap_service)
 		result->aap_service = strdup(DEFAULT_AAP_SERVICE);
