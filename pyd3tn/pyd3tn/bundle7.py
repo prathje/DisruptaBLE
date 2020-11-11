@@ -181,6 +181,9 @@ class CreationTimestamp(tuple):
             lacking a precise clock
     """
     def __new__(cls, time, sequence_number):
+        if time == 0:
+            return super().__new__(cls, [0, int(sequence_number)])
+
         # Use current datetime
         if time is None:
             time = datetime.now(timezone.utc)
@@ -195,7 +198,9 @@ class CreationTimestamp(tuple):
 
     @property
     def time(self):
-        return DTN_EPOCH + timedelta(milliseconds=self[0])
+        return (
+            0 if self[0] == 0 else DTN_EPOCH + timedelta(milliseconds=self[0])
+        )
 
     @property
     def sequence_number(self):
@@ -759,7 +764,7 @@ def create_bundle7(source_eid, destination_eid, payload,
                    creation_timestamp=None, sequence_number=None,
                    lifetime=300, flags=BlockProcFlag.NONE,
                    fragment_offset=None, total_adu_length=None,
-                   hop_limit=30, hop_count=0, bundle_age=0,
+                   hop_limit=30, hop_count=0, bundle_age=None,
                    previous_node_eid=None,
                    crc_type_canonical=CRCType.CRC16):
     """All-in-one function to encode a payload from a source EID
@@ -835,10 +840,11 @@ def create_bundle7(source_eid, destination_eid, payload,
         hop_count,
         crc_type=crc_type_canonical,
     ))
-    bundle.add(BundleAgeBlock(
-        bundle_age,
-        crc_type=crc_type_canonical,
-    ))
+    if bundle_age is not None:
+        bundle.add(BundleAgeBlock(
+            bundle_age,
+            crc_type=crc_type_canonical,
+        ))
 
     return bundle
 
