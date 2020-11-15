@@ -162,6 +162,8 @@ void bundle_processor_task(void * const param)
 	ctx.out_queue = p->router_signaling_queue;
 	ctx.local_eid = p->local_eid;
 	ctx.status_reporting = p->status_reporting;
+	ctx.reassembly_list = NULL;
+	ctx.known_bundle_list = NULL;
 
 	custody_manager_init(ctx.local_eid);
 
