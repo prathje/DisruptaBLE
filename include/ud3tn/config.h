@@ -121,7 +121,7 @@ enum failed_forwarding_policy {
  * [ROUTING] configuration options related to the routing
  * algorithm
  */
-#define ROUTER_MAX_FRAGMENTS 10
+#define ROUTER_MAX_FRAGMENTS 64
 #define ROUTER_MAX_CONTACTS 4
 /* Default values */
 #define ROUTER_GLOBAL_MBS SIZE_MAX
