@@ -106,7 +106,7 @@ static const char *tcpspp_get_name(void)
 static size_t tcpspp_mbs_get(struct cla_config *const config)
 {
 	(void)config;
-	return (1 << 16) - MAX_SPP_HEADER_SIZE; // conservative estimation
+	return 256 - MAX_SPP_HEADER_SIZE; // conservative estimation: OPS-SAT
 }
 
 /*
