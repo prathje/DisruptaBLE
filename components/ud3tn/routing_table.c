@@ -1,3 +1,5 @@
+#include "platform/hal_io.h"
+#include "platform/hal_time.h"
 #include "ud3tn/bundle.h"
 #include "ud3tn/bundle_processor.h"
 #include "ud3tn/bundle_storage_manager.h"
@@ -296,7 +298,7 @@ bool routing_table_delete_node(
 
 static bool add_contact_to_node_in_htab(char *eid, struct contact *c, float p);
 static bool remove_contact_from_node_in_htab(char *eid, struct contact *c);
-static bool check_for_invalid_overlaps(struct contact *c);
+static bool is_invalid(struct contact *c);
 
 static void add_node_to_tables(struct node *node)
 {
@@ -306,8 +308,13 @@ static void add_node_to_tables(struct node *node)
 	ASSERT(node != NULL);
 	cur_contact = node->contacts;
 	while (cur_contact != NULL) {
-		/* TODO: Try to add contact but reduce timespan */
-		if (check_for_invalid_overlaps(cur_contact->data)) {
+		/* TODO: Try to add contact but reduce timespan in case of overlapping c. */
+		if (is_invalid(cur_contact->data)) {
+			LOGF("RoutingTable: Dropped invalid contact (eid=\"%s\", from=%llu, to=%llu).",
+			node->eid,
+			cur_contact->data->from,
+			cur_contact->data->to);
+
 			cur_contact = cur_contact->next;
 			continue;
 		}
@@ -442,6 +449,15 @@ static bool check_for_invalid_overlaps(struct contact *c)
 		cur = cur->next;
 	} while (cur != NULL && cur->data->from < c->to);
 	return (bool)(overlaps >= MAX_CONCURRENT_CONTACTS);
+}
+
+static bool is_invalid(struct contact *c)
+{
+	if (c->from >= c->to
+	|| c->to <= hal_time_get_timestamp_s()
+	|| check_for_invalid_overlaps(c))
+		return true;
+	return false;
 }
 
 /* CONTACT LIST */

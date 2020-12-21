@@ -351,18 +351,9 @@ static void read_command(struct config_parser *parser, const uint8_t byte)
 		break;
 	case RP_EXPECT_CONTACT_END_TIME:
 		if (byte == OBJECT_ELEMENT_SEPARATOR) {
-			end_read_uint64(parser,
-				&(parser->current_contact->data->to));
-			if (parser->current_contact->data->to >
-				parser->current_contact->data->from
-				&& parser->current_contact->data->to >
-				hal_time_get_timestamp_s()
-			) {
-				begin_read_integer(parser);
-				parser->stage = RP_EXPECT_CONTACT_BITRATE;
-			} else {
-				parser->basedata->status = PARSER_STATUS_ERROR;
-			}
+			end_read_uint64(parser, &(parser->current_contact->data->to));
+			begin_read_integer(parser);
+			parser->stage = RP_EXPECT_CONTACT_BITRATE;
 		} else if (!read_integer(parser, byte)) {
 			parser->basedata->status = PARSER_STATUS_ERROR;
 		}
