@@ -182,7 +182,7 @@ case $1 in
     flash_ud3tn "flash-unittest-stm32-openocd-oneshot"
     sleep 1
     echo 'Running tests...'
-    timeout --kill-after=6 5 openocd -c "script openocd.cfg" -c "reset halt" -c "reset run" | tee "$TDIR/ud3tn.out"
+    timeout --kill-after=50 45 openocd -c "script openocd.cfg" -c "reset halt" -c "reset run" | tee "$TDIR/ud3tn.out"
     grep -F "uD3TN unittests succeeded" "$TDIR/ud3tn.out"
     ;;
     #op#
