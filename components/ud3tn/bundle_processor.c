@@ -11,6 +11,7 @@
 
 #include "bundle6/bundle6.h"
 #include "bundle7/hopcount.h"
+#include "bundle7/bundle_age.h"
 
 #include "platform/hal_io.h"
 #include "platform/hal_queue.h"
@@ -61,6 +62,7 @@ static void bundle_forwarding_contraindicated(
 static void bundle_forwarding_failed(
 	struct bundle *bundle, enum bundle_status_report_reason reason);
 static void bundle_expired(struct bundle *bundle);
+static void bundle_age_update(struct bundle *bundle);
 static void bundle_receive(struct bundle *bundle);
 static enum bundle_handling_result handle_unknown_block_flags(
 	struct bundle *bundle, enum bundle_block_flags flags);
@@ -91,8 +93,6 @@ static void send_custody_signal(struct bundle *bundle,
 	const enum bundle_custody_signal_type,
 	const enum bundle_custody_signal_reason reason);
 static enum ud3tn_result send_bundle(bundleid_t bundle, uint16_t timeout);
-static struct bundle_block *find_block_by_type(struct bundle_block_list *blocks,
-	enum bundle_block_type type);
 
 static inline void bundle_add_rc(struct bundle *bundle,
 	const enum bundle_retention_constraints constraint)
@@ -231,6 +231,8 @@ static enum ud3tn_result bundle_forward(struct bundle *bundle, uint16_t timeout)
 		return UD3TN_FAIL;
 	}
 
+	bundle_age_update(bundle);
+
 	/* 5.4-1 */
 	bundle_add_rc(bundle, BUNDLE_RET_CONSTRAINT_FORWARD_PENDING);
 	bundle_rem_rc(bundle, BUNDLE_RET_CONSTRAINT_DISPATCH_PENDING, 0);
@@ -326,6 +328,9 @@ static void bundle_receive(struct bundle *bundle)
 	struct bundle_block_list **e;
 	enum bundle_handling_result res;
 
+	// Set the reception time to calculate the bundle's residence time
+	bundle->reception_timestamp_ms = hal_time_get_timestamp_ms();
+
 	/* 5.6-1 Add retention constraint */
 	bundle_add_rc(bundle, BUNDLE_RET_CONSTRAINT_DISPATCH_PENDING);
 	/* 5.6-2 Request reception */
@@ -333,13 +338,13 @@ static void bundle_receive(struct bundle *bundle)
 		send_status_report(bundle,
 			BUNDLE_SR_FLAG_BUNDLE_RECEIVED,
 			BUNDLE_SR_REASON_NO_INFO);
-	/* Check lifetime - TODO: support Bundle Age block */
-	if (bundle->creation_timestamp_ms != 0 &&
-			bundle_get_expiration_time_s(bundle) <
-			hal_time_get_timestamp_s()) {
+
+	// Check lifetime
+	if (bundle_get_expiration_time_s(bundle) < hal_time_get_timestamp_s()) {
 		bundle_delete(bundle, BUNDLE_SR_REASON_LIFETIME_EXPIRED);
 		return;
 	}
+
 	/* 5.6-3 Handle blocks */
 	e = &bundle->blocks;
 	while (*e != NULL) {
@@ -833,21 +838,6 @@ static enum ud3tn_result send_bundle(bundleid_t bundle, uint16_t timeout)
 }
 
 /**
- * Returns the first occurence if a specific block type in the given list
- */
-static struct bundle_block *find_block_by_type(struct bundle_block_list *blocks,
-	enum bundle_block_type type)
-{
-	while (blocks != NULL) {
-		if (blocks->data->type == type)
-			return blocks->data;
-		blocks = blocks->next;
-	}
-
-	return NULL;
-}
-
-/**
  * 4.3.4. Hop Count (BPv7-bis)
  *
  * Checks if the hop limit exceeds the hop limit. If yes, the bundle gets
@@ -859,8 +849,8 @@ static struct bundle_block *find_block_by_type(struct bundle_block_list *blocks,
  */
 static bool hop_count_validation(struct bundle *bundle)
 {
-	struct bundle_block *block = find_block_by_type(bundle->blocks,
-		BUNDLE_BLOCK_TYPE_HOP_COUNT);
+	struct bundle_block *block = bundle_block_find_by_type(
+		bundle->blocks, BUNDLE_BLOCK_TYPE_HOP_COUNT);
 
 	/* No Hop Count block was found */
 	if (block == NULL)
@@ -904,6 +894,35 @@ static bool hop_count_validation(struct bundle *bundle)
 
 	return true;
 }
+
+static void bundle_age_update(struct bundle *bundle)
+{
+	uint64_t bundle_age;
+	struct bundle_block *block = bundle_block_find_by_type(
+		bundle->blocks, BUNDLE_BLOCK_TYPE_BUNDLE_AGE);
+
+	if (block == NULL)
+		return;
+
+	bundle_age_parse(&bundle_age, block->data, block->length);
+	bundle_age += hal_time_get_timestamp_ms() -
+		bundle->reception_timestamp_ms;
+
+	uint8_t *buffer = malloc(BUNDLE_AGE_MAX_ENCODED_SIZE);
+
+	// Out of memory - validation passes none the less
+	if (buffer == NULL) {
+		LOGI("BundleProcessor: Could not update bundle_age",
+		     bundle->id);
+		return;
+	}
+
+	free(block->data);
+	block->data = buffer;
+	block->length = bundle_age_serialize(bundle_age, buffer,
+		BUNDLE_AGE_MAX_ENCODED_SIZE);
+}
+
 
 /**
  * Get the agent identifier for local bundle delivery.
