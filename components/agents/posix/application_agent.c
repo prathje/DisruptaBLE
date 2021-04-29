@@ -37,28 +37,11 @@
 #include <unistd.h>
 
 #include <sys/socket.h>
+
 #include <sys/un.h>
 
 #include <netinet/in.h>
 #include <arpa/inet.h>
-
-struct application_agent_config {
-	const struct bundle_agent_interface *bundle_agent_interface;
-
-	uint8_t bp_version;
-	uint64_t lifetime;
-
-	int listen_socket;
-	Task_t listener_task;
-};
-
-struct application_agent_comm_config {
-	struct application_agent_config *parent;
-	int socket_fd;
-	int bundle_pipe_fd[2];
-	Task_t task;
-	char *registered_agent_id;
-};
 
 // forward declaration
 static void application_agent_comm_task(void *const param);

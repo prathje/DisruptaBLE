@@ -9,6 +9,7 @@
 #ifndef HAL_IO_H_INCLUDED
 #define HAL_IO_H_INCLUDED
 
+
 #include "platform/hal_time.h"
 
 #include "ud3tn/result.h"

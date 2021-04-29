@@ -92,12 +92,19 @@ Task_t hal_task_create(void (*task_function)(void *), const char *task_name,
 
 	/* update the stack size of the thread (only if greater than 0, */
 	/* otherwise set stack size to the default value */
+#ifdef PLATFORM_ZEPHYR
+    if (task_stack_size > 256) {
+        LOG("Setting the tasks stack size failed! Above Zephyr STACKSIZE");
+		goto fail_attr;
+    }
+#else
 	if (task_stack_size != 0 &&
 			pthread_attr_setstacksize(&tattr, task_stack_size)) {
 		/* abort if error occurs */
 		LOG("Setting the tasks stack size failed! Wrong value!");
 		goto fail_attr;
 	}
+#endif
 
 	desc->task_function = task_function;
 	desc->task_parameter = task_parameters;

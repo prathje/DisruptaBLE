@@ -5,6 +5,7 @@
  * abstraction layer interface for platform-specific functionality
  *
  */
+#ifndef PLATFORM_ZEPHYR
 
 #include "platform/hal_config.h"
 #include "platform/hal_crypto.h"
@@ -120,3 +121,5 @@ void hal_platform_restart(void)
 
 	__builtin_unreachable();
 }
+
+#endif

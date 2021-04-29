@@ -9,6 +9,16 @@
 
 #define APPLICATION_AGENT_BACKLOG 2
 
+struct application_agent_config {
+    const struct bundle_agent_interface *bundle_agent_interface;
+
+    uint8_t bp_version;
+    uint64_t lifetime;
+
+    int listen_socket;
+    Task_t listener_task;
+};
+
 struct application_agent_config *application_agent_setup(
 	const struct bundle_agent_interface *bundle_agent_interface,
 	const char *socket_path,

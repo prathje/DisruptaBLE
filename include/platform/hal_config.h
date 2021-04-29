@@ -1,9 +1,7 @@
-#ifndef PLATFORM_STM32
-
-#include "platform/posix/hal_config.h"
-
-#else // PLATFORM_STM32
-
+#if defined(PLATFORM_STM32)
 #include "platform/stm32/hal_config.h"
-
-#endif // PLATFORM_STM32
+#elif defined(PLATFORM_ZEPHYR)
+#include "platform/zephyr/hal_config.h"
+#else
+#include "platform/posix/hal_config.h"
+#endif

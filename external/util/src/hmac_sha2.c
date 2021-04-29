@@ -1,4 +1,4 @@
-/*
+ /*
  * HMAC-SHA-224/256/384/512 implementation
  * Last update: 06/15/2005
  * Issue date:  06/15/2005

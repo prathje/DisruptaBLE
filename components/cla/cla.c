@@ -1,14 +1,16 @@
 #include "cla/cla.h"
 #include "cla/cla_contact_tx_task.h"
 
-#ifndef PLATFORM_STM32
+#if defined(PLATFORM_STM32)
+#include "cla/stm32/cla_usbotg.h"
+#elif defined(PLATFORM_ZEPHYR)
+// TODO
+#else // PLATFOR_POSIX
 #include "cla/posix/cla_mtcp.h"
 #include "cla/posix/cla_smtcp.h"
 #include "cla/posix/cla_tcpclv3.h"
 #include "cla/posix/cla_tcpspp.h"
-#else // PLATFORM_STM32
-#include "cla/stm32/cla_usbotg.h"
-#endif // PLATFORM_STM32
+#endif
 
 #include "platform/hal_io.h"
 #include "platform/hal_task.h"
@@ -36,14 +38,17 @@ struct available_cla_list_entry {
 };
 
 const struct available_cla_list_entry AVAILABLE_CLAS[] = {
-#ifndef PLATFORM_STM32
-	{ "mtcp", &mtcp_create },
-	{ "smtcp", &smtcp_create },
-	{ "tcpclv3", &tcpclv3_create },
-	{ "tcpspp", &tcpspp_create },
-#else // PLATFORM_STM32
-	{ "usbotg", &usbotg_create },
-#endif // PLATFORM_STM32
+
+#if defined(PLATFORM_STM32)
+    { "usbotg", &usbotg_create },
+#elif defined(PLATFORM_ZEPHYR)
+    // TODO: This is currently empty
+#else
+    { "mtcp", &mtcp_create },
+    { "smtcp", &smtcp_create },
+    { "tcpclv3", &tcpclv3_create },
+    { "tcpspp", &tcpspp_create },
+#endif
 };
 
 

@@ -7,7 +7,9 @@
 #ifndef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200809L
 #endif // _POSIX_C_SOURCE
+
 #include <string.h>
+
 
 /* COMMON FUNCTIONS */
 
@@ -52,7 +54,14 @@ while (list != NULL) { \
 
 #define HAS_FLAG(value, flag) ((value & flag) != 0)
 
+#ifdef ARRAY_LENGTH
+#undef ARRAY_LENGTH
+#endif
 #define ARRAY_LENGTH(x) (sizeof(x) / sizeof((x)[0]))
+
+#ifdef ARRAY_SIZE
+#undef ARRAY_SIZE
+#endif
 #define ARRAY_SIZE ARRAY_LENGTH
 
 #if defined(__GNUC__) && (__GNUC__ >= 7) && !defined(__clang__)

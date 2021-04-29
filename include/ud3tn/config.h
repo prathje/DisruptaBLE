@@ -22,11 +22,14 @@ static const int IS_DEBUG_BUILD;
 #define DEFAULT_EID "dtn://ud3tn.dtn"
 
 /* Default options string provided to the CLA subsystem */
-#ifdef PLATFORM_STM32
+#if defined(PLATFORM_STM32)
 #define DEFAULT_CLA_OPTIONS "usbotg:"
-#else // PLATFORM_STM32
+#elif defined(PLATFORM_ZEPHYR)
+// TODO
+#define DEFAULT_CLA_OPTIONS ""
+#else // PLATFORM_POSIX
 #define DEFAULT_CLA_OPTIONS "tcpclv3:*,4556;tcpspp:*,4223,false,1;smtcp:*,4222,false;mtcp:*,4224"
-#endif // PLATFORM_STM32
+#endif
 
 /* Default TCP IP/port used for the application agent interface */
 #define DEFAULT_AAP_NODE "0.0.0.0"
@@ -83,7 +86,9 @@ enum failed_forwarding_policy {
  * processing
  */
 /* Bundles requiring more space will be dropped immediately */
-#ifdef PLATFORM_STM32
+#if defined(PLATFORM_STM32)
+#define BUNDLE_QUOTA 24576
+#elif defined(PLATFORM_ZEPHYR)
 #define BUNDLE_QUOTA 24576
 #else
 #define BUNDLE_QUOTA 1073741824

@@ -1,3 +1,4 @@
+
 µD3TN - A Free and Lean DTN Implementation for Microcontrollers and POSIX
 =======================================================================
 
@@ -85,6 +86,25 @@ three steps are necessary after connecting the board via STLink-enabled USB:
 
 3. Type `make run-posix` to build and execute µD3TN on your local machine.
 
+
+
+#### Build and run µD3TN on Zephyr RTOS
+
+We provide a preliminary Docker Image to build and run µD3TN under Zephyr RTOS.
+By default, the minimal TCP convergence layer is used and builds on top of [6LoWPan via Bluetooth Low Energy](https://docs.zephyrproject.org/2.5.0/samples/bluetooth/ipsp/README.html).
+Currently, only the nRF52 platform is supported. This also includes the BLE simulation of multiple devices using [BabbleSim](https://babblesim.github.io/).
+
+First, start the corresponding container and mount the current working direction (the ud3tn project root) to /app:
+```
+docker run --rm -it -v ${PWD}:/app prathje/babble-sim-docker:latest /bin/bash
+cd $ZEPHYR_BASE
+git remote add cfriedt https://github.com/cfriedt/zephyr && git fetch cfriedt && git checkout db8eb312e8584cc86a0dab7b7f677be536423b38 && cd .. && west update && cd zephyr
+west build -b nrf52840dk_nrf52840 --pristine auto  /app/platforms/zephyr/
+west build -b native_posix --pristine always  /app/platforms/zephyr/ (this conflicts with POSIX atm)
+west build -b nrf52_bsim --pristine always  /app/platforms/zephyr/ (this conflicts with POSIX atm)
+```
+
+
 Getting Started with the Implementation
 ---------------------------------------
 
@@ -127,6 +147,7 @@ Via `config.h` at compile time:
 
 For configuring contacts at runtime, the `aap_config.py` script in `tools/aap`
 may be used.
+
 
 Testing
 -------
