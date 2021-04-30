@@ -10,7 +10,7 @@
 
 #include "ud3tn/common.h"
 
-#include <kernel.h>
+#include <zephyr.h>
 
 k_tid_t hal_task_create(void (*task_function)(void *), const char *task_name,
 		    int task_priority, void *task_parameters,
