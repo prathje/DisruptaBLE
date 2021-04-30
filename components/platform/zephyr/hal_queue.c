@@ -12,14 +12,20 @@
  * @return A queue identifier
  */
 struct k_msgq *hal_queue_create(int queue_length, int item_size) {
-    struct k_msgq * queue = malloc(sizeof(struct k_msgq));
-    int ret = k_msgq_alloc_init(queue, (size_t) item_size, (uint32_t) queue_length);
+
+    struct k_msgq * queue = k_malloc(sizeof(struct k_msgq));
+    if (queue == NULL) {
+        return NULL;
+    }
+
+    int ret = k_msgq_alloc_init(queue, item_size, queue_length);
 
     if (ret) {
         // not successfull!
-        free(queue);
+        k_free(queue);
         return NULL;
     }
+
     return queue;
 }
 
@@ -30,7 +36,7 @@ struct k_msgq *hal_queue_create(int queue_length, int item_size) {
  */
 void hal_queue_delete(struct k_msgq *queue) {
     k_msgq_cleanup(queue);
-    free(queue);
+    k_free(queue);
 }
 
 /**

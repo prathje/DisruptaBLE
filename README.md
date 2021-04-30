@@ -97,12 +97,17 @@ Currently, only the nRF52 platform is supported. This also includes the BLE simu
 First, start the corresponding container and mount the current working direction (the ud3tn project root) to /app:
 ```
 docker run --rm -it -v ${PWD}:/app prathje/babble-sim-docker:latest /bin/bash
+docker run --rm -it -v ${PWD}:/app --cap-add=SYS_PTRACE --security-opt seccomp=unconfined prathje/babble-sim-docker:latest /bin/bash
+
 cd $ZEPHYR_BASE
 git remote add cfriedt https://github.com/cfriedt/zephyr && git fetch cfriedt && git checkout db8eb312e8584cc86a0dab7b7f677be536423b38 && cd .. && west update && cd zephyr
 west build -b nrf52840dk_nrf52840 --pristine auto  /app/platforms/zephyr/
-west build -b native_posix --pristine always  /app/platforms/zephyr/ (this conflicts with POSIX atm)
-west build -b nrf52_bsim --pristine always  /app/platforms/zephyr/ (this conflicts with POSIX atm)
+west build -b native_posix --pristine auto  /app/platforms/zephyr/
+west build -b nrf52_bsim --pristine auto  /app/platforms/zephyr/
+./build/zephyr/zephyr.exe
 ```
+
+
 
 
 Getting Started with the Implementation

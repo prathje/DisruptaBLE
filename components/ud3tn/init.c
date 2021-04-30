@@ -52,6 +52,7 @@ void start_tasks(const struct ud3tn_cmdline_options *const opt)
 		router_update_config(rc);
 	}
 
+
 	bundle_agent_interface.local_eid = opt->eid;
 
 	/* Initialize queues to communicate with the subsystems */

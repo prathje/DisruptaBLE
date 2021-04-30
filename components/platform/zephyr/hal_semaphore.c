@@ -13,6 +13,11 @@
 struct k_sem *hal_semaphore_init_binary(void)
 {
     struct k_sem *sem = k_malloc(sizeof(struct k_sem));
+
+    if(sem == NULL) {
+        return NULL;
+    }
+
     k_sem_init(sem, 0, 1);
 	return sem;
 }

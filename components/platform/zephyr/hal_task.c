@@ -21,6 +21,11 @@ struct zephyr_task *hal_task_create(void (*task_function)(void *), const char *t
 
     struct zephyr_task *task = k_malloc(sizeof(struct zephyr_task));
 
+    if (task == NULL) {
+        return NULL;
+    }
+
+
     // TODO: This is currently based on https://github.com/zephyrproject-rtos/zephyr/issues/26999
     int32_t ret = k_alloc_thread_stack(task_stack_size, 0, &task->stack);
 
@@ -48,6 +53,9 @@ struct zephyr_task *hal_task_create(void (*task_function)(void *), const char *t
         k_free(task);
         return NULL;
     }
+
+    // We will use the default system pool for now (in user mode we would want to create separate heap regions!)
+    k_thread_system_pool_assign(task->tid);
 
     // TODO: How to name them?
     // TODO: How to tag them?
