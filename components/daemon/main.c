@@ -10,9 +10,11 @@ int u3dtn_main(int argc, char *argv[]) {
 
 
 #ifdef __ZEPHYR__
+#include <zephyr.h>
 void main(void) {
     int argc = 0;
     char * argv[] = {};
+    k_thread_system_pool_assign(k_current_get());
     u3dtn_main(argc, argv);
 }
 #else

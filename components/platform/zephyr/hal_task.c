@@ -10,6 +10,7 @@
 
 #include "ud3tn/common.h"
 #include <zephyr.h>
+#include "platform/hal_io.h"
 
 
 struct zephyr_task *hal_task_create(void (*task_function)(void *), const char *task_name,
@@ -43,15 +44,16 @@ struct zephyr_task *hal_task_create(void (*task_function)(void *), const char *t
                             K_NO_WAIT
     );
 
-    if (task->tid  == NULL) {
+    if (task->tid == NULL) {
         k_free(task->stack);
         k_free(task);
         return NULL;
     }
 
+    LOGF("Heap before: %x", task->tid->resource_pool);
     // We will use the default system pool for now (in user mode we would want to create separate heap regions!)
     k_thread_system_pool_assign(task->tid);
-
+    LOGF("Heap after: %x", task->tid->resource_pool);
     // TODO: How to name them?
     // TODO: How to tag them?
 
