@@ -4,7 +4,7 @@
 #if defined(PLATFORM_STM32)
 #include "cla/stm32/cla_usbotg.h"
 #elif defined(PLATFORM_ZEPHYR)
-// TODO
+#include "cla/zephyr/cla_ml2cap.h"
 #else // PLATFOR_POSIX
 #include "cla/posix/cla_mtcp.h"
 #include "cla/posix/cla_smtcp.h"
@@ -42,7 +42,7 @@ const struct available_cla_list_entry AVAILABLE_CLAS[] = {
 #if defined(PLATFORM_STM32)
     { "usbotg", &usbotg_create },
 #elif defined(PLATFORM_ZEPHYR)
-    // TODO: This is currently empty
+    { "ml2cap", &ml2cap_create },
 #else
     { "mtcp", &mtcp_create },
     { "smtcp", &smtcp_create },

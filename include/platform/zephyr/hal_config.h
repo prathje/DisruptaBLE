@@ -15,12 +15,20 @@
 #define CONTACT_TX_TASK_PRIORITY 3
 #define ROUTER_OPTIMIZER_TASK_PRIORITY 0
 
+// TODO: Rework these
+#define CONTACT_LISTEN_TASK_PRIORITY 2
+#define CONTACT_MANAGEMENT_TASK_PRIORITY 2
+
 // NOTE: Stack size is in 4 byte units!!! TODO: Is this also true for Zephyr?
+//TODO: Optimize them...
 #define DEFAULT_TASK_STACK_SIZE 1024
 #define CONTACT_RX_TASK_STACK_SIZE 1024
 #define CONTACT_MANAGER_TASK_STACK_SIZE 1024
 #define ROUTER_OPTIMIZER_TASK_STACK_SIZE 1024
 #define CONTACT_TX_TASK_STACK_SIZE 1024
+
+#define CONTACT_LISTEN_TASK_STACK_SIZE 1024
+#define CONTACT_MANAGEMENT_TASK_STACK_SIZE 1024
 
 // Timeout for transmitting the next byte. Specified in ms. -1 means infinite.
 #define COMM_TX_TIMEOUT -1

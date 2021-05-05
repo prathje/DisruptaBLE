@@ -25,8 +25,7 @@ static const int IS_DEBUG_BUILD;
 #if defined(PLATFORM_STM32)
 #define DEFAULT_CLA_OPTIONS "usbotg:"
 #elif defined(PLATFORM_ZEPHYR)
-// TODO
-#define DEFAULT_CLA_OPTIONS ""
+#define DEFAULT_CLA_OPTIONS "ml2cap:"
 #else // PLATFORM_POSIX
 #define DEFAULT_CLA_OPTIONS "tcpclv3:*,4556;tcpspp:*,4223,false,1;smtcp:*,4222,false;mtcp:*,4224"
 #endif

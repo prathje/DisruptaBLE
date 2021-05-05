@@ -50,10 +50,8 @@ struct zephyr_task *hal_task_create(void (*task_function)(void *), const char *t
         return NULL;
     }
 
-    LOGF("Heap before: %x", task->tid->resource_pool);
     // We will use the default system pool for now (in user mode we would want to create separate heap regions!)
     k_thread_system_pool_assign(task->tid);
-    LOGF("Heap after: %x", task->tid->resource_pool);
     // TODO: How to name them?
     // TODO: How to tag them?
 
@@ -63,6 +61,11 @@ struct zephyr_task *hal_task_create(void (*task_function)(void *), const char *t
 void hal_task_start_scheduler(void)
 {
 	// NO scheduler start required for Zephyr
+	// we just sleep all day
+
+	while(true) {
+	    k_sleep(K_FOREVER); // K_FOREVER suspends the thread
+	}
 }
 
 void hal_task_delay(int delay)
