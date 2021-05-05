@@ -34,7 +34,6 @@
 #define CONFIG_ML2CAP_SERVICE_UUID BT_UUID_GAP_VAL
 
 
-
 static const struct bt_data ad[] = {
         BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
         BT_DATA_BYTES(BT_DATA_UUID16_ALL, BT_UUID_16_ENCODE(CONFIG_ML2CAP_SERVICE_UUID))
@@ -42,11 +41,11 @@ static const struct bt_data ad[] = {
 
 
 struct ml2cap_config {
-	struct cla_config base;
+    struct cla_config base;
 
-	struct htab_entrylist *link_htab_elem[CONFIG_BT_MAX_CONN]; // we should not have really more entries than active connections?
-	struct htab link_htab;
-	Semaphore_t link_htab_sem;
+    struct htab_entrylist *link_htab_elem[CONFIG_BT_MAX_CONN]; // we should not have really more entries than active connections?
+    struct htab link_htab;
+    Semaphore_t link_htab_sem;
 
 
     struct bt_l2cap_server l2cap_server;
@@ -91,8 +90,7 @@ struct ml2cap_link {
  * @param ml2cap_config
  * @param cla_addr
  * @return */
-static struct ml2cap_link *get_link_from_connection(struct ml2cap_config *ml2cap_config, struct bt_conn *conn)
-{
+static struct ml2cap_link *get_link_from_connection(struct ml2cap_config *ml2cap_config, struct bt_conn *conn) {
 
     char addr[BT_ADDR_LE_STR_LEN];
     bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
@@ -106,9 +104,7 @@ static struct ml2cap_link *get_link_from_connection(struct ml2cap_config *ml2cap
 }
 
 
-
-static enum ud3tn_result handle_established_connection(struct ml2cap_link *const ml2cap_link)
-{
+static enum ud3tn_result handle_established_connection(struct ml2cap_link *const ml2cap_link) {
     struct ml2cap_config *const ml2cap_config = ml2cap_link->config;
 
     if (cla_link_init(&ml2cap_link->base, &ml2cap_config->base) != UD3TN_OK) {
@@ -122,8 +118,7 @@ static enum ud3tn_result handle_established_connection(struct ml2cap_link *const
 }
 
 
-static void ml2cap_link_management_task(void *p)
-{
+static void ml2cap_link_management_task(void *p) {
     struct ml2cap_link *const ml2cap_link = p;
     ASSERT(ml2cap_link->cla_addr != NULL);
 
@@ -186,9 +181,9 @@ static void chan_connected_cb(struct bt_l2cap_chan *chan) {
 
     hal_semaphore_take_blocking(ml2cap_config->link_htab_sem);
 
-    struct ml2cap_link * link = get_link_from_connection(ml2cap_config, chan->conn);
+    struct ml2cap_link *link = get_link_from_connection(ml2cap_config, chan->conn);
 
-    if(link) {
+    if (link) {
         link->chan_connected = 1;
     }
     // TODO: Can we release this already before?
@@ -201,12 +196,12 @@ static void chan_disconnected_cb(struct bt_l2cap_chan *chan) {
 
     hal_semaphore_take_blocking(ml2cap_config->link_htab_sem);
 
-    struct ml2cap_link * link = get_link_from_connection(ml2cap_config, chan->conn);
+    struct ml2cap_link *link = get_link_from_connection(ml2cap_config, chan->conn);
 
-    if(link) {
+    if (link) {
         link->chan_connected = 0;
         // and call the disconnect handler as well
-        link->config->base.vtable->cla_disconnect_handler((struct cla_link *)link);
+        link->config->base.vtable->cla_disconnect_handler((struct cla_link *) link);
     }
     // TODO: Can we release this already before?
     // TODO: We might want to introduce more specific semaphores?
@@ -221,15 +216,15 @@ static int chan_recv_cb(struct bt_l2cap_chan *chan, struct net_buf *buf) {
 
     hal_semaphore_take_blocking(ml2cap_config->link_htab_sem);
 
-    struct ml2cap_link * link = get_link_from_connection(ml2cap_config, chan->conn);
+    struct ml2cap_link *link = get_link_from_connection(ml2cap_config, chan->conn);
 
-    if(link) {
+    if (link) {
         size_t num_elements = net_buf_frags_len(buf);
-        for(int i = 0; i < num_elements; i++) {
-           // TODO: This message queue abuse is quite inefficient!
-           // TODO: Check that this conversion is correct!
-           size_t b = (size_t)net_buf_pull_u8(buf);
-           hal_queue_push_to_back(link->rx_queue, (void*) b);
+        for (int i = 0; i < num_elements; i++) {
+            // TODO: This message queue abuse is quite inefficient!
+            // TODO: Check that this conversion is correct!
+            size_t b = (size_t) net_buf_pull_u8(buf);
+            hal_queue_push_to_back(link->rx_queue, (void *) b);
         }
     }
     // TODO: Can we release this already before?
@@ -265,9 +260,9 @@ static enum ud3tn_result cla_ml2cap_start_link(
     ml2cap_link->chan_connected = false;
 
     static struct bt_l2cap_chan_ops chan_ops = {
-        .connected = chan_connected_cb,
-        .disconnected = chan_disconnected_cb,
-        .recv = chan_recv_cb
+            .connected = chan_connected_cb,
+            .disconnected = chan_disconnected_cb,
+            .recv = chan_recv_cb
     };
 
     ml2cap_link->chan.chan.ops = &chan_ops;
@@ -314,7 +309,7 @@ static enum ud3tn_result cla_ml2cap_start_link(
             CONTACT_MANAGEMENT_TASK_PRIORITY,   //TODO
             ml2cap_link,
             CONTACT_MANAGEMENT_TASK_STACK_SIZE, //TODO
-            (void *)CLA_SPECIFIC_TASK_TAG
+            (void *) CLA_SPECIFIC_TASK_TAG
     );
 
     if (!ml2cap_link->management_task) {
@@ -328,8 +323,8 @@ static enum ud3tn_result cla_ml2cap_start_link(
     hal_semaphore_take_blocking(ml2cap_config->link_htab_sem);
     htab_remove(
             &ml2cap_config->link_htab,
-                ml2cap_link->cla_addr
-            );
+            ml2cap_link->cla_addr
+    );
     hal_semaphore_release(ml2cap_config->link_htab_sem);
 
 
@@ -344,9 +339,7 @@ static enum ud3tn_result cla_ml2cap_start_link(
 }
 
 
-
-static void stop_scan(void)
-{
+static void stop_scan(void) {
     int err;
     err = bt_le_scan_stop();
     if (err) {
@@ -362,8 +355,7 @@ static void start_adv(void) {
     int err = 0;
     err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), NULL, 0);
 
-    if (err)
-    {
+    if (err) {
         LOGF("ML2CAP: advertising failed to start (err %d)\n", err);
         return;
     }
@@ -372,16 +364,14 @@ static void start_adv(void) {
 static void stop_adv(void) {
     int err = bt_le_adv_stop();
 
-    if (err)
-    {
+    if (err) {
         LOGF("ML2CAP: advertising failed to stop (err %d)\n", err);
         return;
     }
 }
 
 static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
-                            struct net_buf_simple *ad)
-{
+                            struct net_buf_simple *ad) {
     char dev[BT_ADDR_LE_STR_LEN];
 
     bt_addr_le_to_str(addr, dev, sizeof(dev));
@@ -420,8 +410,7 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
 }
 
 
-static void start_scan(void)
-{
+static void start_scan(void) {
     int err;
 
     /* Use active scanning and disable duplicate filtering to handle any
@@ -443,9 +432,7 @@ static void start_scan(void)
 }
 
 
-
-static void connected(struct bt_conn *conn, uint8_t err)
-{
+static void connected(struct bt_conn *conn, uint8_t err) {
     if (err) {
         LOGF("Connection failed (err 0x%02x)\n", err);
     } else {
@@ -455,8 +442,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
     }
 }
 
-static void disconnected(struct bt_conn *conn, uint8_t reason)
-{
+static void disconnected(struct bt_conn *conn, uint8_t reason) {
     LOGF("Disconnected (reason 0x%02x)\n", reason);
 
     struct ml2cap_config *ml2cap_config = s_ml2cap_config;
@@ -467,7 +453,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
         // we mark the link as not connected, so we essentially
         link->bt_connected = false;
         // and call the disconnect handler as well
-        link->config->base.vtable->cla_disconnect_handler((struct cla_link *)link);
+        link->config->base.vtable->cla_disconnect_handler((struct cla_link *) link);
     }
     hal_semaphore_release(ml2cap_config->link_htab_sem);
 }
@@ -489,7 +475,7 @@ int l2cap_accept(struct bt_conn *conn, struct bt_l2cap_chan **chan) {
         // we mark the link as not connected, so we essentially
         link->chan_connected = true;
         // and call the disconnect handler as well
-        link->config->base.vtable->cla_disconnect_handler((struct cla_link *)link);
+        link->config->base.vtable->cla_disconnect_handler((struct cla_link *) link);
     } else {
         LOG("ML2CAP: l2cap_accept could not find related link entry!");
     }
@@ -497,39 +483,33 @@ int l2cap_accept(struct bt_conn *conn, struct bt_l2cap_chan **chan) {
 
 }
 
-static void mtcp_management_task(void *param)
-{
-    struct ml2cap_config *const ml2cap_config = (struct ml2cap_config *)param;
+static void mtcp_management_task(void *param) {
+    struct ml2cap_config *const ml2cap_config = (struct ml2cap_config *) param;
 
     // we setup the L2CAP server to handle incoming connections
 
-    ml2cap_config->l2cap_server.psm = CONFIG_ML2CAP_PSM;
-    ml2cap_config->l2cap_server.accept = l2cap_accept;
-
-    int err = bt_l2cap_server_register(&ml2cap_config->l2cap_server);
-    if (err) {
-        LOG("ML2CAP: Error while registering L2CAP Server");
-        goto terminate;
-    }
-
-    err = bt_enable(NULL);
+    int err = bt_enable(NULL);
     if (err) {
         LOGF("Bluetooth init failed (err %d)\n", err);
         goto terminate;
     }
+    bt_conn_cb_register(&conn_callbacks);
+    LOG("Bluetooth init done\n");
 
-    err = bt_le_adv_start(BT_LE_ADV_CONN_NAME, ad, ARRAY_SIZE(ad), NULL, 0);
+    ml2cap_config->l2cap_server.psm = CONFIG_ML2CAP_PSM;
+    ml2cap_config->l2cap_server.accept = l2cap_accept;
+
+    err = bt_l2cap_server_register(&ml2cap_config->l2cap_server);
     if (err) {
-        LOGF("Advertising failed to start (err %d)\n", err);
+        LOG("ML2CAP: Error while registering L2CAP Server");
         goto terminate;
     }
-
-    bt_conn_cb_register(&conn_callbacks);
+    LOG("ML2CAP: Registered L2CAP Server");
 
     start_adv();
     start_scan();
 
-    while(true) {
+    while (true) {
         // TODO: Start advertisements and scan again in case of e.g. errors?
         k_sleep(K_SECONDS(1));
     }
@@ -539,9 +519,8 @@ static void mtcp_management_task(void *param)
     free(param);
 }
 
-static enum ud3tn_result ml2cap_launch(struct cla_config *const config)
-{
-    struct ml2cap_config *const ml2cap_config = (struct ml2cap_config *)config;
+static enum ud3tn_result ml2cap_launch(struct cla_config *const config) {
+    struct ml2cap_config *const ml2cap_config = (struct ml2cap_config *) config;
 
     ml2cap_config->management_task = hal_task_create(
             mtcp_management_task,
@@ -549,7 +528,7 @@ static enum ud3tn_result ml2cap_launch(struct cla_config *const config)
             CONTACT_LISTEN_TASK_PRIORITY, // TODO
             ml2cap_config,
             CONTACT_LISTEN_TASK_STACK_SIZE, // TODO
-            (void *)CLA_SPECIFIC_TASK_TAG
+            (void *) CLA_SPECIFIC_TASK_TAG
     );
 
     if (!ml2cap_config->management_task)
@@ -558,20 +537,17 @@ static enum ud3tn_result ml2cap_launch(struct cla_config *const config)
     return UD3TN_OK;
 }
 
-static const char *ml2cap_name_get(void)
-{
+static const char *ml2cap_name_get(void) {
     return "ml2cap";
 }
 
-size_t ml2cap_mbs_get(struct cla_config *const config)
-{
-    (void)config;
+size_t ml2cap_mbs_get(struct cla_config *const config) {
+    (void) config;
     return SIZE_MAX;
 }
 
-void ml2cap_reset_parsers(struct cla_link *link)
-{
-    struct ml2cap_link *const ml2cap_link = (struct ml2cap_link *)link;
+void ml2cap_reset_parsers(struct cla_link *link) {
+    struct ml2cap_link *const ml2cap_link = (struct ml2cap_link *) link;
 
     rx_task_reset_parsers(&link->rx_task_data);
 
@@ -580,9 +556,8 @@ void ml2cap_reset_parsers(struct cla_link *link)
 }
 
 size_t ml2cap_forward_to_specific_parser(struct cla_link *link,
-                                       const uint8_t *buffer, size_t length)
-{
-    struct ml2cap_link *const ml2cap_link = (struct ml2cap_link *)link;
+                                         const uint8_t *buffer, size_t length) {
+    struct ml2cap_link *const ml2cap_link = (struct ml2cap_link *) link;
     struct rx_task_data *const rx_data = &link->rx_task_data;
     size_t result = 0;
 
@@ -635,10 +610,9 @@ size_t ml2cap_forward_to_specific_parser(struct cla_link *link,
 
 static enum ud3tn_result ml2cap_read(struct cla_link *link,
                                      uint8_t *buffer, size_t length,
-                                     size_t *bytes_read)
-{
+                                     size_t *bytes_read) {
     struct ml2cap_link *const ml2cap_link =
-            (struct ml2cap_link *)link;
+            (struct ml2cap_link *) link;
 
 
     // Special case: empty buffer
@@ -653,8 +627,7 @@ static enum ud3tn_result ml2cap_read(struct cla_link *link,
     QueueIdentifier_t rx_queue = ml2cap_link->rx_queue;
 
     // Receive at least one byte in blocking manner from the RX queue
-    while (hal_queue_receive(rx_queue, stream, -1) != UD3TN_OK)
-        ;
+    while (hal_queue_receive(rx_queue, stream, -1) != UD3TN_OK);
     length--;
     stream++;
 
@@ -673,23 +646,21 @@ static enum ud3tn_result ml2cap_read(struct cla_link *link,
 }
 
 static enum ud3tn_result ml2cap_start_scheduled_contact(
-        struct cla_config *config, const char *eid, const char *cla_addr)
-{
+        struct cla_config *config, const char *eid, const char *cla_addr) {
     // STUB - UNUSED
-    (void)config;
-    (void)eid;
-    (void)cla_addr;
+    (void) config;
+    (void) eid;
+    (void) cla_addr;
 
     return UD3TN_OK;
 }
 
 static enum ud3tn_result ml2cap_end_scheduled_contact(
-        struct cla_config *config, const char *eid, const char *cla_addr)
-{
+        struct cla_config *config, const char *eid, const char *cla_addr) {
     // STUB - UNUSED
-    (void)config;
-    (void)eid;
-    (void)cla_addr;
+    (void) config;
+    (void) eid;
+    (void) cla_addr;
 
     return UD3TN_OK;
 }
@@ -697,20 +668,22 @@ static enum ud3tn_result ml2cap_end_scheduled_contact(
 // TODO: This net buf pool should be worked into ml2cap_send_packet_data when dynamic allocation is allowed
 // This currently assumes that we only have one call to ml2cap_send_packet_data active at a time (see tx_task)
 // TODO: We might want to use more than CONFIG_BT_MAX_CONN buffers, (who knows?)
-K_SEM_DEFINE(ml2cap_send_packet_data_pool_sem, 0, CONFIG_BT_MAX_CONN);
+K_SEM_DEFINE(ml2cap_send_packet_data_pool_sem,
+0, CONFIG_BT_MAX_CONN);
 
 // This destroy callback ensures that we do not allocate too many buffers
 static void ml2cap_send_packet_data_pool_buf_destroy(struct net_buf *buf) {
     k_sem_give(&ml2cap_send_packet_data_pool_sem);
 }
 
-NET_BUF_POOL_HEAP_DEFINE(ml2cap_send_packet_data_pool, CONFIG_BT_MAX_CONN, ml2cap_send_packet_data_pool_buf_destroy);
+NET_BUF_POOL_HEAP_DEFINE(ml2cap_send_packet_data_pool, CONFIG_BT_MAX_CONN, ml2cap_send_packet_data_pool_buf_destroy
+);
 
 
 static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const size_t length) {
 
-    struct ml2cap_link *const ml2cap_link = (struct ml2cap_link *)link;
-    struct ml2cap_config *const ml2cap_config = (struct ml2cap_config *)link->config;
+    struct ml2cap_link *const ml2cap_link = (struct ml2cap_link *) link;
+    struct ml2cap_config *const ml2cap_config = (struct ml2cap_config *) link->config;
 
 
     // overall length could be more than the supported MTU -> we need to
@@ -722,7 +695,7 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
     // K_NO_WAIT is used per specification of NET_BUF_POOL_HEAP_DEFINE
 
     while (sent < length) {
-        uint32_t frag_size = MIN(mtu, length-sent);
+        uint32_t frag_size = MIN(mtu, length - sent);
 
         // TODO: Not ideal to use the hal method here but define using zephyr specific macro!
         // This semaphore also ensures that we limit the maximum amout of stalled data (waiting to be sent by zephyr)
@@ -736,7 +709,7 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
             return;
         }
 
-        net_buf_add_mem(buf, (data+sent), frag_size);
+        net_buf_add_mem(buf, (data + sent), frag_size);
 
         int ret = bt_l2cap_chan_send(&ml2cap_link->chan.chan, buf);
 
@@ -751,10 +724,10 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
         sent += frag_size;
     }
 }
-static void ml2cap_begin_packet(struct cla_link *link, size_t length)
-{
+
+static void ml2cap_begin_packet(struct cla_link *link, size_t length) {
     struct usbotg_config *const usbotg_config =
-            (struct usbotg_config *)link->config;
+            (struct usbotg_config *) link->config;
 
     const size_t BUFFER_SIZE = 9; // max. for uint64_t
     uint8_t buffer[BUFFER_SIZE];
@@ -764,31 +737,26 @@ static void ml2cap_begin_packet(struct cla_link *link, size_t length)
     l2cap_transmit_bytes(link, buffer, hdr_len);
 }
 
-static void ml2cap_end_packet(struct cla_link *link)
-{
+static void ml2cap_end_packet(struct cla_link *link) {
     // STUB
-    (void)link;
+    (void) link;
 }
 
 
-
-void ml2cap_send_packet_data(struct cla_link *link, const void *data, const size_t length)
-{
+void ml2cap_send_packet_data(struct cla_link *link, const void *data, const size_t length) {
     l2cap_transmit_bytes(link, data, length);
 }
 
-static void usbotg_disconnect_handler(struct cla_link *link)
-{
-    (void)link;
+static void usbotg_disconnect_handler(struct cla_link *link) {
+    (void) link;
     ASSERT(0);
     // TODO!
 }
 
 static struct cla_tx_queue ml2cap_get_tx_queue(
-        struct cla_config *config, const char *eid, const char *cla_addr)
-{
-    (void)eid;
-    struct ml2cap_config *const ml2cap_config = (struct ml2cap_config *)config;
+        struct cla_config *config, const char *eid, const char *cla_addr) {
+    (void) eid;
+    struct ml2cap_config *const ml2cap_config = (struct ml2cap_config *) config;
 
     hal_semaphore_take_blocking(ml2cap_config->link_htab_sem);
 
@@ -805,16 +773,16 @@ static struct cla_tx_queue ml2cap_get_tx_queue(
 
         // Freed while trying to obtain it
         if (!cla_link->tx_queue_handle)
-            return (struct cla_tx_queue){ NULL, NULL };
+            return (struct cla_tx_queue) {NULL, NULL};
 
-        return (struct cla_tx_queue){
+        return (struct cla_tx_queue) {
                 .tx_queue_handle = cla_link->tx_queue_handle,
                 .tx_queue_sem = cla_link->tx_queue_sem,
         };
     }
 
     hal_semaphore_release(ml2cap_config->link_htab_sem);
-    return (struct cla_tx_queue){ NULL, NULL };
+    return (struct cla_tx_queue) {NULL, NULL};
 }
 
 
@@ -841,8 +809,7 @@ const struct cla_vtable ml2cap_vtable = {
 };
 
 static enum ud3tn_result ml2cap_init(
-        struct ml2cap_config *config, const struct bundle_agent_interface *bundle_agent_interface)
-{
+        struct ml2cap_config *config, const struct bundle_agent_interface *bundle_agent_interface) {
     /* Initialize base_config */
     if (cla_config_init(&config->base, bundle_agent_interface) != UD3TN_OK)
         return UD3TN_FAIL;
@@ -864,8 +831,8 @@ struct cla_config *ml2cap_create(
         const char *const options[], const size_t option_count,
         const struct bundle_agent_interface *bundle_agent_interface) {
 
-    (void)options;
-    (void)option_count;
+    (void) options;
+    (void) option_count;
 
     if (s_ml2cap_config) {
         // TODO: Shall we handle restarts too?
