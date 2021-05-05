@@ -343,63 +343,7 @@ static enum ud3tn_result cla_ml2cap_start_link(
     return UD3TN_FAIL;
 }
 
-static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
-                            struct net_buf_simple *ad)
-{
-    char dev[BT_ADDR_LE_STR_LEN];
 
-    bt_addr_le_to_str(addr, dev, sizeof(dev));
-    printk("[DEVICE]: %s, AD evt type %u, AD data len %u, RSSI %i\n",
-           dev, type, ad->len, rssi);
-
-    /* We're only interested in connectable events */
-    if (type == BT_GAP_ADV_TYPE_ADV_IND ||
-        type == BT_GAP_ADV_TYPE_ADV_DIRECT_IND) {
-
-        struct ml2cap_config *ml2cap_config = s_ml2cap_config;
-
-
-        // we check if we already have a connection to this device
-        hal_semaphore_take_blocking(ml2cap_config->link_htab_sem);
-
-        struct ml2cap_link *link = htab_get(
-                &ml2cap_config->link_htab,
-                dev
-        );
-
-        hal_semaphore_release(ml2cap_config->link_htab_sem);
-
-        // TODO: This does not cover, timed out / failed connections etc.
-        if (!link) {
-            int err = bt_conn_le_create(addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM_DEFAULT, NULL);
-            if (err) {
-                printk("[P2P] Create conn failed (err %d)\n", err);
-            }
-        }
-    }
-}
-
-static void start_scan(void)
-{
-    int err;
-
-    /* Use active scanning and disable duplicate filtering to handle any
-     * devices that might update their advertising data at runtime. */
-    struct bt_le_scan_param scan_param = {
-            .type       = BT_LE_SCAN_TYPE_PASSIVE,
-            .options    = BT_LE_SCAN_OPT_NONE,
-            .interval   = BT_GAP_SCAN_FAST_INTERVAL,    // TODO: Adapt interval and window
-            .window     = BT_GAP_SCAN_FAST_WINDOW,
-    };
-
-    err = bt_le_scan_start(&scan_param, device_found_cb);
-    if (err) {
-        LOGF("ML2CAP: Scanning failed to start (err %d)\n", err);
-        return;
-    }
-
-    LOG("ML2CAP: Scanning successfully started\n");
-}
 
 static void stop_scan(void)
 {
@@ -433,6 +377,69 @@ static void stop_adv(void) {
         LOGF("ML2CAP: advertising failed to stop (err %d)\n", err);
         return;
     }
+}
+
+static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
+                            struct net_buf_simple *ad)
+{
+    char dev[BT_ADDR_LE_STR_LEN];
+
+    bt_addr_le_to_str(addr, dev, sizeof(dev));
+    printk("[DEVICE]: %s, AD evt type %u, AD data len %u, RSSI %i\n",
+           dev, type, ad->len, rssi);
+
+    /* We're only interested in connectable events */
+    if (type == BT_GAP_ADV_TYPE_ADV_IND ||
+        type == BT_GAP_ADV_TYPE_ADV_DIRECT_IND) {
+
+        struct ml2cap_config *ml2cap_config = s_ml2cap_config;
+
+
+        // we check if we already have a connection to this device
+        hal_semaphore_take_blocking(ml2cap_config->link_htab_sem);
+
+        struct ml2cap_link *link = htab_get(
+                &ml2cap_config->link_htab,
+                dev
+        );
+
+        hal_semaphore_release(ml2cap_config->link_htab_sem);
+
+        // TODO: This does not cover, timed out / failed connections etc.
+        if (!link) {
+
+            stop_adv();
+            stop_scan();
+
+            int err = bt_conn_le_create(addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM_DEFAULT, NULL);
+            if (err) {
+                printk("[P2P] Create conn failed (err %d)\n", err);
+            }
+        }
+    }
+}
+
+
+static void start_scan(void)
+{
+    int err;
+
+    /* Use active scanning and disable duplicate filtering to handle any
+     * devices that might update their advertising data at runtime. */
+    struct bt_le_scan_param scan_param = {
+            .type       = BT_LE_SCAN_TYPE_PASSIVE,
+            .options    = BT_LE_SCAN_OPT_NONE,
+            .interval   = BT_GAP_SCAN_FAST_INTERVAL,    // TODO: Adapt interval and window
+            .window     = BT_GAP_SCAN_FAST_WINDOW,
+    };
+
+    err = bt_le_scan_start(&scan_param, device_found_cb);
+    if (err) {
+        LOGF("ML2CAP: Scanning failed to start (err %d)\n", err);
+        return;
+    }
+
+    LOG("ML2CAP: Scanning successfully started\n");
 }
 
 
@@ -845,11 +852,9 @@ static enum ud3tn_result ml2cap_init(
     config->base.vtable = &ml2cap_vtable;
 
     // TODO: use other config variable
-    htab_init(&config->link_htab, CLA_TCP_PARAM_HTAB_SLOT_COUNT,
-              config->link_htab_elem);
+    htab_init(&config->link_htab, CONFIG_BT_MAX_CONN, config->link_htab_elem);
     config->link_htab_sem = hal_semaphore_init_binary();
     hal_semaphore_release(config->link_htab_sem);
-
 
     return UD3TN_OK;
 }
@@ -884,5 +889,6 @@ struct cla_config *ml2cap_create(
     // TODO: Rework this singleton!
     s_ml2cap_config = config;
 
+    LOG("ml2cap: Creation completed!");
     return &config->base;
 }
