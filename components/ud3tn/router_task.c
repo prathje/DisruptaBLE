@@ -267,6 +267,7 @@ static bool process_signal(
 		LOGF("RouterTask: Node withdrawn (%p)!", node);
 		break;
 	case ROUTER_SIGNAL_NEW_LINK_ESTABLISHED:
+		LOG("RouterTask: New Link! :)");
 		// NOTE: When we implement a "bundle backlog", we will attempt
 		// to route the bundles here.
 		wake_up_contact_manager(
