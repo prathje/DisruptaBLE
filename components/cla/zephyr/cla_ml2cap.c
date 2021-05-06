@@ -112,6 +112,9 @@ static enum ud3tn_result handle_established_connection(struct ml2cap_link *const
         return UD3TN_FAIL;
     }
 
+
+    // TODO: Shall we wait and disconnect before waiting for the cleanup?
+
     cla_link_wait_cleanup(&ml2cap_link->base);
 
     return UD3TN_OK;
@@ -126,19 +129,26 @@ static void ml2cap_link_management_task(void *p) {
     // we know need to either start the server or connect to it based on our role
 
     if (ml2cap_link->is_client) {
+        LOGF("ML2CAP: Initiating channel connectiong to \"%s\"", ml2cap_link->cla_addr);
         // we are the client and try to connect to the channel server
         bt_l2cap_chan_connect(ml2cap_link->conn, &ml2cap_link->chan.chan, CONFIG_ML2CAP_PSM);
     } else {
+        LOGF("ML2CAP: Awaiting channel connectiong from \"%s\"", ml2cap_link->cla_addr);
         // we are the server and use the running L2CAP server to handle incoming connections
         // nothing more to initialize here, the server accept callback and sets the connection on the relevant link
     }
 
     while (ml2cap_link->bt_connected && !ml2cap_link->chan_connected) {
-        hal_task_delay(20); // delay for 20 msec TODO
+        LOGF("ML2CAP: Still waiting... for \"%s\"", ml2cap_link->cla_addr);
+        hal_task_delay(1000); // delay for 20 msec TODO!
     }
 
     if (ml2cap_link->bt_connected && ml2cap_link->chan_connected) {
+        LOGF("ML2CAP: Channel established handling connectiong to \"%s\"", ml2cap_link->cla_addr);
         handle_established_connection(ml2cap_link);
+        LOGF("ML2CAP: Channel handling to \"%s\" finished", ml2cap_link->cla_addr);
+    } else {
+        LOGF("ML2CAP: Could not connect the channel for \"%s\"", ml2cap_link->cla_addr);
     }
 
     if (ml2cap_link->bt_connected) {
@@ -177,6 +187,7 @@ static void ml2cap_link_management_task(void *p) {
 
 static void chan_connected_cb(struct bt_l2cap_chan *chan) {
 
+    LOG("Channel connected!");
     struct ml2cap_config *ml2cap_config = s_ml2cap_config;
 
     hal_semaphore_take_blocking(ml2cap_config->link_htab_sem);
@@ -194,14 +205,16 @@ static void chan_connected_cb(struct bt_l2cap_chan *chan) {
 static void chan_disconnected_cb(struct bt_l2cap_chan *chan) {
     struct ml2cap_config *ml2cap_config = s_ml2cap_config;
 
+    LOG("Channel disconnected!");
     hal_semaphore_take_blocking(ml2cap_config->link_htab_sem);
 
     struct ml2cap_link *link = get_link_from_connection(ml2cap_config, chan->conn);
 
     if (link) {
         link->chan_connected = 0;
-        // and call the disconnect handler as well
-        link->config->base.vtable->cla_disconnect_handler((struct cla_link *) link);
+        // and call the disconnect handler as well if the queue
+        // TODO: This will try to shutdown the tx thread which might not have been spawned.
+        //link->config->base.vtable->cla_disconnect_handler((struct cla_link *) link);
     }
     // TODO: Can we release this already before?
     // TODO: We might want to introduce more specific semaphores?
@@ -401,9 +414,15 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
             stop_adv();
             stop_scan();
 
-            int err = bt_conn_le_create(addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM_DEFAULT, NULL);
+            struct bt_conn *conn;
+
+            int err = bt_conn_le_create(addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM_DEFAULT, &conn);
+
             if (err) {
                 printk("[P2P] Create conn failed (err %d)\n", err);
+            } else {
+                // we directly unref the connection here as we will use the connection event to save it
+                bt_conn_unref(conn);
             }
         }
     }
@@ -434,16 +453,16 @@ static void start_scan(void) {
 
 static void connected(struct bt_conn *conn, uint8_t err) {
     if (err) {
-        LOGF("Connection failed (err 0x%02x)\n", err);
+        LOGF("BLE Connection failed (err 0x%02x)\n", err);
     } else {
-        LOG("Connected\n");
+        LOG("BLE Connected\n");
         // we now try to start the relevant link (which will itself try to connect to the L2CAP Server)
         cla_ml2cap_start_link(s_ml2cap_config, conn);
     }
 }
 
 static void disconnected(struct bt_conn *conn, uint8_t reason) {
-    LOGF("Disconnected (reason 0x%02x)\n", reason);
+    LOGF("BLE Disconnected (reason 0x%02x)\n", reason);
 
     struct ml2cap_config *ml2cap_config = s_ml2cap_config;
 
@@ -453,7 +472,8 @@ static void disconnected(struct bt_conn *conn, uint8_t reason) {
         // we mark the link as not connected, so we essentially
         link->bt_connected = false;
         // and call the disconnect handler as well
-        link->config->base.vtable->cla_disconnect_handler((struct cla_link *) link);
+        // TODO: This will try to shutdown the tx thread which might not have been spawned.
+        //link->config->base.vtable->cla_disconnect_handler((struct cla_link *) link);
     }
     hal_semaphore_release(ml2cap_config->link_htab_sem);
 }
@@ -474,8 +494,6 @@ int l2cap_accept(struct bt_conn *conn, struct bt_l2cap_chan **chan) {
         *chan = &link->chan.chan;
         // we mark the link as not connected, so we essentially
         link->chan_connected = true;
-        // and call the disconnect handler as well
-        link->config->base.vtable->cla_disconnect_handler((struct cla_link *) link);
     } else {
         LOG("ML2CAP: l2cap_accept could not find related link entry!");
     }
@@ -726,8 +744,6 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
 }
 
 static void ml2cap_begin_packet(struct cla_link *link, size_t length) {
-    struct usbotg_config *const usbotg_config =
-            (struct usbotg_config *) link->config;
 
     const size_t BUFFER_SIZE = 9; // max. for uint64_t
     uint8_t buffer[BUFFER_SIZE];
@@ -747,16 +763,12 @@ void ml2cap_send_packet_data(struct cla_link *link, const void *data, const size
     l2cap_transmit_bytes(link, data, length);
 }
 
-static void usbotg_disconnect_handler(struct cla_link *link) {
-    (void) link;
-    ASSERT(0);
-    // TODO!
-}
-
 static struct cla_tx_queue ml2cap_get_tx_queue(
         struct cla_config *config, const char *eid, const char *cla_addr) {
     (void) eid;
     struct ml2cap_config *const ml2cap_config = (struct ml2cap_config *) config;
+
+    LOGF("ml2cap_get_tx_queue addr: %s", cla_addr);
 
     hal_semaphore_take_blocking(ml2cap_config->link_htab_sem);
 
@@ -765,7 +777,7 @@ static struct cla_tx_queue ml2cap_get_tx_queue(
             cla_addr
     );
 
-    if (link && link->bt_connected && link->chan_connected) {
+    if (link) {
         struct cla_link *const cla_link = &link->base;
 
         hal_semaphore_take_blocking(cla_link->tx_queue_sem);
