@@ -157,8 +157,14 @@ enum ud3tn_result cla_config_init(
 	return UD3TN_OK;
 }
 
-enum ud3tn_result cla_link_init(struct cla_link *link,
-				struct cla_config *config)
+/**
+ *
+ * @param link
+ * @param config
+ * @param cla_link_address address with cla protocol e.g. mtcp://127.0.0.1, will be duplicated
+ * @return
+ */
+enum ud3tn_result cla_link_init(struct cla_link *link, struct cla_config *config, const char *cla_link_address)
 {
 	link->config = config;
 	link->active = true;
@@ -168,6 +174,13 @@ enum ud3tn_result cla_link_init(struct cla_link *link,
 
 	link->tx_queue_handle = NULL;
 	link->tx_queue_sem = NULL;
+
+    link->cla_link_address = NULL;
+
+    if (cla_link_address) {
+        link->cla_link_address = strdup(cla_link_address);
+    }
+
 
 	// Semaphores used for waiting for the tasks to exit
 	// NOTE: They are already locked on creation!
@@ -215,9 +228,17 @@ enum ud3tn_result cla_link_init(struct cla_link *link,
 	}
 
 	// Notify the router task of the newly established connection...
+
+	const char *link_addr = NULL;
+
+	if (link->cla_link_address) {
+	    // this needs to be freed by the router_task
+        link_addr = strdup(link->cla_link_address);
+	}
+
 	struct router_signal rt_signal = {
 		.type = ROUTER_SIGNAL_NEW_LINK_ESTABLISHED,
-		.data = NULL,
+		.data = link_addr,
 	};
 	const struct bundle_agent_interface *const bundle_agent_interface =
 		config->bundle_agent_interface;
@@ -239,6 +260,11 @@ fail_rx_data:
 fail_tx_sem:
 	hal_semaphore_delete(link->rx_task_sem);
 fail_rx_sem:
+
+    if (link->cla_link_address) {
+        free((void*)link->cla_link_address);
+        link->cla_link_address = NULL;
+    }
 	return UD3TN_FAIL;
 }
 
@@ -266,6 +292,12 @@ void cla_link_wait_cleanup(struct cla_link *link)
 
 	link->config->vtable->cla_rx_task_reset_parsers(link);
 	rx_task_data_deinit(&link->rx_task_data);
+
+	// and clean the link's address
+    if (link->cla_link_address) {
+        free((void*)link->cla_link_address);
+        link->cla_link_address = NULL;
+    }
 }
 
 char *cla_get_connect_addr(const char *cla_addr, const char *cla_name)

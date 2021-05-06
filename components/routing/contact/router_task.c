@@ -267,7 +267,12 @@ static bool process_signal(
 		LOGF("RouterTask: Node withdrawn (%p)!", node);
 		break;
 	case ROUTER_SIGNAL_NEW_LINK_ESTABLISHED:
-		LOG("RouterTask: New Link! :)");
+        const char* link_cla_address = (const char *)signal.data;
+        if(link_cla_address) {
+            LOGF("RouterTask: New Link with address %s", link_cla_address);
+            // we directly free the address
+            free(link_cla_address);
+        }
 		// NOTE: When we implement a "bundle backlog", we will attempt
 		// to route the bundles here.
 		wake_up_contact_manager(

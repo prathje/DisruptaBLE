@@ -66,7 +66,7 @@ enum ud3tn_result cla_tcp_link_init(
 	link->connection_socket = connected_socket;
 
 	// This will fire up the RX and TX tasks
-	if (cla_link_init(&link->base, &config->base) != UD3TN_OK)
+	if (cla_link_init(&link->base, &config->base, NULL) != UD3TN_OK)
 		return UD3TN_FAIL;
 
 	return UD3TN_OK;

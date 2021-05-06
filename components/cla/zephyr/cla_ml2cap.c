@@ -107,7 +107,7 @@ static struct ml2cap_link *get_link_from_connection(struct ml2cap_config *ml2cap
 static enum ud3tn_result handle_established_connection(struct ml2cap_link *const ml2cap_link) {
     struct ml2cap_config *const ml2cap_config = ml2cap_link->config;
 
-    if (cla_link_init(&ml2cap_link->base, &ml2cap_config->base) != UD3TN_OK) {
+    if (cla_link_init(&ml2cap_link->base, &ml2cap_config->base, ml2cap_link->cla_addr) != UD3TN_OK) {
         LOG("ML2CAP: Error initializing CLA link!");
         return UD3TN_FAIL;
     }

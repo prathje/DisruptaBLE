@@ -4,9 +4,11 @@ project(ud3tn)
 
 
 
-FILE(GLOB app_components ../../components/*/*.c ../../components/*/zephyr/*.c ../../components/routing/*/*.c)
+FILE(GLOB app_components ../../components/*/*.c ../../components/*/zephyr/*.c)
 FILE(GLOB app_include ../../include)
 
+FILE(GLOB app_routing_contact ../../components/routing/contact/*.c)
+FILE(GLOB app_routing_epidemic ../../components/routing/epidemic/*.c)
 
 
 
@@ -27,7 +29,7 @@ FILE(GLOB ext_src_tinycbor
 FILE(GLOB ext_src ../../external/util/src/*.c)
 FILE(GLOB ext_include ../../external/tinycbor/src ../../external/util/include)
 
-target_sources(app PRIVATE ${app_components} ${ext_src} ${ext_src_tinycbor})
+target_sources(app PRIVATE ${app_components} ${ext_src} ${ext_src_tinycbor} ${app_routing_epidemic})
 
 target_include_directories(app PRIVATE ${app_include} ${ext_include})
 target_compile_definitions(app PUBLIC PLATFORM_ZEPHYR WITHOUT_OPEN_MEMSTREAM _POSIX_C_SOURCE=200809L)

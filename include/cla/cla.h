@@ -43,6 +43,8 @@ struct cla_link {
 	QueueIdentifier_t tx_queue_handle;
 	// Semaphore blocking the TX queue while bundles are being added
 	Semaphore_t tx_queue_sem;
+
+    char *cla_link_address;
 };
 
 struct cla_tx_queue {
@@ -69,7 +71,8 @@ enum ud3tn_result cla_config_init(
 	const struct bundle_agent_interface *bundle_agent_interface);
 
 enum ud3tn_result cla_link_init(struct cla_link *link,
-				struct cla_config *config);
+				struct cla_config *config,
+                const char *cla_link_address);
 
 void cla_link_wait_cleanup(struct cla_link *link);
 

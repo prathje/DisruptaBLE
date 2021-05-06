@@ -323,7 +323,7 @@ struct cla_config *usbotg_create(
 	/* set base_config vtable */
 	config->base.vtable = &usbotg_vtable;
 
-	if (cla_link_init(&config->link, &config->base) != UD3TN_OK) {
+	if (cla_link_init(&config->link, &config->base, NULL) != UD3TN_OK) {
 		LOG("usbotg: Link initialization failed!");
 		free(config);
 		return NULL;

@@ -104,6 +104,17 @@ west build -b nrf52_bsim --pristine auto  /app/platforms/zephyr/
 ./build/zephyr/zephyr.exe
 ```
 
+Or execute the bsim test simulation:
+```
+/app/bsim/test.sh
+```
+
+To run with gdb support:
+```
+/app/bsim/test_gdb.sh
+```
+
+
 
 
 
