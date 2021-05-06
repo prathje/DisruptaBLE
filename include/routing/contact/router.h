@@ -4,7 +4,7 @@
 #include "ud3tn/bundle.h"
 #include "ud3tn/config.h"
 #include "ud3tn/node.h"
-#include "ud3tn/routing_table.h"
+#include "routing_table.h"
 
 #include <stddef.h>
 #include <stdint.h>

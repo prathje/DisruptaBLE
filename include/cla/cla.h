@@ -79,6 +79,9 @@ void cla_generic_disconnect_handler(struct cla_link *link);
 
 /*
  * Virtual Functions
+ * TODO: These are very complicated due to the interconnection between the individual cla and the common tx/rx handlers
+ *       The common cla mechanisms could be refactored into own components which are then managed by the cla implementation (and not the other way around)
+ *       resulting in a strict hierarchy and possibly clean communication relying only on e.g. message queues for CLA as well.
  */
 
 struct cla_vtable {
@@ -93,15 +96,16 @@ struct cla_vtable {
 	/* Obtains the max. serialized size of outgoing bundles for this CLA. */
 	size_t (*cla_mbs_get)(struct cla_config *);
 
-
 	/* Returns the transmission queue for the given node EID and address */
 	struct cla_tx_queue (*cla_get_tx_queue)(struct cla_config *,
 						const char *, const char *);
 	/* Initiates a scheduled contact for a given EID and CLA address */
+	// TODO: This is very specific to some CLA implementations, the router could just try to send bundles to a specific CLA address which triggers connection creation if none is yet available (or introduce signal
 	enum ud3tn_result (*cla_start_scheduled_contact)(struct cla_config *,
 							 const char *,
 							 const char *);
 	/* Ends a scheduled contact for a given EID and CLA address */
+	// TODO: This is very specific to some CLA implementations, we could introduce
 	enum ud3tn_result (*cla_end_scheduled_contact)(struct cla_config *,
 						       const char *,
 						       const char *);

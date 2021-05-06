@@ -12,7 +12,7 @@
 
 #include "ud3tn/common.h"
 #include "ud3tn/result.h"
-#include "ud3tn/router_task.h"
+#include "routing/router_task.h"
 
 #include <netdb.h>
 #include <netinet/tcp.h>

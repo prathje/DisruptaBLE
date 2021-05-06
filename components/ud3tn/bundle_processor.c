@@ -6,7 +6,7 @@
 #include "ud3tn/bundle_storage_manager.h"
 #include "ud3tn/report_manager.h"
 #include "ud3tn/result.h"
-#include "ud3tn/router_task.h"
+#include "routing/router_task.h"
 #include "ud3tn/task_tags.h"
 
 #include "bundle6/bundle6.h"

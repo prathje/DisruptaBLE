@@ -1,8 +1,8 @@
 #include "ud3tn/bundle.h"
 #include "ud3tn/common.h"
 #include "ud3tn/node.h"
-#include "ud3tn/router.h"
-#include "ud3tn/routing_table.h"
+#include "routing/contact/router.h"
+#include "routing/contact/routing_table.h"
 
 #include "cla/cla.h"
 

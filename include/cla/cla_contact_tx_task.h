@@ -4,7 +4,7 @@
 #include "cla/cla.h"
 
 #include "ud3tn/node.h"
-#include "ud3tn/router.h"
+#include "routing/contact/router.h"
 
 #include "platform/hal_queue.h"
 

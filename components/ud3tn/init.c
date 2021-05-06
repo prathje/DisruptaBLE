@@ -3,8 +3,8 @@
 #include "ud3tn/cmdline.h"
 #include "ud3tn/common.h"
 #include "ud3tn/init.h"
-#include "ud3tn/router.h"
-#include "ud3tn/router_task.h"
+#include "routing/contact/router.h"
+#include "routing/router_task.h"
 #include "ud3tn/task_tags.h"
 
 #include "agents/application_agent.h"

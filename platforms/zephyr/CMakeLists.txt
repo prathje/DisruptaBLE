@@ -4,7 +4,7 @@ project(ud3tn)
 
 
 
-FILE(GLOB app_components ../../components/*/*.c ../../components/*/zephyr/*.c)
+FILE(GLOB app_components ../../components/*/*.c ../../components/*/zephyr/*.c ../../components/routing/*/*.c)
 FILE(GLOB app_include ../../include)
 
 

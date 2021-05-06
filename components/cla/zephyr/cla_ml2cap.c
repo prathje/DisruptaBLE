@@ -483,7 +483,6 @@ static struct bt_conn_cb conn_callbacks = {
         .disconnected = disconnected,
 };
 
-
 int l2cap_accept(struct bt_conn *conn, struct bt_l2cap_chan **chan) {
 
     struct ml2cap_config *ml2cap_config = s_ml2cap_config;

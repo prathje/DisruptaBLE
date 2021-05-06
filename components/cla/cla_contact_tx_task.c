@@ -11,7 +11,7 @@
 
 #include "ud3tn/bundle_storage_manager.h"
 #include "ud3tn/common.h"
-#include "ud3tn/router_task.h"
+#include "routing/router_task.h"
 #include "ud3tn/task_tags.h"
 
 #include <stdlib.h>
