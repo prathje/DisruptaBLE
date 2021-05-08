@@ -237,7 +237,7 @@ static bool process_signal(
             LOG("ROUTER_SIGNAL_NEW_LINK_ESTABLISHED not supported");
             break;
         case ROUTER_SIGNAL_NEIGHBOR_DISCOVERED:
-            ;LOG("ROUTER_SIGNAL_NEIGHBOR_DISCOVERED");
+            ;//LOG("ROUTER_SIGNAL_NEIGHBOR_DISCOVERED");
             struct node *neighbor = (struct node *)signal.data;
             if(neighbor) {
                 LOGF("RouterTask: Neighbor Discovered %s, %s", neighbor->eid, neighbor->cla_addr);

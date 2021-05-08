@@ -103,7 +103,7 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
 
     struct ml2cap_config *const ml2cap_config = (struct ml2cap_config *const) context;
 
-    LOGF("ML2CAP: Found other device with mac_address %s and eid %s", ble_node_info->mac_addr, ble_node_info->eid);
+    //LOGF("ML2CAP: Found other device with mac_address %s and eid %s", ble_node_info->mac_addr, ble_node_info->eid);
 
     // we now build the corresponding node entry and push it to the router which would then decide how to proceed with this contact
     // node will be freed by the router

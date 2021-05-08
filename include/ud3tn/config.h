@@ -19,7 +19,9 @@ static const int IS_DEBUG_BUILD;
  */
 
 /* Default local EID */
+#ifndef DEFAULT_EID
 #define DEFAULT_EID "dtn://ud3tn.dtn"
+#endif
 
 /* Default options string provided to the CLA subsystem */
 #if defined(PLATFORM_STM32)

@@ -1,0 +1,5 @@
+source "$ZEPHYR_BASE/Kconfig.zephyr"
+
+config EID
+	string "Default EID"
+	default "dtn://ud3tn.dtn"

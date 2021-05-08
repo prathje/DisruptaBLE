@@ -23,14 +23,12 @@
 #define NB_BLE_QUEUE_SIZE 10
 #define CONFIG_ML2CAP_SERVICE_UUID BT_UUID_GAP_VAL
 
+#define NB_BLE_UUID 0xFFFF
+
 // TODO: Not the best to define them statically...
 static struct nb_ble_config nb_ble_config;
 static QueueIdentifier_t nb_ble_node_info_queue;
 
-static const struct bt_data ad[] = {
-        BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-        BT_DATA_BYTES(BT_DATA_UUID16_ALL, BT_UUID_16_ENCODE(CONFIG_ML2CAP_SERVICE_UUID))
-};
 
 static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
                             struct net_buf_simple *ad) {
@@ -48,17 +46,43 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
     if (type == BT_GAP_ADV_TYPE_ADV_IND ||
         type == BT_GAP_ADV_TYPE_ADV_DIRECT_IND) {
 
-        struct nb_ble_node_info node_info = {
-            .eid = strdup("dtn://test"),
-            .mac_addr = strdup(dev)
-        };
+        // TODO: This is not standard-conform advertisement parsing!
+        if (ad->len >= 5) {
+            /*uint8_t _flags_len = */ net_buf_simple_pull_u8(ad);
+            /*uint8_t _flags_type = */ net_buf_simple_pull_u8(ad);
+            /*uint8_t _flags = */ net_buf_simple_pull_u8(ad);
+            uint8_t entry_len = net_buf_simple_pull_u8(ad);
+            uint8_t type = net_buf_simple_pull_u8(ad);
 
-        // we simply queue this to prevent BLE thread blocking
-        // This will copy the content from node_info into the queue
-        if(hal_queue_try_push_to_back(nb_ble_node_info_queue, &node_info, 0) != UD3TN_OK) {
-            LOG("NB BLE: Could not queue node info!");
-            free(node_info.eid);
-            free(node_info.mac_addr);
+            if (type == BT_DATA_SVC_DATA16 && entry_len >= 4) {
+
+                uint8_t uuid_low = net_buf_simple_pull_u8(ad);
+                uint8_t uuid_high = net_buf_simple_pull_u8(ad);
+
+                if (((uuid_high<<8)|uuid_low) == NB_BLE_UUID) {
+
+                    size_t eid_len = entry_len-3;
+                    void *eid_buf = net_buf_simple_pull_mem(ad, eid_len);
+
+                    // This will be freed later!
+                    char *eid = malloc(eid_len+1);
+                    memcpy(eid, eid_buf, eid_len);
+                    eid[eid_len] = '\0';
+
+                    struct nb_ble_node_info node_info = {
+                            .eid = eid,
+                            .mac_addr = strdup(dev)
+                    };
+
+                    // we simply queue this to prevent BLE thread blocking
+                    // This will copy the content from node_info into the queue
+                    if(hal_queue_try_push_to_back(nb_ble_node_info_queue, &node_info, 0) != UD3TN_OK) {
+                        LOG("NB BLE: Could not queue node info!");
+                        free(node_info.eid);
+                        free(node_info.mac_addr);
+                    }
+                }
+            }
         }
     }
 }
@@ -91,7 +115,26 @@ static void nb_ble_management_task(void *param) {
 
 void nb_ble_start() {
     int err = 0;
-    err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), NULL, 0);
+
+    size_t data_len = strlen(nb_ble_config.eid)+2; // 2 byte uuid
+    char *data = malloc(data_len);
+
+    // Store the UUID in little endian format
+    *data = NB_BLE_UUID&0xFF;
+    *(data+1) = (NB_BLE_UUID>>8)&0xFF;
+    memcpy(data+2, nb_ble_config.eid, data_len-2);  // this copies the data without the null terminator
+
+    struct bt_data ad[] = {
+            BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
+            BT_DATA(BT_DATA_SVC_DATA16, data, data_len)
+    };
+
+    err = bt_le_adv_start(
+            BT_LE_ADV_CONN,
+            ad,
+            ARRAY_SIZE(ad), NULL, 0);
+
+    free(data);
 
     if (err) {
         LOGF("NB BLE: advertising failed to start (err %d)\n", err);
