@@ -21,6 +21,55 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Limit the amount of transmissions to nodes that are NOT the destination
+// -1 Transmissions will not limit the amount of transmissions to other nodes
+// Bundles will still be delivered to the destination node in all cases
+#define EPIDEMIC_ROUTING_NUM_REPLICAS -1
+
+
+// Limit the amount of hops to forward bundles to their destination
+// 0 -> only directly deliver bundles to their destination (e.g. as in direct delivery)
+// 1 -> only forward bundles once and then directly deliver them (e.g. as in spray-and-wait)
+// -1 -> do not limit forwarding (e.g. classical epidemic flooding)
+#define EPIDEMIC_ROUTING_FORWARDING -1
+
+
+// While EPIDEMIC_ROUTING_NUM_REPLICAS and EPIDEMIC_ROUTING_FORWARDING need to be set to -1 for classical epidemic forwarding
+// We can further tweak the settings to support both spray-and-wait and direct delivery (which are essentially limited variants)
+// bundles are stored until their timeout
+
+
+// TODO: Recheck https://tools.ietf.org/html/draft-irtf-dtnrg-ipnd-03 -> there the EID is part of the neighbor discovery
+// Seems like we will also need to define neighbor discovery for BLE (!) -> we can split that to the BLE part and the initial connection setup? (e.g. BLE only GATT service UUID plus Service Data EID (hash?))
+// THEN during connection setup use GATT / two channels ? / the one channel for setup by sending the same IPDTNNB packet on that reliable connection? -> covers ALL what we want... As we then know services, EID and cla address -> we can thus report a full node to the router! (not only the link address)
+// the BLE NB could cache the nodes which are available at a specific point in time.
+
+
+
+// TODO: Based on the link address, each party sends a hello message from their local endpoints to the routing AGENT
+// This way, each can register the
+
+
+// TODO: I think that we need to keep track of outdated bundles ourselves?
+// TODO: Wrapping bundles in an Epidemic Routing Bundle could be nice?
+
+
+// TODO: First send all bundles without checking which are alredy available? -> which will obviously be bad, then move on to send the distinct bundle hashes?!
+// TODO: Use bundle source id, creation timestamp and sequence number together with the fragmentation (offset ?)
+
+
+// TODO: I guess that we need to save the bundles (routed_bundles?!) that we want to (delete, forward?), deletion does not seem to be handled right now (-> select random bundle and check its timeout?
+// TODO: Use hopcount! Seems fitting? -> but we need to make sure that we still deliver to the destination! Currently, hop count is only checked after local delivery! (but before routing so perfect for us?)
+
+
+// TODO: We probably want to use the available contact struct to save the available links? Or we simply use custom helper structures for each connection to keep track of the bundles?
+
+
+// TODO: Loop through all available contacts and pump connections full with bundles to send? (first send all bundles ofc)
+// TODO: Do we also want to randomize this? (ignore duplicates?) or shall we use the timeouts as a way to determine forwarding?
+// TODO: Maybe simply manage a htab of the routed_bundles locally too?
+
+
 static bool process_signal(
         struct router_signal signal,
         QueueIdentifier_t bp_signaling_queue,
@@ -220,8 +269,22 @@ static struct bundle_processing_result process_bundle(struct bundle *bundle)
         return result;
     }
 
-    // TODO: IMPLEMENT ME
-    result.status_or_fragments = BUNDLE_RESULT_NO_MEMORY;
+    // TODO: Support fragmentation, for now we do not fragment at all (which will hinder propagation of big bundles
+    // If we however support fragmentation, the bundles will also need to be reconstructed before we can use them in this router -> implement router agent later
+    // they could initially send small unfragmented "hello bundles" to exchange basic contact information before
+    bool fragmentation_required = false;
+
+    result.status_or_fragments = BUNDLE_RESULT_NO_ROUTE;
+    /*if (fragmentation_required) {
+        if (!bundle_must_not_fragment(bundle)) {
+            // Only fragment if it is allowed -- if not, there is no route.
+            result = apply_fragmentation(bundle, route);
+        } else {
+            result.status_or_fragments = BUNDLE_RESULT_NO_ROUTE;
+        }
+    }*/
+
+
     /* route = router_get_first_route(bundle);
     if (route.fragments == 1) {
     } else if (!bundle_must_not_fragment(bundle)) {

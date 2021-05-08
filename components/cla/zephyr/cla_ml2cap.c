@@ -28,17 +28,21 @@
 #include <net/buf.h>
 
 #include "ud3tn/simplehtab.h"
+#include "cla/zephyr/nb_ble.h"
+#include "../../../include/cla/zephyr/nb_ble.h"
 
 // TODO: Move this to KConfig
 #define CONFIG_ML2CAP_PSM 0xc0
-#define CONFIG_ML2CAP_SERVICE_UUID BT_UUID_GAP_VAL
+
+static void handle_discovered_neighbor_info(void *context, const struct nb_ble_node_info * const ble_node_info) {
+    LOGF("Found other device with mac_address %s", ble_node_info->mac_addr);
+}
 
 
-static const struct bt_data ad[] = {
-        BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-        BT_DATA_BYTES(BT_DATA_UUID16_ALL, BT_UUID_16_ENCODE(CONFIG_ML2CAP_SERVICE_UUID))
-};
-
+void start_scan(){};
+void stop_scan(){};
+void start_adv(){};
+void stop_adv(){};
 
 struct ml2cap_config {
     struct cla_config base;
@@ -102,7 +106,6 @@ static struct ml2cap_link *get_link_from_connection(struct ml2cap_config *ml2cap
 
     return link;
 }
-
 
 static enum ud3tn_result handle_established_connection(struct ml2cap_link *const ml2cap_link) {
     struct ml2cap_config *const ml2cap_config = ml2cap_link->config;
@@ -352,104 +355,6 @@ static enum ud3tn_result cla_ml2cap_start_link(
 }
 
 
-static void stop_scan(void) {
-    int err;
-    err = bt_le_scan_stop();
-    if (err) {
-        LOGF("ML2CAP: Scanning failed to stop (err %d)\n", err);
-        return;
-    }
-
-    LOG("ML2CAP: Scanning successfully stopped\n");
-}
-
-static void start_adv(void) {
-
-    int err = 0;
-    err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), NULL, 0);
-
-    if (err) {
-        LOGF("ML2CAP: advertising failed to start (err %d)\n", err);
-        return;
-    }
-}
-
-static void stop_adv(void) {
-    int err = bt_le_adv_stop();
-
-    if (err) {
-        LOGF("ML2CAP: advertising failed to stop (err %d)\n", err);
-        return;
-    }
-}
-
-static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
-                            struct net_buf_simple *ad) {
-    char dev[BT_ADDR_LE_STR_LEN];
-
-    bt_addr_le_to_str(addr, dev, sizeof(dev));
-    printk("[DEVICE]: %s, AD evt type %u, AD data len %u, RSSI %i\n",
-           dev, type, ad->len, rssi);
-
-    /* We're only interested in connectable events */
-    if (type == BT_GAP_ADV_TYPE_ADV_IND ||
-        type == BT_GAP_ADV_TYPE_ADV_DIRECT_IND) {
-
-        struct ml2cap_config *ml2cap_config = s_ml2cap_config;
-
-
-        // we check if we already have a connection to this device
-        hal_semaphore_take_blocking(ml2cap_config->link_htab_sem);
-
-        struct ml2cap_link *link = htab_get(
-                &ml2cap_config->link_htab,
-                dev
-        );
-
-        hal_semaphore_release(ml2cap_config->link_htab_sem);
-
-        // TODO: This does not cover, timed out / failed connections etc.
-        if (!link) {
-
-            stop_adv();
-            stop_scan();
-
-            struct bt_conn *conn;
-
-            int err = bt_conn_le_create(addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM_DEFAULT, &conn);
-
-            if (err) {
-                printk("[P2P] Create conn failed (err %d)\n", err);
-            } else {
-                // we directly unref the connection here as we will use the connection event to save it
-                bt_conn_unref(conn);
-            }
-        }
-    }
-}
-
-
-static void start_scan(void) {
-    int err;
-
-    /* Use active scanning and disable duplicate filtering to handle any
-     * devices that might update their advertising data at runtime. */
-    struct bt_le_scan_param scan_param = {
-            .type       = BT_LE_SCAN_TYPE_PASSIVE,
-            .options    = BT_LE_SCAN_OPT_NONE,
-            .interval   = BT_GAP_SCAN_FAST_INTERVAL,    // TODO: Adapt interval and window
-            .window     = BT_GAP_SCAN_FAST_WINDOW,
-    };
-
-    err = bt_le_scan_start(&scan_param, device_found_cb);
-    if (err) {
-        LOGF("ML2CAP: Scanning failed to start (err %d)\n", err);
-        return;
-    }
-
-    LOG("ML2CAP: Scanning successfully started\n");
-}
-
 
 static void connected(struct bt_conn *conn, uint8_t err) {
     if (err) {
@@ -504,14 +409,26 @@ static void mtcp_management_task(void *param) {
     struct ml2cap_config *const ml2cap_config = (struct ml2cap_config *) param;
 
     // we setup the L2CAP server to handle incoming connections
-
     int err = bt_enable(NULL);
     if (err) {
-        LOGF("Bluetooth init failed (err %d)\n", err);
+        LOGF("Bluetooth init failed (err %d)", err);
         goto terminate;
     }
     bt_conn_cb_register(&conn_callbacks);
-    LOG("Bluetooth init done\n");
+    LOG("Bluetooth init done");
+
+
+    LOG("Starting NB BLE");
+
+    struct nb_ble_config config = {
+            .eid = "test",
+            .discover_cb = handle_discovered_neighbor_info,
+            .discover_cb_context = ml2cap_config
+    };
+
+    if (nb_ble_launch(&config) != UD3TN_OK) {
+        goto terminate;
+    }
 
     ml2cap_config->l2cap_server.psm = CONFIG_ML2CAP_PSM;
     ml2cap_config->l2cap_server.accept = l2cap_accept;
