@@ -71,12 +71,19 @@ enum ud3tn_result cla_config_init(
 	const struct bundle_agent_interface *bundle_agent_interface);
 
 enum ud3tn_result cla_link_init(struct cla_link *link,
-				struct cla_config *config,
-                const char *cla_link_address);
+				struct cla_config *config);
 
 void cla_link_wait_cleanup(struct cla_link *link);
 
+/**
+ * Remove the protocol name from the cla address: "tcp://127.0.0.1:80" -> "127.0.0.1:80"
+ */
 char *cla_get_connect_addr(const char *cla_addr, const char *cla_name);
+
+/**
+ * Add the protocol name to the cla connect address: "127.0.0.1:80" -> "tcp://127.0.0.1:80"
+ */
+char *cla_get_cla_addr(const char *cla_name, const char *cla_connect_addr);
 
 void cla_generic_disconnect_handler(struct cla_link *link);
 

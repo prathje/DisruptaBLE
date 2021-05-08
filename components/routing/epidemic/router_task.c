@@ -234,13 +234,14 @@ static bool process_signal(
             LOG("ROUTER_SIGNAL_WITHDRAW_NODE not supported");
             break;
         case ROUTER_SIGNAL_NEW_LINK_ESTABLISHED:
-            ;
-            const char *link_cla_address = (char *)signal.data;
-            if(link_cla_address) {
-                LOGF("RouterTask: New Link with address %s", link_cla_address);
-                free(link_cla_address);
-            } else {
-                LOG("RouterTask: New Link with unknown address");
+            LOG("ROUTER_SIGNAL_NEW_LINK_ESTABLISHED not supported");
+            break;
+        case ROUTER_SIGNAL_NEIGHBOR_DISCOVERED:
+            ;LOG("ROUTER_SIGNAL_NEIGHBOR_DISCOVERED");
+            struct node *neighbor = (struct node *)signal.data;
+            if(neighbor) {
+                LOGF("RouterTask: Neighbor Discovered %s, %s", neighbor->eid, neighbor->cla_addr);
+                free_node(neighbor);
             }
             break;
         default:

@@ -161,10 +161,9 @@ enum ud3tn_result cla_config_init(
  *
  * @param link
  * @param config
- * @param cla_link_address address with cla protocol e.g. mtcp://127.0.0.1, will be duplicated
  * @return
  */
-enum ud3tn_result cla_link_init(struct cla_link *link, struct cla_config *config, const char *cla_link_address)
+enum ud3tn_result cla_link_init(struct cla_link *link, struct cla_config *config)
 {
 	link->config = config;
 	link->active = true;
@@ -174,12 +173,6 @@ enum ud3tn_result cla_link_init(struct cla_link *link, struct cla_config *config
 
 	link->tx_queue_handle = NULL;
 	link->tx_queue_sem = NULL;
-
-    link->cla_link_address = NULL;
-
-    if (cla_link_address) {
-        link->cla_link_address = strdup(cla_link_address);
-    }
 
 
 	// Semaphores used for waiting for the tasks to exit
@@ -228,17 +221,9 @@ enum ud3tn_result cla_link_init(struct cla_link *link, struct cla_config *config
 	}
 
 	// Notify the router task of the newly established connection...
-
-	const char *link_addr = NULL;
-
-	if (link->cla_link_address) {
-	    // this needs to be freed by the router_task
-        link_addr = strdup(link->cla_link_address);
-	}
-
 	struct router_signal rt_signal = {
 		.type = ROUTER_SIGNAL_NEW_LINK_ESTABLISHED,
-		.data = link_addr,
+		.data = NULL,
 	};
 	const struct bundle_agent_interface *const bundle_agent_interface =
 		config->bundle_agent_interface;
@@ -261,10 +246,6 @@ fail_tx_sem:
 	hal_semaphore_delete(link->rx_task_sem);
 fail_rx_sem:
 
-    if (link->cla_link_address) {
-        free((void*)link->cla_link_address);
-        link->cla_link_address = NULL;
-    }
 	return UD3TN_FAIL;
 }
 
@@ -293,11 +274,6 @@ void cla_link_wait_cleanup(struct cla_link *link)
 	link->config->vtable->cla_rx_task_reset_parsers(link);
 	rx_task_data_deinit(&link->rx_task_data);
 
-	// and clean the link's address
-    if (link->cla_link_address) {
-        free((void*)link->cla_link_address);
-        link->cla_link_address = NULL;
-    }
 }
 
 char *cla_get_connect_addr(const char *cla_addr, const char *cla_name)
@@ -309,6 +285,24 @@ char *cla_get_connect_addr(const char *cla_addr, const char *cla_name)
 	ASSERT(offset - cla_addr == (ssize_t)strlen(cla_name));
 	ASSERT(memcmp(cla_addr, cla_name, offset - cla_addr) == 0);
 	return strdup(offset + 1);
+}
+
+char *cla_get_cla_addr(const char *cla_name, const char *cla_connect_addr)
+{
+    ASSERT(cla_connect_addr != NULL);
+    ASSERT(cla_name != NULL);
+    const char *delimiter = "://";
+
+    size_t cla_addr_size = strlen(cla_name) + strlen(delimiter) + strlen(cla_connect_addr) +1;
+    char *cla_addr = malloc(cla_addr_size); // 1 for null terminator
+
+    if (!cla_addr) {
+        return NULL;
+    }
+
+    snprintf(cla_addr, cla_addr_size, "%s%s%s", cla_name, delimiter, cla_connect_addr);
+
+    return cla_addr;
 }
 
 void cla_generic_disconnect_handler(struct cla_link *link)

@@ -42,21 +42,23 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
     char dev[BT_ADDR_LE_STR_LEN];
 
     bt_addr_le_to_str(addr, dev, sizeof(dev));
-    LOGF("[NB BLE]: %s, AD evt type %u, AD data len %u, RSSI %i\n",
-           dev, type, ad->len, rssi);
+    //LOGF("[NB BLE]: %s, AD evt type %u, AD data len %u, RSSI %i\n", dev, type, ad->len, rssi);
 
     /* We're only interested in connectable events */
     if (type == BT_GAP_ADV_TYPE_ADV_IND ||
         type == BT_GAP_ADV_TYPE_ADV_DIRECT_IND) {
 
         struct nb_ble_node_info node_info = {
-            .eid = strdup("test"),
+            .eid = strdup("dtn://test"),
             .mac_addr = strdup(dev)
         };
 
         // we simply queue this to prevent BLE thread blocking
+        // This will copy the content from node_info into the queue
         if(hal_queue_try_push_to_back(nb_ble_node_info_queue, &node_info, 0) != UD3TN_OK) {
             LOG("NB BLE: Could not queue node info!");
+            free(node_info.eid);
+            free(node_info.mac_addr);
         }
     }
 }

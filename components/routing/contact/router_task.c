@@ -267,12 +267,6 @@ static bool process_signal(
 		LOGF("RouterTask: Node withdrawn (%p)!", node);
 		break;
 	case ROUTER_SIGNAL_NEW_LINK_ESTABLISHED:
-        const char* link_cla_address = (const char *)signal.data;
-        if(link_cla_address) {
-            LOGF("RouterTask: New Link with address %s", link_cla_address);
-            // we directly free the address
-            free(link_cla_address);
-        }
 		// NOTE: When we implement a "bundle backlog", we will attempt
 		// to route the bundles here.
 		wake_up_contact_manager(
@@ -280,6 +274,13 @@ static bool process_signal(
 			CM_SIGNAL_PROCESS_CURRENT_BUNDLES
 		);
 		break;
+    case ROUTER_SIGNAL_NEIGHBOR_DISCOVERED:
+            struct node *neighbor = (struct node *)signal.data;
+            if(neighbor) {
+                LOG("RouterTask: Ignore new neighbor info");
+                free_node(neighbor);
+            }
+            break;
 	default:
 		LOGF("RouterTask: Invalid signal (%d) received!", signal.type);
 		success = false;

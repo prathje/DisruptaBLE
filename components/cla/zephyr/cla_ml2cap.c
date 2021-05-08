@@ -15,6 +15,10 @@
 #include "ud3tn/common.h"
 #include "ud3tn/config.h"
 #include "ud3tn/task_tags.h"
+#include "ud3tn/node.h"
+
+
+#include "routing/router_task.h"
 
 
 #include <stdio.h>
@@ -34,9 +38,7 @@
 // TODO: Move this to KConfig
 #define CONFIG_ML2CAP_PSM 0xc0
 
-static void handle_discovered_neighbor_info(void *context, const struct nb_ble_node_info * const ble_node_info) {
-    LOGF("Found other device with mac_address %s", ble_node_info->mac_addr);
-}
+
 
 
 void start_scan(){};
@@ -89,6 +91,42 @@ struct ml2cap_link {
 };
 
 
+static const char *ml2cap_name_get(void) {
+    return "ml2cap";
+}
+
+
+/**
+ * We pump discovered neighbors through the CLA layer as we add the correct CLA address.
+ */
+static void handle_discovered_neighbor_info(void *context, const struct nb_ble_node_info * const ble_node_info) {
+
+    struct ml2cap_config *const ml2cap_config = (struct ml2cap_config *const) context;
+
+    LOGF("ML2CAP: Found other device with mac_address %s and eid %s", ble_node_info->mac_addr, ble_node_info->eid);
+
+    // we now build the corresponding node entry and push it to the router which would then decide how to proceed with this contact
+    // node will be freed by the router
+    struct node* node = node_create(ble_node_info->eid);
+
+    if(!node) {
+        LOG("ML2CAP: Error while creating the node for NB");
+        return;
+    }
+
+    // bt_addr_le_to_str
+    node->cla_addr = cla_get_cla_addr(ml2cap_name_get(), ble_node_info->mac_addr);
+
+    struct router_signal rt_signal = {
+            .type = ROUTER_SIGNAL_NEIGHBOR_DISCOVERED,
+            .data = node,
+    };
+    const struct bundle_agent_interface *const bundle_agent_interface =
+            ml2cap_config->base.bundle_agent_interface;
+    hal_queue_push_to_back(bundle_agent_interface->router_signaling_queue,
+                           &rt_signal);
+}
+
 /**
  * Imprtant: Need to take and release the semaphore before this operation!
  * @param ml2cap_config
@@ -110,7 +148,7 @@ static struct ml2cap_link *get_link_from_connection(struct ml2cap_config *ml2cap
 static enum ud3tn_result handle_established_connection(struct ml2cap_link *const ml2cap_link) {
     struct ml2cap_config *const ml2cap_config = ml2cap_link->config;
 
-    if (cla_link_init(&ml2cap_link->base, &ml2cap_config->base, ml2cap_link->cla_addr) != UD3TN_OK) {
+    if (cla_link_init(&ml2cap_link->base, &ml2cap_config->base) != UD3TN_OK) {
         LOG("ML2CAP: Error initializing CLA link!");
         return UD3TN_FAIL;
     }
@@ -421,7 +459,7 @@ static void mtcp_management_task(void *param) {
     LOG("Starting NB BLE");
 
     struct nb_ble_config config = {
-            .eid = "test",
+            .eid = ml2cap_config->base.bundle_agent_interface->local_eid, // This gets copied
             .discover_cb = handle_discovered_neighbor_info,
             .discover_cb_context = ml2cap_config
     };
@@ -469,10 +507,6 @@ static enum ud3tn_result ml2cap_launch(struct cla_config *const config) {
         return UD3TN_FAIL;
 
     return UD3TN_OK;
-}
-
-static const char *ml2cap_name_get(void) {
-    return "ml2cap";
 }
 
 size_t ml2cap_mbs_get(struct cla_config *const config) {
@@ -585,6 +619,8 @@ static enum ud3tn_result ml2cap_start_scheduled_contact(
     (void) config;
     (void) eid;
     (void) cla_addr;
+
+    // TODO: we need to use bt_addr_le_from_str to parse the cla_address again
 
     return UD3TN_OK;
 }
