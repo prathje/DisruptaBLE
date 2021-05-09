@@ -421,10 +421,6 @@ static void disconnected(struct bt_conn *conn, uint8_t reason) {
     hal_semaphore_release(ml2cap_config->link_htab_sem);
 }
 
-static struct bt_conn_cb conn_callbacks = {
-        .connected = connected,
-        .disconnected = disconnected,
-};
 
 int l2cap_accept(struct bt_conn *conn, struct bt_l2cap_chan **chan) {
 
@@ -452,6 +448,13 @@ static void mtcp_management_task(void *param) {
         LOGF("Bluetooth init failed (err %d)", err);
         goto terminate;
     }
+
+
+    static struct bt_conn_cb conn_callbacks = {
+            .connected = connected,
+            .disconnected = disconnected,
+    };
+
     bt_conn_cb_register(&conn_callbacks);
     LOG("Bluetooth init done");
 
