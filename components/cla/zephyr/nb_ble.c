@@ -207,6 +207,7 @@ enum ud3tn_result nb_ble_launch(const struct nb_ble_config * const config) {
 
 /**
  * Format is "ED-71-8F-C2-E4-6E.random" while the zephyr format is "ED:71:8F:C2:E4:6E (random)"
+ * Returns new string which needs to be freed afterward
  */
 const char* bt_addr_le_to_mac_addr(const bt_addr_le_t *addr) {
 

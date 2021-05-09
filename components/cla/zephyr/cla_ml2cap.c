@@ -145,7 +145,7 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
     int err = bt_conn_le_create(&addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM_DEFAULT, &conn);
 
     if (err) {
-        printk("ML2CAP: Failed to create connection (err %d)\n", err);
+        //LOGF("ML2CAP: Failed to create connection (err %d)\n", err);
     } else {
         // we directly unref the connection here as we will use the connection event to save it
         bt_conn_unref(conn);
@@ -162,13 +162,16 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
  * @return */
 static struct ml2cap_link *get_link_from_connection(struct ml2cap_config *ml2cap_config, struct bt_conn *conn) {
 
-    char addr[BT_ADDR_LE_STR_LEN];
-    bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+    const char *mac_addr = bt_addr_le_to_mac_addr(bt_conn_get_dst(conn));
+    const char *cla_addr = cla_get_cla_addr(ml2cap_name_get(), mac_addr);
 
     struct ml2cap_link *link = htab_get(
             &ml2cap_config->link_htab,
-            addr
+            cla_addr
     );
+
+    free(mac_addr);
+    free(cla_addr);
 
     return link;
 }
@@ -461,15 +464,18 @@ int l2cap_accept(struct bt_conn *conn, struct bt_l2cap_chan **chan) {
 
     hal_semaphore_take_blocking(ml2cap_config->link_htab_sem);
     struct ml2cap_link *link = get_link_from_connection(s_ml2cap_config, conn);
+
+    int ret = 0;
     if (link) {
         *chan = &link->chan.chan;
         // we mark the link as not connected, so we essentially
         link->chan_connected = true;
     } else {
         LOG("ML2CAP: l2cap_accept could not find related link entry!");
+        ret = -EACCES;
     }
     hal_semaphore_release(ml2cap_config->link_htab_sem);
-    return 0;
+    return ret;
 }
 
 static void mtcp_management_task(void *param) {
