@@ -1,6 +1,8 @@
 #ifndef NB_BLE_INCLUDE_H
 #define NB_BLE_INCLUDE_H
 
+#include <bluetooth/addr.h>
+
 #include "ud3tn/node.h"
 #include "ud3tn/result.h"
 
@@ -38,5 +40,10 @@ void nb_ble_start();
  * Important: Will block until nb_ble is launched
  */
 void nb_ble_stop();
+
+
+
+const char* bt_addr_le_to_mac_addr(const bt_addr_le_t *addr);
+int bt_addr_le_from_mac_addr(const char *str, bt_addr_le_t *addr);
 
 #endif

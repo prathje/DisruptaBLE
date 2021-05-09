@@ -36,7 +36,6 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
         LOG("NB BLE: Queue not found!");
         return;
     }
-
     char dev[BT_ADDR_LE_STR_LEN];
 
     bt_addr_le_to_str(addr, dev, sizeof(dev));
@@ -71,7 +70,7 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
 
                     struct nb_ble_node_info node_info = {
                             .eid = eid,
-                            .mac_addr = strdup(dev)
+                            .mac_addr = bt_addr_le_to_mac_addr(addr)
                     };
 
                     // we simply queue this to prevent BLE thread blocking
@@ -204,4 +203,68 @@ enum ud3tn_result nb_ble_launch(const struct nb_ble_config * const config) {
         return UD3TN_FAIL;
     }
     return UD3TN_OK;
+}
+
+/**
+ * Format is "ED-71-8F-C2-E4-6E.random" while the zephyr format is "ED:71:8F:C2:E4:6E (random)"
+ */
+const char* bt_addr_le_to_mac_addr(const bt_addr_le_t *addr) {
+
+    ASSERT(addr);
+    char type[10];
+
+    switch (addr->type) {
+        case BT_ADDR_LE_PUBLIC:
+            strcpy(type, "public");
+            break;
+        case BT_ADDR_LE_RANDOM:
+            strcpy(type, "random");
+            break;
+        case BT_ADDR_LE_PUBLIC_ID:
+            strcpy(type, "public-id");
+            break;
+        case BT_ADDR_LE_RANDOM_ID:
+            strcpy(type, "random-id");
+            break;
+        default:
+            snprintk(type, sizeof(type), "0x%02x", addr->type);
+            break;
+    }
+
+    char buf[BT_ADDR_LE_STR_LEN+1];
+    snprintk(buf, BT_ADDR_LE_STR_LEN, "%02X-%02X-%02X-%02X-%02X-%02X.%s",
+                    addr->a.val[5], addr->a.val[4], addr->a.val[3],
+                    addr->a.val[2], addr->a.val[1], addr->a.val[0], type);
+
+    buf[BT_ADDR_LE_STR_LEN] = '\0';
+    return strdup(buf);
+}
+
+/**
+ * We split "ED-71-8F-C2-E4-6E.random" -> into "ED-71-8F-C2-E4-6E" and "random"
+ * @return Zero on success or (negative) error code otherwise.
+ */
+int bt_addr_le_from_mac_addr(const char *str, bt_addr_le_t *addr) {
+
+    ASSERT(addr);
+    ASSERT(str);
+    ASSERT(strlen(str) > 18);
+
+    char buf[BT_ADDR_LE_STR_LEN+1];
+    strncpy(buf, str, BT_ADDR_LE_STR_LEN);
+    buf[BT_ADDR_LE_STR_LEN] = '\0';
+
+    // split the string
+    buf[17] = '\0';
+    char *mac = &buf[0];
+    char *type = &buf[18];
+
+    for(size_t i = 0; i < 17; i++) {
+        char a = buf[i];
+        if (a == '-') {
+            buf[i] = ':';
+        }
+    }
+
+    return bt_addr_le_from_str(mac, type, addr);
 }

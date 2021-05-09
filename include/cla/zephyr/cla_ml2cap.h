@@ -7,7 +7,6 @@
 
 #include <stddef.h>
 
-
 struct cla_config *ml2cap_create(
 	const char *const options[], const size_t option_count,
 	const struct bundle_agent_interface *bundle_agent_interface);

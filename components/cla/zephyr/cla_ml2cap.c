@@ -29,6 +29,7 @@
 #include <bluetooth/l2cap.h>
 #include <bluetooth/conn.h>
 #include <bluetooth/uuid.h>
+#include <bluetooth/addr.h>
 #include <net/buf.h>
 
 #include "ud3tn/simplehtab.h"
@@ -85,6 +86,9 @@ struct ml2cap_link {
     /* ml2cap://<Other ble device address in hex> */
     char *cla_addr;
 
+    /* <Other ble device address in hex> */
+    char *mac_addr;
+
     bool bt_connected;
     bool chan_connected;
     bool is_client;
@@ -114,7 +118,6 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
         return;
     }
 
-    // bt_addr_le_to_str
     node->cla_addr = cla_get_cla_addr(ml2cap_name_get(), ble_node_info->mac_addr);
 
     struct router_signal rt_signal = {
@@ -125,6 +128,31 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
             ml2cap_config->base.bundle_agent_interface;
     hal_queue_push_to_back(bundle_agent_interface->router_signaling_queue,
                            &rt_signal);
+
+    // We now try to connect as soon as we received that advertisement
+    // As this callback is called from the nb_ble thread, we should not need further synchronization for the advertisements
+
+    // TODO: Do we really need to stop the advertisement?
+    nb_ble_stop();
+
+    struct bt_conn *conn;
+    bt_addr_le_t addr;
+
+
+    bt_addr_le_from_mac_addr(ble_node_info->mac_addr, &addr);
+
+    // TODO: It is a little bit excessive to directly connect to everyone in reach :)
+    int err = bt_conn_le_create(&addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM_DEFAULT, &conn);
+
+    if (err) {
+        printk("ML2CAP: Failed to create connection (err %d)\n", err);
+    } else {
+        // we directly unref the connection here as we will use the connection event to save it
+        bt_conn_unref(conn);
+    }
+
+    // TODO: Can we start directly afterward?
+    nb_ble_start();
 }
 
 /**
@@ -152,7 +180,6 @@ static enum ud3tn_result handle_established_connection(struct ml2cap_link *const
         LOG("ML2CAP: Error initializing CLA link!");
         return UD3TN_FAIL;
     }
-
 
     // TODO: Shall we wait and disconnect before waiting for the cleanup?
 
@@ -219,6 +246,7 @@ static void ml2cap_link_management_task(void *p) {
     hal_queue_delete(ml2cap_link->rx_queue);
 
     free(ml2cap_link->cla_addr);
+    free(ml2cap_link->mac_addr);
 
     Task_t management_task = ml2cap_link->management_task;
     bt_conn_unref(ml2cap_link->conn);
@@ -298,7 +326,13 @@ static enum ud3tn_result cla_ml2cap_start_link(
         return UD3TN_FAIL;
     }
 
-    ml2cap_link->conn = bt_conn_ref(conn);  // TODO: We should check for null values here to be save
+    ml2cap_link->conn = bt_conn_ref(conn);
+
+    if (!ml2cap_link) {
+        LOG("ML2CAP: Failed to ref connection!");
+        return UD3TN_FAIL;
+    }
+
 
     // we get the info if we are client or server
     struct bt_conn_info info;
@@ -321,10 +355,8 @@ static enum ud3tn_result cla_ml2cap_start_link(
 
     ml2cap_link->chan.chan.ops = &chan_ops;
 
-
-    char addr[BT_ADDR_LE_STR_LEN];
-    bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
-    ml2cap_link->cla_addr = strdup(addr);
+    ml2cap_link->mac_addr = bt_addr_le_to_mac_addr(bt_conn_get_dst(conn));
+    ml2cap_link->cla_addr = cla_get_cla_addr(ml2cap_name_get(), ml2cap_link->mac_addr);
 
     if (!ml2cap_link->cla_addr) {
         LOG("ML2CAP: Failed to copy CLA address!");
@@ -387,6 +419,7 @@ static enum ud3tn_result cla_ml2cap_start_link(
 
     fail:
     bt_conn_unref(ml2cap_link->conn);
+    free(ml2cap_link->mac_addr);
     free(ml2cap_link->cla_addr);
     free(ml2cap_link);
     return UD3TN_FAIL;
@@ -436,7 +469,7 @@ int l2cap_accept(struct bt_conn *conn, struct bt_l2cap_chan **chan) {
         LOG("ML2CAP: l2cap_accept could not find related link entry!");
     }
     hal_semaphore_release(ml2cap_config->link_htab_sem);
-
+    return 0;
 }
 
 static void mtcp_management_task(void *param) {
@@ -682,7 +715,7 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
             return;
         }
 
-        net_buf_add_mem(buf, (data + sent), frag_size);
+        net_buf_add_mem(buf, ((char *)data) + sent, frag_size);
 
         int ret = bt_l2cap_chan_send(&ml2cap_link->chan.chan, buf);
 

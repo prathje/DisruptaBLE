@@ -69,6 +69,8 @@
 // TODO: Do we also want to randomize this? (ignore duplicates?) or shall we use the timeouts as a way to determine forwarding?
 // TODO: Maybe simply manage a htab of the routed_bundles locally too?
 
+// TODO: We might want to limit the number of active connections?
+
 
 static bool process_signal(
         struct router_signal signal,
