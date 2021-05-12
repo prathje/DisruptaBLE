@@ -4,6 +4,7 @@
 #include "ud3tn/eid.h"
 
 #include "platform/hal_io.h"
+#include "platform/hal_random.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -166,8 +167,26 @@ finish:
 	else if (!result->aap_node && result->aap_service)
 		result->aap_node = strdup(DEFAULT_AAP_NODE);
 
-	if (!result->eid)
-		result->eid = strdup(DEFAULT_EID);
+	if (!result->eid) {
+
+        result->eid = strdup(DEFAULT_EID);
+
+        #if defined(CONFIG_RANDOM_EID) && CONFIG_RANDOM_EID
+        // we replace every occurce of * with a hexadecimal
+        for(int i = strlen(result->eid)-1; i >= 0; i--) {
+            char c = result->eid[i];
+            if (c == '*') {
+                // r ranges from 0 to 15
+                char r = (hal_random_get() & 0x0F);
+                char buf[2];
+                snprintf(buf, 2, "%x", r);
+                result->eid[i] = buf[0];
+            }
+        }
+
+        #endif
+
+	}
 	if (!result->cla_options)
 		result->cla_options = strdup(DEFAULT_CLA_OPTIONS);
 

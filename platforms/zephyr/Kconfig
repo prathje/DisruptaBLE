@@ -1,5 +1,13 @@
 source "$ZEPHYR_BASE/Kconfig.zephyr"
 
+config RANDOM_EID
+    bool "Randomly generate a EID by replacing all occurences of * in the EID"
+    default n
+
 config EID
-	string "Default EID"
+	string "Default EID use RANDOM_EID to replace occurences of * with random hex values"
 	default "dtn://ud3tn.dtn"
+
+config CONTACT_TIMEOUT_S
+	int "Contact Timeout in seconds, too old contacts will thus be removed"
+	default 60
