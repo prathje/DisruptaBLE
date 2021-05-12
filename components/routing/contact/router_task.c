@@ -274,11 +274,12 @@ static bool process_signal(
 			CM_SIGNAL_PROCESS_CURRENT_BUNDLES
 		);
 		break;
-    case ROUTER_SIGNAL_NEIGHBOR_DISCOVERED:
-            struct node *neighbor = (struct node *)signal.data;
-            if(neighbor) {
-                LOG("RouterTask: Ignore new neighbor info");
-                free_node(neighbor);
+    case ROUTER_SIGNAL_CONN_UP:
+    case ROUTER_SIGNAL_CONN_DOWN:
+            char *cla = (char *)signal.data;
+            if(cla) {
+                LOG("RouterTask: Ignore neighbor info");
+                free(cla);
             }
             break;
 	default:

@@ -72,6 +72,7 @@ void start_tasks(const struct ud3tn_cmdline_options *const opt)
 			bundle_agent_interface.router_signaling_queue;
 	router_task_params->bundle_processor_signaling_queue =
 			bundle_agent_interface.bundle_signaling_queue;
+	router_task_params->bundle_agent_interface = &bundle_agent_interface; // we need this reference for the routing agent!
 
 	struct bundle_processor_task_parameters *bundle_processor_task_params
 		= malloc(sizeof(struct bundle_processor_task_parameters));

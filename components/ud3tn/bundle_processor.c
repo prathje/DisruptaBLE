@@ -115,7 +115,6 @@ static inline void bundle_rem_rc(struct bundle *bundle,
 }
 
 /* COMMUNICATION */
-
 void bundle_processor_inform(
 	QueueIdentifier_t bundle_processor_signaling_queue, bundleid_t bundle,
 	enum bundle_processor_signal_type type,

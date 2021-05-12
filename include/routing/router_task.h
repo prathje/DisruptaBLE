@@ -29,7 +29,9 @@ enum router_signal_type {
 	ROUTER_SIGNAL_WITHDRAW_NODE,
 	ROUTER_SIGNAL_OPTIMIZATION_DROP,
 	ROUTER_SIGNAL_NEW_LINK_ESTABLISHED,
-	ROUTER_SIGNAL_NEIGHBOR_DISCOVERED
+	ROUTER_SIGNAL_NEIGHBOR_DISCOVERED, // notifies the router about new neighbor advertisements
+	ROUTER_SIGNAL_CONN_UP, // TODO: for ml2cap, this means that the L2CAP connection is up and running
+	ROUTER_SIGNAL_CONN_DOWN // TODO: for ml2cap, this means that we lost the L2CAP connection
 };
 
 struct router_signal {
@@ -42,6 +44,7 @@ struct router_signal {
 struct router_task_parameters {
 	QueueIdentifier_t router_signaling_queue;
 	QueueIdentifier_t bundle_processor_signaling_queue;
+    const struct bundle_agent_interface *bundle_agent_interface;
 };
 
 void router_task(void *args);

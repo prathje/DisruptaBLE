@@ -77,8 +77,8 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
                     // This will copy the content from node_info into the queue
                     if(hal_queue_try_push_to_back(nb_ble_node_info_queue, &node_info, 0) != UD3TN_OK) {
                         LOG("NB BLE: Could not queue node info!");
-                        free(node_info.eid);
-                        free(node_info.mac_addr);
+                        free((void*)node_info.eid);
+                        free((void*)node_info.mac_addr);
                     }
                 }
             }
@@ -104,8 +104,8 @@ static void nb_ble_management_task(void *param) {
         struct nb_ble_node_info node_info;
         if (hal_queue_receive(nb_ble_node_info_queue, &node_info, -1) == UD3TN_OK) {
             nb_ble_config.discover_cb(nb_ble_config.discover_cb_context, &node_info);
-            free(node_info.eid);
-            free(node_info.mac_addr);
+            free((void*)node_info.eid);
+            free((void*)node_info.mac_addr);
         }
     }
     // free(nb_ble_config.eid)
@@ -199,7 +199,7 @@ enum ud3tn_result nb_ble_launch(const struct nb_ble_config * const config) {
     );
 
     if (!task) {
-        free(nb_ble_config.eid);
+        free((void*)nb_ble_config.eid);
         return UD3TN_FAIL;
     }
     return UD3TN_OK;
@@ -209,7 +209,7 @@ enum ud3tn_result nb_ble_launch(const struct nb_ble_config * const config) {
  * Format is "ED-71-8F-C2-E4-6E.random" while the zephyr format is "ED:71:8F:C2:E4:6E (random)"
  * Returns new string which needs to be freed afterward
  */
-const char* bt_addr_le_to_mac_addr(const bt_addr_le_t *addr) {
+char* bt_addr_le_to_mac_addr(const bt_addr_le_t *addr) {
 
     ASSERT(addr);
     char type[10];

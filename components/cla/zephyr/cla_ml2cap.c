@@ -34,7 +34,7 @@
 
 #include "ud3tn/simplehtab.h"
 #include "cla/zephyr/nb_ble.h"
-#include "../../../include/cla/zephyr/nb_ble.h"
+#include "routing/router_task.h"
 
 // TODO: Move this to KConfig
 #define CONFIG_ML2CAP_PSM 0xc0
@@ -89,6 +89,7 @@ struct ml2cap_link {
     /* <Other ble device address in hex> */
     char *mac_addr;
 
+
     bool bt_connected;
     bool chan_connected;
     bool is_client;
@@ -97,6 +98,46 @@ struct ml2cap_link {
 
 static const char *ml2cap_name_get(void) {
     return "ml2cap";
+}
+
+
+/**
+ * Signals that a connection is up to the router (so that bundles could be routed to this cla address)
+ * The pointer to the cla_addr will be pushed to the router (which has to free it then)
+ * TODO: This currently means that a link is closed
+ */
+static void signal_router_conn_up(const struct ml2cap_link *const ml2cap_link) {
+    struct ml2cap_config *const ml2cap_config = ml2cap_link->config;
+
+    struct router_signal rt_signal = {
+            .type = ROUTER_SIGNAL_CONN_UP,
+            .data = strdup(ml2cap_link->cla_addr),
+    };
+
+    const struct bundle_agent_interface *const bundle_agent_interface =
+            ml2cap_config->base.bundle_agent_interface;
+    hal_queue_push_to_back(bundle_agent_interface->router_signaling_queue,
+                           &rt_signal);
+}
+
+
+/**
+ * Signals that a connection is down to the router (so that no more bundles will be routed to this cla address)
+ * The pointer to the cla_addr will be pushed to the router (which has to free it then)
+ * TODO: This currently means that a link is closed
+ */
+static void signal_router_conn_down(const struct ml2cap_link *const ml2cap_link) {
+    struct ml2cap_config *const ml2cap_config = ml2cap_link->config;
+
+    struct router_signal rt_signal = {
+            .type = ROUTER_SIGNAL_CONN_DOWN,
+            .data = strdup(ml2cap_link->cla_addr),
+    };
+
+    const struct bundle_agent_interface *const bundle_agent_interface =
+            ml2cap_config->base.bundle_agent_interface;
+    hal_queue_push_to_back(bundle_agent_interface->router_signaling_queue,
+                           &rt_signal);
 }
 
 
@@ -170,8 +211,8 @@ static struct ml2cap_link *get_link_from_connection(struct ml2cap_config *ml2cap
             cla_addr
     );
 
-    free(mac_addr);
-    free(cla_addr);
+    free((void*)mac_addr);
+    free((void*)cla_addr);
 
     return link;
 }
@@ -184,9 +225,11 @@ static enum ud3tn_result handle_established_connection(struct ml2cap_link *const
         return UD3TN_FAIL;
     }
 
-    // TODO: Shall we wait and disconnect before waiting for the cleanup?
+    signal_router_conn_up(ml2cap_link);
 
+    // TODO: Shall we wait and disconnect before waiting for the cleanup?
     cla_link_wait_cleanup(&ml2cap_link->base);
+    signal_router_conn_down(ml2cap_link);
 
     return UD3TN_OK;
 }
@@ -696,6 +739,7 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
 
     struct ml2cap_link *const ml2cap_link = (struct ml2cap_link *) link;
     struct ml2cap_config *const ml2cap_config = (struct ml2cap_config *) link->config;
+    (void) ml2cap_config;
 
 
     // overall length could be more than the supported MTU -> we need to

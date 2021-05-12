@@ -6,16 +6,15 @@
 #include "ud3tn/config.h"
 #include "ud3tn/contact_manager.h"
 #include "ud3tn/node.h"
-#include "routing/contact/router.h"
-#include "routing/contact/router_optimizer.h"
 #include "routing/router_task.h"
-#include "routing/contact/routing_table.h"
+#include "routing/epidemic/routing_agent.h"
 #include "ud3tn/task_tags.h"
 
 #include "platform/hal_io.h"
 #include "platform/hal_queue.h"
 #include "platform/hal_semaphore.h"
 #include "platform/hal_task.h"
+#include "platform/hal_config.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -90,9 +89,43 @@ struct bundle_processing_result {
 
 static struct bundle_processing_result process_bundle(struct bundle *bundle);
 
+/**
+ * This router task will first spawn our routing agent before handling the router signal queue
+ * @param rt_parameters
+ */
 void router_task(void *rt_parameters)
 {
-    struct router_task_parameters *parameters;
+    struct router_task_parameters *parameters =  (struct router_task_parameters *)rt_parameters;
+
+    // we will use this config to also identify the routing agent in calls
+    void *routing_agent_config = routing_agent_management_config_init(parameters->bundle_agent_interface);
+
+    if (!routing_agent_config) {
+        LOG("Router Task: Failed to init Routing Agent Config");
+        return;
+    }
+
+    // create the routing agent management task
+    {
+        Task_t task = hal_task_create(
+                routing_agent_management_task,
+                "routing_agent_management_t",
+                ROUTING_AGENT_TASK_PRIORITY,
+                routing_agent_config,
+                DEFAULT_TASK_STACK_SIZE,
+                (void *)ROUTING_AGENT_LISTENER_TASK_TAG
+        );
+
+        if (task == NULL) {
+            LOG("Router Task: Failed to start Routing Agent");
+            free(routing_agent_config);
+            return;
+        }
+    }
+
+
+
+
     struct router_signal signal;
 
     ASSERT(rt_parameters != NULL);
@@ -101,12 +134,14 @@ void router_task(void *rt_parameters)
     for (;;) {
         if (hal_queue_receive(
                 parameters->router_signaling_queue, &signal,
-                -1) == UD3TN_OK
+                100) == UD3TN_OK
                 ) {
             process_signal(signal,
                            parameters->bundle_processor_signaling_queue,
                            parameters->router_signaling_queue
                            );
+        } else {
+
         }
     }
 }
@@ -151,7 +186,7 @@ static bool process_signal(
 
     switch (signal.type) {
         case ROUTER_SIGNAL_PROCESS_COMMAND:
-            command = (struct router_command *)signal.data;
+            command = (struct router_command *) signal.data;
             LOGF("RouterTask: Command (T = %c) ignored.", command->type);
             free_node(command->data);
             free(command);
@@ -159,7 +194,8 @@ static bool process_signal(
         case ROUTER_SIGNAL_ROUTE_BUNDLE:
 
             // TODO: Check if this bundle was actually meant for this router
-            b_id = (bundleid_t)(uintptr_t)signal.data;
+            b_id = (bundleid_t)(uintptr_t)
+            signal.data;
             b = bundle_storage_get(b_id);
 
             /*
@@ -210,11 +246,12 @@ static bool process_signal(
             }
             break;
         case ROUTER_SIGNAL_CONTACT_OVER:
+            // TODO: remove stored contact information
             LOG("ROUTER_SIGNAL_CONTACT_OVER not supported");
             break;
         case ROUTER_SIGNAL_TRANSMISSION_SUCCESS:
         case ROUTER_SIGNAL_TRANSMISSION_FAILURE:
-            rb = (struct routed_bundle *)signal.data;
+            rb = (struct routed_bundle *) signal.data;
             if (rb->serialized == rb->contact_count) {
                 b_id = rb->id;
                 bundle_processor_inform(
@@ -238,12 +275,33 @@ static bool process_signal(
         case ROUTER_SIGNAL_NEW_LINK_ESTABLISHED:
             LOG("ROUTER_SIGNAL_NEW_LINK_ESTABLISHED not supported");
             break;
-        case ROUTER_SIGNAL_NEIGHBOR_DISCOVERED:
-            ;//LOG("ROUTER_SIGNAL_NEIGHBOR_DISCOVERED");
-            struct node *neighbor = (struct node *)signal.data;
-            if(neighbor) {
+        case ROUTER_SIGNAL_NEIGHBOR_DISCOVERED:;//LOG("ROUTER_SIGNAL_NEIGHBOR_DISCOVERED");
+            struct node *neighbor = (struct node *) signal.data;
+            if (neighbor) {
                 LOGF("RouterTask: Neighbor Discovered %s, %s", neighbor->eid, neighbor->cla_addr);
-                free_node(neighbor);
+                //TODO: handle_discovered_neighbor(neighbor, hal_time_get_timestamp_s());
+            }
+            break;
+        case ROUTER_SIGNAL_CONN_UP:;
+            {
+                char *cla_address = (char *) signal.data;
+                if (cla_address) {
+                    LOGF("RouterTask: ROUTER_SIGNAL_CONN_UP %s", cla_address);
+                    free(cla_address);
+                } else {
+                    LOG("RouterTask: ROUTER_SIGNAL_CONN_UP with null cla_address");
+                }
+            }
+            break;
+        case ROUTER_SIGNAL_CONN_DOWN:
+            {
+                char *cla_address = (char *)signal.data;
+                if (cla_address) {
+                    LOGF("RouterTask: ROUTER_SIGNAL_CONN_DOWN %s", cla_address);
+                    free(cla_address);
+                } else {
+                    LOG("RouterTask: ROUTER_SIGNAL_CONN_DOWN with null cla_address");
+                }
             }
             break;
         default:
@@ -254,12 +312,9 @@ static bool process_signal(
     return success;
 }
 
-static struct bundle_processing_result apply_fragmentation(
-        struct bundle *bundle, struct router_result route);
 
 static struct bundle_processing_result process_bundle(struct bundle *bundle)
 {
-    struct router_result route;
     struct bundle_processing_result result = {
             .status_or_fragments = BUNDLE_RESULT_NO_ROUTE
     };
@@ -295,70 +350,5 @@ static struct bundle_processing_result process_bundle(struct bundle *bundle)
         result = apply_fragmentation(bundle, route);
     }*/
 
-    return result;
-}
-
-static struct bundle_processing_result apply_fragmentation(
-        struct bundle *bundle, struct router_result route)
-{
-    struct bundle *frags[ROUTER_MAX_FRAGMENTS];
-    uint32_t size;
-    int8_t f, g;
-    uint8_t fragments = route.fragments;
-    struct bundle_processing_result result = {
-            .status_or_fragments = BUNDLE_RESULT_NO_MEMORY
-    };
-
-    /* Create fragments */
-    frags[0] = bundlefragmenter_initialize_first_fragment(bundle);
-    if (frags[0] == NULL)
-        return result;
-
-    for (f = 0; f < fragments - 1; f++) {
-        /* Determine minimal fragmented bundle size */
-        if (f == 0)
-            size = bundle_get_first_fragment_min_size(bundle);
-        else if (f == fragments - 1)
-            size = bundle_get_last_fragment_min_size(bundle);
-        else
-            size = bundle_get_mid_fragment_min_size(bundle);
-
-        frags[f + 1] = bundlefragmenter_fragment_bundle(frags[f],
-                                                        size + route.fragment_results[f].payload_size);
-
-        if (frags[f + 1] == NULL) {
-            for (g = 0; g <= f; g++)
-                bundle_free(frags[g]);
-            return result;
-        }
-    }
-
-    /* Add to route */
-    for (f = 0; f < fragments; f++) {
-        bundle_storage_add(frags[f]);
-        if (!router_add_bundle_to_route(
-                &route.fragment_results[f], frags[f])
-                ) {
-            for (g = 0; g < f; g++)
-                router_remove_bundle_from_route(
-                        &route.fragment_results[g],
-                        frags[g]->id, 1);
-            for (g = 0; g < fragments; g++) {
-                /* FIXME: Routed bundles not unrouted */
-                if (g <= f)
-                    bundle_storage_delete(frags[g]->id);
-                bundle_free(frags[g]);
-            }
-            return result;
-        }
-    }
-
-    /* Success - remove bundle */
-    bundle_storage_delete(bundle->id);
-    bundle_free(bundle);
-
-    for (f = 0; f < fragments; f++)
-        result.fragment_ids[f] = frags[f]->id;
-    result.status_or_fragments = fragments;
     return result;
 }

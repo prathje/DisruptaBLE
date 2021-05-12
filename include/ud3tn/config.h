@@ -19,6 +19,7 @@ static const int IS_DEBUG_BUILD;
  */
 
 /* Default local EID */
+
 #ifndef DEFAULT_EID
 #define DEFAULT_EID "dtn://ud3tn.dtn"
 #endif

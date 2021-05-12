@@ -19,6 +19,8 @@
 #define CONTACT_LISTEN_TASK_PRIORITY 2
 #define CONTACT_MANAGEMENT_TASK_PRIORITY 2
 
+#define ROUTING_AGENT_TASK_PRIORITY 2
+
 // NOTE: Stack size is in 4 byte units!!! TODO: Is this also true for Zephyr?
 //TODO: Optimize them...
 #define DEFAULT_TASK_STACK_SIZE 1024
