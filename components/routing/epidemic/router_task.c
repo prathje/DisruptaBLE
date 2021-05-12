@@ -74,7 +74,8 @@
 static bool process_signal(
         struct router_signal signal,
         QueueIdentifier_t bp_signaling_queue,
-        QueueIdentifier_t router_signaling_queue);
+        QueueIdentifier_t router_signaling_queue,
+        void* router_agent);
 
 struct bundle_processing_result {
     int8_t status_or_fragments;
@@ -98,9 +99,9 @@ void router_task(void *rt_parameters)
     struct router_task_parameters *parameters =  (struct router_task_parameters *)rt_parameters;
 
     // we will use this config to also identify the routing agent in calls
-    void *routing_agent_config = routing_agent_management_config_init(parameters->bundle_agent_interface);
+    void *routing_agent = routing_agent_management_config_init(parameters->bundle_agent_interface);
 
-    if (!routing_agent_config) {
+    if (!routing_agent) {
         LOG("Router Task: Failed to init Routing Agent Config");
         return;
     }
@@ -111,14 +112,14 @@ void router_task(void *rt_parameters)
                 routing_agent_management_task,
                 "routing_agent_management_t",
                 ROUTING_AGENT_TASK_PRIORITY,
-                routing_agent_config,
+                routing_agent,
                 DEFAULT_TASK_STACK_SIZE,
                 (void *)ROUTING_AGENT_LISTENER_TASK_TAG
         );
 
         if (task == NULL) {
             LOG("Router Task: Failed to start Routing Agent");
-            free(routing_agent_config);
+            free(routing_agent);
             return;
         }
     }
@@ -138,8 +139,9 @@ void router_task(void *rt_parameters)
                 ) {
             process_signal(signal,
                            parameters->bundle_processor_signaling_queue,
-                           parameters->router_signaling_queue
-                           );
+                           parameters->router_signaling_queue,
+                           routing_agent
+                   );
         } else {
 
         }
@@ -174,7 +176,9 @@ static inline enum bundle_status_report_reason get_reason(int8_t bh_result)
 static bool process_signal(
         struct router_signal signal,
         QueueIdentifier_t bp_signaling_queue,
-        QueueIdentifier_t router_signaling_queue)
+        QueueIdentifier_t router_signaling_queue,
+        void *router_agent
+        )
 {
     bool success = true;
     bundleid_t b_id;
@@ -273,13 +277,17 @@ static bool process_signal(
             LOG("ROUTER_SIGNAL_WITHDRAW_NODE not supported");
             break;
         case ROUTER_SIGNAL_NEW_LINK_ESTABLISHED:
-            LOG("ROUTER_SIGNAL_NEW_LINK_ESTABLISHED not supported");
+            //LOG("ROUTER_SIGNAL_NEW_LINK_ESTABLISHED not supported");
             break;
-        case ROUTER_SIGNAL_NEIGHBOR_DISCOVERED:;//LOG("ROUTER_SIGNAL_NEIGHBOR_DISCOVERED");
-            struct node *neighbor = (struct node *) signal.data;
-            if (neighbor) {
-                LOGF("RouterTask: Neighbor Discovered %s, %s", neighbor->eid, neighbor->cla_addr);
-                //TODO: handle_discovered_neighbor(neighbor, hal_time_get_timestamp_s());
+        case ROUTER_SIGNAL_NEIGHBOR_DISCOVERED:
+            {
+                //LOG("ROUTER_SIGNAL_NEIGHBOR_DISCOVERED");
+                struct node *neighbor = (struct node *) signal.data;
+                if (neighbor) {
+                    LOGF("RouterTask: Neighbor Discovered %s, %s", neighbor->eid, neighbor->cla_addr);
+                    signal_new_neighbor(router_agent, neighbor->eid, neighbor->cla_addr);
+                    free_node(neighbor);
+                }
             }
             break;
         case ROUTER_SIGNAL_CONN_UP:;
@@ -287,6 +295,7 @@ static bool process_signal(
                 char *cla_address = (char *) signal.data;
                 if (cla_address) {
                     LOGF("RouterTask: ROUTER_SIGNAL_CONN_UP %s", cla_address);
+                    signal_conn_up(router_agent, cla_address);
                     free(cla_address);
                 } else {
                     LOG("RouterTask: ROUTER_SIGNAL_CONN_UP with null cla_address");
@@ -298,6 +307,7 @@ static bool process_signal(
                 char *cla_address = (char *)signal.data;
                 if (cla_address) {
                     LOGF("RouterTask: ROUTER_SIGNAL_CONN_DOWN %s", cla_address);
+                    signal_conn_down(router_agent, cla_address);
                     free(cla_address);
                 } else {
                     LOG("RouterTask: ROUTER_SIGNAL_CONN_DOWN with null cla_address");

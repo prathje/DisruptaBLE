@@ -256,6 +256,16 @@ static bool process_signal(
 		LOGF("RouterTask: Preemption routing failed for bundle #%d!",
 		     b_id);
 		break;
+
+    case ROUTER_SIGNAL_NEIGHBOR_DISCOVERED:
+        {
+            struct node *neighbor = (struct node *) signal.data;
+            if (neighbor) {
+                signal_new_neighbor(config, neighbor->eid, neighbor->cla_address);
+                free_node(neighbor);
+            }
+        }
+        break;
 	case ROUTER_SIGNAL_WITHDRAW_NODE:
 		node = (struct node *)signal.data;
 		hal_semaphore_take_blocking(cm_semaphore);
@@ -276,12 +286,11 @@ static bool process_signal(
 		break;
     case ROUTER_SIGNAL_CONN_UP:
     case ROUTER_SIGNAL_CONN_DOWN:
-            char *cla = (char *)signal.data;
-            if(cla) {
-                LOG("RouterTask: Ignore neighbor info");
-                free(cla);
-            }
-            break;
+        {
+            char *cla_address = (char *)signal.data;
+            free(cla_address);
+        }
+        break;
 	default:
 		LOGF("RouterTask: Invalid signal (%d) received!", signal.type);
 		success = false;

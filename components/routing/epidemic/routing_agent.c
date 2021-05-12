@@ -110,3 +110,16 @@ void routing_agent_management_task(void *param) {
     // TODO: Handle ROUTER_SIGNAL_TRANSMISSION_SUCCESS?! checkout ret_constraints FAILED_FORWARD_POLICY use POLICY_TRY_RE_SCHEDULE?
     // I think that we can happily send to the bundle_processor whatever signal we want!
 }
+
+
+void signal_new_neighbor(void *config, const char *eid, const char *cla_address) {
+    LOGF("RouterAgent: Neighbor Discovered %s, %s", eid, cla_address);
+}
+
+void signal_conn_up(void *config, const char *cla_address) {
+    LOGF("RouterAgent: Conn UP %s", cla_address);
+}
+
+void signal_conn_down(void *config, const char *cla_address) {
+    LOGF("RouterAgent: Conn DOWN %s", cla_address);
+}
