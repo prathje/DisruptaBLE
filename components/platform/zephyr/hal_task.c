@@ -31,6 +31,12 @@ struct zephyr_task *hal_task_create(void (*task_function)(void *), const char *t
     // TODO: This is currently based on https://github.com/zephyrproject-rtos/zephyr/issues/26999, use stack allocation api when available
     task->stack = k_aligned_alloc(Z_KERNEL_STACK_OBJ_ALIGN, Z_KERNEL_STACK_SIZE_ADJUST(stack_size));
 
+    if (!task->stack) {
+        // Failed to allocate enough memory for the stack!
+        k_free(task);
+        return NULL;
+    }
+
     task->tid = k_thread_create(
                             &task->thread,
                             task->stack,
