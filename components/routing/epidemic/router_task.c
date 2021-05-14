@@ -284,9 +284,11 @@ static bool process_signal(
                 //LOG("ROUTER_SIGNAL_NEIGHBOR_DISCOVERED");
                 struct node *neighbor = (struct node *) signal.data;
                 if (neighbor) {
-                    LOGF("RouterTask: Neighbor Discovered %s, %s", neighbor->eid, neighbor->cla_addr);
+                    //LOGF("RouterTask: Neighbor Discovered %s, %s", neighbor->eid, neighbor->cla_addr);
                     signal_new_neighbor(router_agent, neighbor->eid, neighbor->cla_addr);
                     free_node(neighbor);
+                } else {
+                    LOG("RouterTask: ROUTER_SIGNAL_NEIGHBOR_DISCOVERED with null node");
                 }
             }
             break;
@@ -294,7 +296,7 @@ static bool process_signal(
             {
                 char *cla_address = (char *) signal.data;
                 if (cla_address) {
-                    LOGF("RouterTask: ROUTER_SIGNAL_CONN_UP %s", cla_address);
+                    //LOGF("RouterTask: ROUTER_SIGNAL_CONN_UP %s", cla_address);
                     signal_conn_up(router_agent, cla_address);
                     free(cla_address);
                 } else {
@@ -306,7 +308,7 @@ static bool process_signal(
             {
                 char *cla_address = (char *)signal.data;
                 if (cla_address) {
-                    LOGF("RouterTask: ROUTER_SIGNAL_CONN_DOWN %s", cla_address);
+                    //LOGF("RouterTask: ROUTER_SIGNAL_CONN_DOWN %s", cla_address);
                     signal_conn_down(router_agent, cla_address);
                     free(cla_address);
                 } else {

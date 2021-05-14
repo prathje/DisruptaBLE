@@ -19,11 +19,21 @@
 #include <net/buf.h>
 #include <stdlib.h>
 
-// TODO: Refine this size...
-#define NB_BLE_QUEUE_SIZE 10
-#define CONFIG_ML2CAP_SERVICE_UUID BT_UUID_GAP_VAL
 
+// TODO: Make this configurable?
 #define NB_BLE_UUID 0xFFFF
+
+#ifndef CONFIG_NB_BLE_QUEUE_SIZE
+#define CONFIG_NB_BLE_QUEUE_SIZE 10
+#endif
+
+#ifndef CONFIG_NB_BLE_SCAN_DELAY_MS
+#define CONFIG_NB_BLE_SCAN_DELAY_MS 50
+#endif
+
+#ifndef CONFIG_NB_BLE_DEBUG
+#define CONFIG_NB_BLE_DEBUG 0
+#endif
 
 // TODO: Not the best to define them statically...
 static struct nb_ble_config nb_ble_config;
@@ -91,7 +101,7 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
 static void nb_ble_management_task(void *param) {
     (void)param;
 
-    nb_ble_node_info_queue = hal_queue_create(NB_BLE_QUEUE_SIZE, sizeof(struct nb_ble_node_info));
+    nb_ble_node_info_queue = hal_queue_create(CONFIG_NB_BLE_QUEUE_SIZE, sizeof(struct nb_ble_node_info));
 
     if (!nb_ble_node_info_queue) {
         LOG("NB BLE: Failed to initialize queue");
@@ -102,10 +112,12 @@ static void nb_ble_management_task(void *param) {
     nb_ble_start();
     while(true) {
         struct nb_ble_node_info node_info;
-        if (hal_queue_receive(nb_ble_node_info_queue, &node_info, -1) == UD3TN_OK) {
+        if (hal_queue_receive(nb_ble_node_info_queue, &node_info, CONFIG_NB_BLE_SCAN_DELAY_MS) == UD3TN_OK) {
             nb_ble_config.discover_cb(nb_ble_config.discover_cb_context, &node_info);
             free((void*)node_info.eid);
             free((void*)node_info.mac_addr);
+        } else {
+            nb_ble_start(); // we always try to start the scanning afterward
         }
     }
     // free(nb_ble_config.eid)
@@ -135,9 +147,11 @@ void nb_ble_start() {
 
     free(data);
 
+#if CONFIG_NB_BLE_DEBUG
     if (err) {
         LOGF("NB BLE: advertising failed to start (err %d)\n", err);
     }
+#endif
 
     /* Use active scanning and disable duplicate filtering to handle any
     * devices that might update their advertising data at runtime. */
@@ -150,9 +164,11 @@ void nb_ble_start() {
 
     err = bt_le_scan_start(&scan_param, device_found_cb);
 
+#if CONFIG_NB_BLE_DEBUG
     if (err) {
         LOGF("NB BLE: Scanning failed to start (err %d)\n", err);
     }
+#endif
 
 }
 
@@ -161,14 +177,18 @@ void nb_ble_stop() {
 
     int err = bt_le_adv_stop();
 
+#if CONFIG_NB_BLE_DEBUG
     if (err) {
         LOGF("NB BLE: advertising failed to stop (err %d)\n", err);
     }
+#endif
 
     err = bt_le_scan_stop();
+#if CONFIG_NB_BLE_DEBUG
     if (err) {
         LOGF("NB BLE: Scanning failed to stop (err %d)\n", err);
     }
+#endif
 }
 
 

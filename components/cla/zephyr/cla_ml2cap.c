@@ -39,13 +39,9 @@
 // TODO: Move this to KConfig
 #define CONFIG_ML2CAP_PSM 0xc0
 
-
-
-
-void start_scan(){};
-void stop_scan(){};
-void start_adv(){};
-void stop_adv(){};
+#ifndef CONFIG_CLA_ML2CAP_DELAY_MS
+#define CONFIG_CLA_ML2CAP_DELAY_MS 50
+#endif
 
 struct ml2cap_config {
     struct cla_config base;
@@ -170,30 +166,33 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
     hal_queue_push_to_back(bundle_agent_interface->router_signaling_queue,
                            &rt_signal);
 
-    // We now try to connect as soon as we received that advertisement
-    // As this callback is called from the nb_ble thread, we should not need further synchronization for the advertisements
 
-    // TODO: Do we really need to stop the advertisement?
-    nb_ble_stop();
 
-    struct bt_conn *conn;
     bt_addr_le_t addr;
-
-
     bt_addr_le_from_mac_addr(ble_node_info->mac_addr, &addr);
 
-    // TODO: It is a little bit excessive to directly connect to everyone in reach :)
-    int err = bt_conn_le_create(&addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM_DEFAULT, &conn);
 
-    if (err) {
-        //LOGF("ML2CAP: Failed to create connection (err %d)\n", err);
-    } else {
-        // we directly unref the connection here as we will use the connection event to save it
-        bt_conn_unref(conn);
+    // TODO: It is a little bit excessive to directly connect to everyone in reach :)
+    struct bt_conn *conn = bt_conn_lookup_addr_le(BT_ID_DEFAULT, &addr);
+
+    if (conn == NULL) {
+        // We now try to connect as soon as we received that advertisement
+        nb_ble_stop(); // we need to disable the advertisements for that, Note that this cb is called by the NB_BLE TASK
+        int err = bt_conn_le_create(&addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM_DEFAULT, &conn);
+
+        if (err) {
+            if (err != -EINVAL) {
+                // we get EINVAL in case the connection already exists...
+                LOGF("ML2CAP: Failed to create connection (err %d)\n", err);
+            }
+        }
     }
 
-    // TODO: Can we start directly afterward?
-    nb_ble_start();
+    if (conn) {
+        // conn was either set by bt_conn_lookup_addr_le or bt_conn_le_create
+        // we directly unref the connection here
+        bt_conn_unref(conn);
+    }
 }
 
 /**
@@ -243,22 +242,22 @@ static void ml2cap_link_management_task(void *p) {
     // we know need to either start the server or connect to it based on our role
 
     if (ml2cap_link->is_client) {
-        LOGF("ML2CAP: Initiating channel connectiong to \"%s\"", ml2cap_link->cla_addr);
+        LOGF("ML2CAP: Initiating channel connection to \"%s\"", ml2cap_link->cla_addr);
         // we are the client and try to connect to the channel server
         bt_l2cap_chan_connect(ml2cap_link->conn, &ml2cap_link->chan.chan, CONFIG_ML2CAP_PSM);
     } else {
-        LOGF("ML2CAP: Awaiting channel connectiong from \"%s\"", ml2cap_link->cla_addr);
+        LOGF("ML2CAP: Awaiting channel connection from \"%s\"", ml2cap_link->cla_addr);
         // we are the server and use the running L2CAP server to handle incoming connections
         // nothing more to initialize here, the server accept callback and sets the connection on the relevant link
     }
 
     while (ml2cap_link->bt_connected && !ml2cap_link->chan_connected) {
         LOGF("ML2CAP: Still waiting... for \"%s\"", ml2cap_link->cla_addr);
-        hal_task_delay(1000); // delay for 20 msec TODO!
+        hal_task_delay(CONFIG_CLA_ML2CAP_DELAY_MS); // delay for 20 msec TODO!
     }
 
     if (ml2cap_link->bt_connected && ml2cap_link->chan_connected) {
-        LOGF("ML2CAP: Channel established handling connectiong to \"%s\"", ml2cap_link->cla_addr);
+        LOGF("ML2CAP: Channel established handling connection to \"%s\"", ml2cap_link->cla_addr);
         handle_established_connection(ml2cap_link);
         LOGF("ML2CAP: Channel handling to \"%s\" finished", ml2cap_link->cla_addr);
     } else {
@@ -472,7 +471,6 @@ static enum ud3tn_result cla_ml2cap_start_link(
 }
 
 
-
 static void connected(struct bt_conn *conn, uint8_t err) {
     if (err) {
         LOGF("BLE Connection failed (err 0x%02x)\n", err);
@@ -562,9 +560,6 @@ static void mtcp_management_task(void *param) {
         goto terminate;
     }
     LOG("ML2CAP: Registered L2CAP Server");
-
-    start_adv();
-    start_scan();
 
     while (true) {
         // TODO: Start advertisements and scan again in case of e.g. errors?
