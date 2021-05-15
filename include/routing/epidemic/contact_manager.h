@@ -15,7 +15,7 @@ enum contact_manager_event {
     CONTACT_EVENT_INACTIVE
 };
 
-typedef void (*contact_manager_cb)(void *context, enum contact_manager_event, const struct contact *contact);
+typedef void (*contact_manager_cb)(void *context, enum contact_manager_event event, const struct contact *contact);
 void contact_manager_set_event_callback(contact_manager_cb cb, void *context);
 
 

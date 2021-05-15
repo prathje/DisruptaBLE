@@ -255,21 +255,26 @@ void handle_discovered_neighbor(struct node * node) {
 
             // reset values
             memset(contact_info, 0, sizeof(struct contact_info));
+
+            contact_info->contact = contact_create(node);
+
+            if (!contact_info->contact) {
+                LOGF("Contact Manager: No place to handle contact for eid \"%s\"", node->eid);
+                current_contact_count--;
+                free_node(node);
+                return;
+            }
+
+            contact_info->contact->to = current_timestamp;
+            contact_info->contact->from = current_timestamp;
+            on_event(CONTACT_EVENT_ADDED, contact_info->contact);
         }
-    }
 
-    if (!contact_info) {
-        LOGF("Contact Manager: No place to handle node with eid \"%s\"", node->eid);
-        free_node(node);
-        return;
-    }
-
-    if (!contact_info->contact) {
-        contact_info->contact = contact_create(node);
-        contact_info->contact->from = current_timestamp;
-        contact_info->contact->to = current_timestamp;
-
-        on_event(CONTACT_EVENT_ADDED, contact_info->contact);
+        if (!contact_info) {
+            LOGF("Contact Manager: No place to handle node with eid \"%s\"", node->eid);
+            free_node(node);
+            return;
+        }
     } else {
         // update the to value if the contact already existed
         contact_info->contact->to = MAX(contact_info->contact->to, current_timestamp);
