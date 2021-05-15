@@ -22,9 +22,6 @@
 
 #include "routing/epidemic/routing_agent.h"
 
-#ifndef EID_NONE
-#define EID_NONE "dtn:none"
-#endif
 
 #ifndef CONFIG_CONTACT_TIMEOUT_S
 #define CONFIG_CONTACT_TIMEOUT_S 60

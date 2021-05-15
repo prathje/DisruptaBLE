@@ -742,7 +742,6 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
 
     uint32_t sent = 0;
 
-
     // K_NO_WAIT is used per specification of NET_BUF_POOL_HEAP_DEFINE
 
     while (sent < length) {
@@ -870,7 +869,6 @@ static enum ud3tn_result ml2cap_init(
 
     return UD3TN_OK;
 }
-
 
 struct cla_config *ml2cap_create(
         const char *const options[], const size_t option_count,

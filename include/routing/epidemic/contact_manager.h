@@ -7,6 +7,12 @@
 
 #include <stdint.h>
 
+#ifndef EID_NONE
+#define EID_NONE "dtn:none"
+#endif
+
+#define IS_EID_NONE(eid) (!strcmp(eid, (EID_NONE)))
+
 enum contact_manager_event {
     CONTACT_EVENT_ADDED,
     CONTACT_EVENT_UPDATED,

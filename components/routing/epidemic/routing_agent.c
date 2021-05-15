@@ -20,14 +20,33 @@
 #include "ud3tn/bundle_storage_manager.h"
 #include "ud3tn/task_tags.h"
 
+#include "ud3tn/simplehtab.h"
+
 #include "platform/hal_io.h"
 #include "platform/hal_task.h"
+#include "platform/hal_semaphore.h"
 
 #define ROUTING_AGENT_SINK_IDENTIFIER "routing/epidemic"
+
+#ifndef CONFIG_ROUTING_AGENT_MAX_ROUTING_CONTACTS
+#define CONFIG_ROUTING_AGENT_MAX_ROUTING_CONTACTS (CONFIG_BT_MAX_CONN)
+#endif
+
+
+struct routing_contact {
+    struct contact *contact;
+    // TODO: Add relevant routing information, e.g. information about the received bundles and so on
+};
+
+
 
 
 struct routing_agent_config {
     const struct bundle_agent_interface *bundle_agent_interface;
+
+    struct htab_entrylist *routing_contact_htab_elem[CONFIG_ROUTING_AGENT_MAX_ROUTING_CONTACTS]; // we should not have really more entries than active connections?
+    struct htab routing_contact_htab;
+    Semaphore_t routing_contact_htab_sem;
 };
 
 
@@ -156,16 +175,22 @@ static void agent_msg_recv(struct bundle_adu data, void *param)
 }
 
 void* routing_agent_management_config_init(const struct bundle_agent_interface *bundle_agent_interface) {
-    struct routing_agent_config *routing_agent_config = malloc(sizeof(struct routing_agent_config));
+    struct routing_agent_config *config = malloc(sizeof(struct routing_agent_config));
 
-    routing_agent_config->bundle_agent_interface = bundle_agent_interface;
+    config->bundle_agent_interface = bundle_agent_interface;
 
-    return routing_agent_config;
+    htab_init(&config->routing_contact_htab, CONFIG_ROUTING_AGENT_MAX_ROUTING_CONTACTS, config->routing_contact_htab_elem);
+    config->routing_contact_htab_sem = hal_semaphore_init_binary();
+    hal_semaphore_release(config->routing_contact_htab_sem);
+
+
+    return config;
 }
 
 void routing_agent_management_task(void *param) {
     LOG("Routing Agent: Starting Epidemic Routing Agent...");
-    const struct routing_agent_config *config = (const struct routing_agent_config *)param;
+    struct routing_agent_config *config = (struct routing_agent_config *)param;
+
 
 
     LOGF("Routing Agent: Trying to register sink with sid %s", ROUTING_AGENT_SINK_IDENTIFIER);
@@ -190,6 +215,8 @@ void routing_agent_management_task(void *param) {
     }
 
     terminate:
+
+    hal_semaphore_delete(config->routing_contact_htab_sem);
     // Free the config in the end!
     free(config);
 
@@ -201,9 +228,44 @@ void routing_agent_management_task(void *param) {
 }
 
 void routing_agent_handle_contact_event(void *context, enum contact_manager_event event, const struct contact *contact) {
-    const struct routing_agent_config *config = (const struct routing_agent_config *)config;
+    struct routing_agent_config *config = (struct routing_agent_config *)config;
 
-    LOGF("Routing Agent: Contact Event %d", event);
+
+    // for now we only send bundles to active contacts, however we need the corresponding eid
+
+
+    const char *eid = contact->node->eid;
+
+    // we completely ignore contacts with invalid eids...
+
+    if (IS_EID_NONE(eid)) {
+        return;
+    }
+
+
+    // if contact is active but we do not yet know this contact -> add and initialize transmissions
+    hal_semaphore_take_blocking(config->routing_contact_htab_sem);
+
+    struct routing_contact *rc = htab_get(
+            &config->routing_contact_htab,
+            eid
+    );
+
+    if (contact->active && rc == NULL) {
+        rc = malloc(sizeof(struct routing_contact));
+        if (rc) {
+            // Contact is already active, what else do we need to do?
+            LOGF("Routing Agent: Added routing contact %d", eid);
+        } else {
+            LOGF("Routing Agent: Could not allocate memory for routing contact for eid %d", eid);
+        }
+    } else if(!contact->active && rc != NULL) {
+        // we remove the routing contact
+        htab_remove(&config->routing_contact_htab, eid);
+        LOGF("Routing Agent: Removed routing contact %d", eid);
+    }
+
+    hal_semaphore_release(config->routing_contact_htab_sem);
 
 
     // we send a welcome bundle to the other node
@@ -211,7 +273,7 @@ void routing_agent_handle_contact_event(void *context, enum contact_manager_even
     /*
      static char welcome_msg = "Hello World!";
 
-    const struct routing_agent_config *config = (const struct routing_agent_config *)config;
+    struct routing_agent_config *config = (struct routing_agent_config *)config;
 
     send_info_bundle(config->bundle_agent_interface)
 
