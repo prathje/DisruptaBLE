@@ -23,13 +23,113 @@
 #include "platform/hal_io.h"
 #include "platform/hal_task.h"
 
-#define ROUTING_AGENT_SINK_POSTFIX "/routing/epidemic"
-
+#define ROUTING_AGENT_SINK_IDENTIFIER "routing/epidemic"
 
 
 struct routing_agent_config {
     const struct bundle_agent_interface *bundle_agent_interface;
 };
+
+
+
+char *create_routing_endpoint(const char* eid) {
+
+    char *ep = malloc(strlen(eid) + strlen(ROUTING_AGENT_SINK_IDENTIFIER)+2); // 1 byte for "/", 1 for null termination
+
+    if (!ep) {
+        return NULL;
+    }
+
+    sprintf(ep, "%s/%s", eid, ROUTING_AGENT_SINK_IDENTIFIER);
+
+    return ep;
+}
+
+
+
+static struct bundle *create_bundle(const char *local_eid, char *sink_id, char *destination,
+                                    const uint64_t lifetime, void *payload, size_t payload_length)
+{
+    const size_t local_eid_length = strlen(local_eid);
+    const size_t sink_length = strlen(sink_id);
+    char *source_eid = malloc(local_eid_length + sink_length + 2);
+
+    if (source_eid == NULL) {
+        free(payload);
+        return NULL;
+    }
+
+    memcpy(source_eid, local_eid, local_eid_length);
+    source_eid[local_eid_length] = '/';
+    memcpy(&source_eid[local_eid_length + 1], sink_id, sink_length + 1);
+
+    struct bundle *result;
+
+    result = bundle7_create_local(
+            payload, payload_length, source_eid, destination,
+            hal_time_get_timestamp_s(),
+            lifetime, 0);
+
+    free(source_eid);
+
+    return result;
+}
+
+static bundleid_t create_forward_bundle(
+        const struct bundle_agent_interface *bundle_agent_interface,
+        char *sink_id, char *destination,
+        const uint64_t lifetime, void *payload, size_t payload_length)
+{
+    struct bundle *bundle = create_bundle(
+            bundle_agent_interface->local_eid,
+            sink_id,
+            destination,
+            lifetime,
+            payload,
+            payload_length
+    );
+
+    if (bundle == NULL)
+        return BUNDLE_INVALID_ID;
+
+    bundleid_t bundle_id = bundle_storage_add(bundle);
+
+    if (bundle_id != BUNDLE_INVALID_ID)
+        bundle_processor_inform(
+                bundle_agent_interface->bundle_signaling_queue,
+                bundle_id,
+                BP_SIGNAL_BUNDLE_LOCAL_DISPATCH,
+                BUNDLE_SR_REASON_NO_INFO
+        );
+    else
+        bundle_free(bundle);
+
+    return bundle_id;
+}
+
+/**
+ * We use info bundles to exchange information from one epidemic service to the other
+ * Based on this information exchange, we will e.g. queue "real" data bundles etc.
+ */
+static bundleid_t send_info_bundle(const struct bundle_agent_interface *bundle_agent_interface, char *destination_eid, void *payload, size_t payload_length) {
+
+    // we limit the lifetime of this meta bundle to a few seconds
+    uint64_t lifetime = 5;
+
+    char* dest = create_routing_endpoint(destination_eid);
+
+    bundleid_t b = create_forward_bundle(
+            bundle_agent_interface,
+            ROUTING_AGENT_SINK_IDENTIFIER,
+            dest,
+            lifetime,
+            payload,
+            payload_length);
+
+    free(dest);
+    return b;
+}
+
 
 
 // TODO: Maybe store the bundles in this agent temporarily?!?
@@ -55,7 +155,6 @@ static void agent_msg_recv(struct bundle_adu data, void *param)
     bundle_adu_free_members(data);
 }
 
-
 void* routing_agent_management_config_init(const struct bundle_agent_interface *bundle_agent_interface) {
     struct routing_agent_config *routing_agent_config = malloc(sizeof(struct routing_agent_config));
 
@@ -68,24 +167,14 @@ void routing_agent_management_task(void *param) {
     LOG("Routing Agent: Starting Epidemic Routing Agent...");
     const struct routing_agent_config *config = (const struct routing_agent_config *)param;
 
-    char *sink_identifier = malloc(strlen(config->bundle_agent_interface->local_eid) + strlen(ROUTING_AGENT_SINK_POSTFIX)+1);
 
-    if (!sink_identifier) {
-        LOG("Routing Agent: ERROR Failed to allocate the sink identifier");
-        goto terminate;
-    }
-
-
-
-    sprintf(sink_identifier, "%s%s", config->bundle_agent_interface->local_eid, ROUTING_AGENT_SINK_POSTFIX);
-    LOGF("Routing Agent: Trying to register sink with sid %s", sink_identifier);
-
+    LOGF("Routing Agent: Trying to register sink with sid %s", ROUTING_AGENT_SINK_IDENTIFIER);
     int ret = bundle_processor_perform_agent_action(
             config->bundle_agent_interface->bundle_signaling_queue,
             BP_SIGNAL_AGENT_REGISTER,
-            sink_identifier,
+            ROUTING_AGENT_SINK_IDENTIFIER,
             agent_msg_recv,
-            config,
+            (void*) config,
             true
     );
 
@@ -111,15 +200,20 @@ void routing_agent_management_task(void *param) {
     // I think that we can happily send to the bundle_processor whatever signal we want!
 }
 
+void routing_agent_handle_contact_event(void *context, enum contact_manager_event event, const struct contact *contact) {
+    const struct routing_agent_config *config = (const struct routing_agent_config *)config;
 
-void signal_new_neighbor(void *config, const char *eid, const char *cla_address) {
-    LOGF("RouterAgent: Neighbor Discovered %s, %s", eid, cla_address);
-}
+    LOGF("Routing Agent: Contact Event %d", event);
 
-void signal_conn_up(void *config, const char *cla_address) {
-    LOGF("RouterAgent: Conn UP %s", cla_address);
-}
 
-void signal_conn_down(void *config, const char *cla_address) {
-    LOGF("RouterAgent: Conn DOWN %s", cla_address);
+    // we send a welcome bundle to the other node
+
+    /*
+     static char welcome_msg = "Hello World!";
+
+    const struct routing_agent_config *config = (const struct routing_agent_config *)config;
+
+    send_info_bundle(config->bundle_agent_interface)
+
+    create_forward_bundle()*/
 }

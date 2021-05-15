@@ -4,7 +4,7 @@
 #include "ud3tn/bundle_storage_manager.h"
 #include "ud3tn/common.h"
 #include "ud3tn/config.h"
-#include "routing/contact/contact_manager.h"
+#include "routing/epidemic/contact_manager.h"
 #include "ud3tn/node.h"
 #include "routing/router_task.h"
 #include "routing/epidemic/routing_agent.h"
@@ -125,6 +125,9 @@ void router_task(void *rt_parameters)
     }
 
 
+    contact_manager_set_event_callback(routing_agent, routing_agent_handle_contact_event);
+
+
 
 
     struct router_signal signal;
@@ -177,7 +180,7 @@ static bool process_signal(
         struct router_signal signal,
         QueueIdentifier_t bp_signaling_queue,
         QueueIdentifier_t router_signaling_queue,
-        void *router_agent
+        void *router_agent  // TODO: Remove?
         )
 {
     bool success = true;
@@ -285,8 +288,7 @@ static bool process_signal(
                 struct node *neighbor = (struct node *) signal.data;
                 if (neighbor) {
                     //LOGF("RouterTask: Neighbor Discovered %s, %s", neighbor->eid, neighbor->cla_addr);
-                    signal_new_neighbor(router_agent, neighbor->eid, neighbor->cla_addr);
-                    free_node(neighbor);
+                    handle_discovered_neighbor(neighbor); // handle_discovered_neighbor needs to free neighbor!
                 } else {
                     LOG("RouterTask: ROUTER_SIGNAL_NEIGHBOR_DISCOVERED with null node");
                 }
@@ -297,7 +299,7 @@ static bool process_signal(
                 char *cla_address = (char *) signal.data;
                 if (cla_address) {
                     //LOGF("RouterTask: ROUTER_SIGNAL_CONN_UP %s", cla_address);
-                    signal_conn_up(router_agent, cla_address);
+                    handle_conn_up(cla_address);
                     free(cla_address);
                 } else {
                     LOG("RouterTask: ROUTER_SIGNAL_CONN_UP with null cla_address");
@@ -309,7 +311,7 @@ static bool process_signal(
                 char *cla_address = (char *)signal.data;
                 if (cla_address) {
                     //LOGF("RouterTask: ROUTER_SIGNAL_CONN_DOWN %s", cla_address);
-                    signal_conn_down(router_agent, cla_address);
+                    handle_conn_down(cla_address);
                     free(cla_address);
                 } else {
                     LOG("RouterTask: ROUTER_SIGNAL_CONN_DOWN with null cla_address");
@@ -361,6 +363,8 @@ static struct bundle_processing_result process_bundle(struct bundle *bundle)
         // Only fragment if it is allowed -- if not, there is no route.
         result = apply_fragmentation(bundle, route);
     }*/
+
+    LOG("Router Task: Bundle needs processing!");
 
     return result;
 }
