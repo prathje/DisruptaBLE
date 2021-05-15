@@ -125,7 +125,7 @@ void router_task(void *rt_parameters)
     }
 
 
-    contact_manager_set_event_callback(routing_agent, routing_agent_handle_contact_event);
+    contact_manager_set_event_callback(routing_agent_handle_contact_event, routing_agent);
 
 
 
