@@ -272,6 +272,11 @@ void routing_agent_handle_contact_event(void *context, enum contact_manager_even
 
             if (htab_entry) {
                 // TODO: Initialize everything
+
+                // we send a welcome bundle to the other node
+                static char *welcome_msg = "Hello World!";
+                bundleid_t b = send_info_bundle(config->bundle_agent_interface, eid, welcome_msg, strlen(welcome_msg));
+                LOGF("Routing Agent: Welcome Message %d", b);
             } else {
                 LOG("Routing Agent: Error creating htab entry!");
             }
@@ -289,14 +294,5 @@ void routing_agent_handle_contact_event(void *context, enum contact_manager_even
     hal_semaphore_release(config->routing_contact_htab_sem);
 
 
-    // we send a welcome bundle to the other node
 
-    /*
-     static char welcome_msg = "Hello World!";
-
-    struct routing_agent_config *config = (struct routing_agent_config *)config;
-
-    send_info_bundle(config->bundle_agent_interface)
-
-    create_forward_bundle()*/
 }
