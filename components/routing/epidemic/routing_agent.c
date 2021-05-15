@@ -181,6 +181,12 @@ void* routing_agent_management_config_init(const struct bundle_agent_interface *
 
     htab_init(&config->routing_contact_htab, CONFIG_ROUTING_AGENT_MAX_ROUTING_CONTACTS, config->routing_contact_htab_elem);
     config->routing_contact_htab_sem = hal_semaphore_init_binary();
+
+    if (!config->routing_contact_htab_sem) {
+        free(config);
+        return NULL;
+    }
+
     hal_semaphore_release(config->routing_contact_htab_sem);
 
 
@@ -190,8 +196,6 @@ void* routing_agent_management_config_init(const struct bundle_agent_interface *
 void routing_agent_management_task(void *param) {
     LOG("Routing Agent: Starting Epidemic Routing Agent...");
     struct routing_agent_config *config = (struct routing_agent_config *)param;
-
-
 
     LOGF("Routing Agent: Trying to register sink with sid %s", ROUTING_AGENT_SINK_IDENTIFIER);
     int ret = bundle_processor_perform_agent_action(
@@ -214,6 +218,8 @@ void routing_agent_management_task(void *param) {
         hal_task_delay(20);
     }
 
+    LOG("Routing Agent: Terminating...");
+
     terminate:
 
     hal_semaphore_delete(config->routing_contact_htab_sem);
@@ -228,7 +234,7 @@ void routing_agent_management_task(void *param) {
 }
 
 void routing_agent_handle_contact_event(void *context, enum contact_manager_event event, const struct contact *contact) {
-    struct routing_agent_config *config = (struct routing_agent_config *)config;
+    struct routing_agent_config *config = (struct routing_agent_config *)context;
 
 
     // for now we only send bundles to active contacts, however we need the corresponding eid
@@ -253,16 +259,31 @@ void routing_agent_handle_contact_event(void *context, enum contact_manager_even
 
     if (contact->active && rc == NULL) {
         rc = malloc(sizeof(struct routing_contact));
+
         if (rc) {
             // Contact is already active, what else do we need to do?
-            LOGF("Routing Agent: Added routing contact %d", eid);
+            LOGF("Routing Agent: Added routing contact %s", eid);
+
+            struct htab_entrylist *htab_entry = htab_add(
+                    &config->routing_contact_htab,
+                    eid,
+                    rc
+            );
+
+            if (htab_entry) {
+                // TODO: Initialize everything
+            } else {
+                LOG("Routing Agent: Error creating htab entry!");
+            }
         } else {
             LOGF("Routing Agent: Could not allocate memory for routing contact for eid %d", eid);
         }
     } else if(!contact->active && rc != NULL) {
         // we remove the routing contact
         htab_remove(&config->routing_contact_htab, eid);
-        LOGF("Routing Agent: Removed routing contact %d", eid);
+
+        free(rc);   // TODO: Clear everything
+        LOGF("Routing Agent: Removed routing contact %s", eid);
     }
 
     hal_semaphore_release(config->routing_contact_htab_sem);

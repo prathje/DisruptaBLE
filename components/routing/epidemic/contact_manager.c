@@ -239,10 +239,17 @@ enum ud3tn_result send_bundle(const char *const eid, struct routed_bundle *route
 void handle_discovered_neighbor(struct node * node) {
 
 
+    //LOGF("handle_discovered_neighbor: %s, %s", node->eid, node->cla_addr);
     ASSERT(node->eid != NULL);
-    const uint64_t current_timestamp = hal_time_get_timestamp_s();
+    ASSERT(node->cla_addr != NULL);
 
+    const uint64_t current_timestamp = hal_time_get_timestamp_s();
     struct contact_info *contact_info = find_contact_info_by_eid(node->eid);
+
+    if (!contact_info) {
+        // we try to find the contact by cla address as a fallback
+        contact_info = find_contact_info_by_cla_addr(node->cla_addr);
+    }
 
     if (!contact_info) {
         // we initialize contact_info
