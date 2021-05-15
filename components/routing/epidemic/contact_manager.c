@@ -132,6 +132,7 @@ uint8_t remove_and_free_expired_contacts()
             );
         }
         free_contact(removed_contacts[i].contact);
+        removed_contacts[i].contact = NULL;
     }
 
     return removed_count;
@@ -145,7 +146,7 @@ static struct contact_info * find_contact_info_by_eid(const char *const eid) {
 
     struct contact_info *found = NULL;
 
-    for (uint8_t i = current_contact_count - 1; i >= 0; i--) {
+    for (int i = current_contact_count - 1; i >= 0; i--) {
         const char * const contact_eid = current_contacts[i].contact->node->eid;
         if (!strcmp(eid, contact_eid)) {
             found = &current_contacts[i];
@@ -164,7 +165,7 @@ static struct contact_info * find_contact_info_by_cla_addr(const char *const cla
 
     struct contact_info *found = NULL;
 
-    for (uint8_t i = current_contact_count - 1; i >= 0; i--) {
+    for (int i = current_contact_count - 1; i >= 0; i--) {
         const char * const contact_cla_addr = current_contacts[i].contact->node->cla_addr;
         if (!strcmp(cla_addr, contact_cla_addr)) {
             found = &current_contacts[i];
