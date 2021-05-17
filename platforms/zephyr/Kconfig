@@ -11,3 +11,8 @@ config EID
 config CONTACT_TIMEOUT_S
 	int "Contact Timeout in seconds, too old contacts will thus be removed"
 	default 60
+
+
+config BUNDLE_PROCESSOR_AUTO_REMOVE_EXPIRED_KNOWN_BUNDLES
+    bool "Automatically delete expired bundles (i.e. deadline in the past)"
+	default n

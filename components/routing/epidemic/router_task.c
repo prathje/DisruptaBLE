@@ -8,6 +8,7 @@
 #include "ud3tn/node.h"
 #include "routing/router_task.h"
 #include "routing/epidemic/routing_agent.h"
+#include "routing/epidemic/router.h"
 #include "ud3tn/task_tags.h"
 
 #include "platform/hal_io.h"
@@ -37,12 +38,10 @@
 // We can further tweak the settings to support both spray-and-wait and direct delivery (which are essentially limited variants)
 // bundles are stored until their timeout
 
-
 // TODO: Recheck https://tools.ietf.org/html/draft-irtf-dtnrg-ipnd-03 -> there the EID is part of the neighbor discovery
 // Seems like we will also need to define neighbor discovery for BLE (!) -> we can split that to the BLE part and the initial connection setup? (e.g. BLE only GATT service UUID plus Service Data EID (hash?))
 // THEN during connection setup use GATT / two channels ? / the one channel for setup by sending the same IPDTNNB packet on that reliable connection? -> covers ALL what we want... As we then know services, EID and cla address -> we can thus report a full node to the router! (not only the link address)
 // the BLE NB could cache the nodes which are available at a specific point in time.
-
 
 
 // TODO: Based on the link address, each party sends a hello message from their local endpoints to the routing AGENT
@@ -74,8 +73,7 @@
 static bool process_signal(
         struct router_signal signal,
         QueueIdentifier_t bp_signaling_queue,
-        QueueIdentifier_t router_signaling_queue,
-        void* router_agent);
+        QueueIdentifier_t router_signaling_queue);
 
 struct bundle_processing_result {
     int8_t status_or_fragments;
@@ -88,7 +86,6 @@ struct bundle_processing_result {
 #define BUNDLE_RESULT_INVALID -3
 #define BUNDLE_RESULT_EXPIRED -4
 
-static struct bundle_processing_result process_bundle(struct bundle *bundle);
 
 /**
  * This router task will first spawn our routing agent before handling the router signal queue
@@ -99,36 +96,15 @@ void router_task(void *rt_parameters)
     struct router_task_parameters *parameters =  (struct router_task_parameters *)rt_parameters;
 
     // we will use this config to also identify the routing agent in calls
-    void *routing_agent = routing_agent_management_config_init(parameters->bundle_agent_interface);
 
-    if (!routing_agent) {
-        LOG("Router Task: Failed to init Routing Agent Config");
-        return;
-    }
-
-    // create the routing agent management task
-    {
-        Task_t task = hal_task_create(
-                routing_agent_management_task,
-                "routing_agent_management_t",
-                ROUTING_AGENT_TASK_PRIORITY,
-                routing_agent,
-                DEFAULT_TASK_STACK_SIZE,
-                (void *)ROUTING_AGENT_LISTENER_TASK_TAG
-        );
-
-        if (task == NULL) {
-            LOG("Router Task: Failed to start Routing Agent");
-            free(routing_agent);
-            return;
-        }
-    }
+    contact_manager_add_event_callback(routing_agent_handle_contact_event, NULL);
+    contact_manager_add_event_callback(router_handle_contact_event, NULL);
 
 
-    contact_manager_set_event_callback(routing_agent_handle_contact_event, routing_agent);
+    // we now initialize the router and routing_agent
 
-
-
+    router_init(parameters->bundle_agent_interface);
+    routing_agent_init(parameters->bundle_agent_interface);
 
     struct router_signal signal;
 
@@ -142,11 +118,12 @@ void router_task(void *rt_parameters)
                 ) {
             process_signal(signal,
                            parameters->bundle_processor_signaling_queue,
-                           parameters->router_signaling_queue,
-                           routing_agent
+                           parameters->router_signaling_queue
                    );
         } else {
-
+            // TODO: Which order?
+            routing_agent_update();
+            router_update();
         }
     }
 }
@@ -179,9 +156,7 @@ static inline enum bundle_status_report_reason get_reason(int8_t bh_result)
 static bool process_signal(
         struct router_signal signal,
         QueueIdentifier_t bp_signaling_queue,
-        QueueIdentifier_t router_signaling_queue,
-        void *router_agent  // TODO: Remove?
-        )
+        QueueIdentifier_t router_signaling_queue)
 {
     bool success = true;
     bundleid_t b_id;
@@ -200,78 +175,21 @@ static bool process_signal(
             break;
         case ROUTER_SIGNAL_ROUTE_BUNDLE:
 
-            // TODO: Check if this bundle was actually meant for this router
-            b_id = (bundleid_t)(uintptr_t)
-            signal.data;
+            b_id = (bundleid_t)(uintptr_t) signal.data;
             b = bundle_storage_get(b_id);
-
-            /*
-             * TODO: Check bundle expiration time
-             * => no timely contact signal
-             */
-
-            struct bundle_processing_result proc_result = {
-                    .status_or_fragments = BUNDLE_RESULT_INVALID
-            };
-
-            if (b != NULL)
-                proc_result = process_bundle(b);
-            b = NULL; /* b may be invalid or free'd now */
-
-            if (IS_DEBUG_BUILD)
-                LOGF(
-                        "RouterTask: Bundle #%d [ %s ] [ frag = %d ]",
-                        b_id,
-                        (proc_result.status_or_fragments < 1)
-                        ? "ERR" : "OK",
-                        proc_result.status_or_fragments
-                );
-            if (proc_result.status_or_fragments < 1) {
-
-                const enum bundle_status_report_reason reason =
-                        get_reason(proc_result.status_or_fragments);
-                const enum bundle_processor_signal_type signal =
-                        get_bp_signal(proc_result.status_or_fragments);
-
-                bundle_processor_inform(
-                        bp_signaling_queue,
-                        b_id,
-                        signal,
-                        reason
-                );
-                success = false;
-            } else {
-                for (int8_t i = 0; i < proc_result.status_or_fragments;
-                     i++) {
-                    bundle_processor_inform(
-                            bp_signaling_queue,
-                            proc_result.fragment_ids[i],
-                            BP_SIGNAL_BUNDLE_ROUTED,
-                            BUNDLE_SR_REASON_NO_INFO
-                    );
-                }
-            }
+            if (b != NULL) {
+                router_route_bundle(b);
+            } // TODO: can we just ignore the other case?
             break;
         case ROUTER_SIGNAL_CONTACT_OVER:
             // TODO: remove stored contact information
             LOG("ROUTER_SIGNAL_CONTACT_OVER not supported");
             break;
         case ROUTER_SIGNAL_TRANSMISSION_SUCCESS:
+            router_signal_bundle_transmission((struct routed_bundle *) signal.data, true);
+            break;
         case ROUTER_SIGNAL_TRANSMISSION_FAILURE:
-            rb = (struct routed_bundle *) signal.data;
-            if (rb->serialized == rb->contact_count) {
-                b_id = rb->id;
-                bundle_processor_inform(
-                        bp_signaling_queue, b_id,
-                        (rb->serialized == rb->transmitted)
-                        ? BP_SIGNAL_TRANSMISSION_SUCCESS
-                        : BP_SIGNAL_TRANSMISSION_FAILURE,
-                        BUNDLE_SR_REASON_NO_INFO
-                );
-                free(rb->destination);
-                free(rb->contacts);
-                free(rb);
-            }
+            router_signal_bundle_transmission((struct routed_bundle *) signal.data, false);
             break;
         case ROUTER_SIGNAL_OPTIMIZATION_DROP:
             LOG("ROUTER_SIGNAL_OPTIMIZATION_DROP not supported");
@@ -288,7 +206,7 @@ static bool process_signal(
                 struct node *neighbor = (struct node *) signal.data;
                 if (neighbor) {
                     //LOGF("RouterTask: Neighbor Discovered %s, %s", neighbor->eid, neighbor->cla_addr);
-                    handle_discovered_neighbor(neighbor); // handle_discovered_neighbor needs to free neighbor!
+                    contact_manager_handle_discovered_neighbor(neighbor); // handle_discovered_neighbor needs to free neighbor!
                 } else {
                     LOG("RouterTask: ROUTER_SIGNAL_NEIGHBOR_DISCOVERED with null node");
                 }
@@ -299,7 +217,7 @@ static bool process_signal(
                 char *cla_address = (char *) signal.data;
                 if (cla_address) {
                     //LOGF("RouterTask: ROUTER_SIGNAL_CONN_UP %s", cla_address);
-                    handle_conn_up(cla_address);
+                    contact_manager_handle_conn_up(cla_address);
                     free(cla_address);
                 } else {
                     LOG("RouterTask: ROUTER_SIGNAL_CONN_UP with null cla_address");
@@ -311,7 +229,7 @@ static bool process_signal(
                 char *cla_address = (char *)signal.data;
                 if (cla_address) {
                     //LOGF("RouterTask: ROUTER_SIGNAL_CONN_DOWN %s", cla_address);
-                    handle_conn_down(cla_address);
+                    contact_manager_handle_conn_down(cla_address);
                     free(cla_address);
                 } else {
                     LOG("RouterTask: ROUTER_SIGNAL_CONN_DOWN with null cla_address");
@@ -324,47 +242,4 @@ static bool process_signal(
             break;
     }
     return success;
-}
-
-
-static struct bundle_processing_result process_bundle(struct bundle *bundle)
-{
-    struct bundle_processing_result result = {
-            .status_or_fragments = BUNDLE_RESULT_NO_ROUTE
-    };
-
-    ASSERT(bundle != NULL);
-
-    if (bundle_get_expiration_time_s(bundle) < hal_time_get_timestamp_s()) {
-        // Bundle is already expired on arrival at the router...
-        result.status_or_fragments = BUNDLE_RESULT_EXPIRED;
-        return result;
-    }
-
-    // TODO: Support fragmentation, for now we do not fragment at all (which will hinder propagation of big bundles
-    // If we however support fragmentation, the bundles will also need to be reconstructed before we can use them in this router -> implement router agent later
-    // they could initially send small unfragmented "hello bundles" to exchange basic contact information before
-    bool fragmentation_required = false;
-
-    result.status_or_fragments = BUNDLE_RESULT_NO_ROUTE;
-    /*if (fragmentation_required) {
-        if (!bundle_must_not_fragment(bundle)) {
-            // Only fragment if it is allowed -- if not, there is no route.
-            result = apply_fragmentation(bundle, route);
-        } else {
-            result.status_or_fragments = BUNDLE_RESULT_NO_ROUTE;
-        }
-    }*/
-
-
-    /* route = router_get_first_route(bundle);
-    if (route.fragments == 1) {
-    } else if (!bundle_must_not_fragment(bundle)) {
-        // Only fragment if it is allowed -- if not, there is no route.
-        result = apply_fragmentation(bundle, route);
-    }*/
-
-    LOG("Router Task: Bundle needs processing!");
-
-    return result;
 }

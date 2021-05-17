@@ -551,10 +551,10 @@ uint8_t router_add_bundle_to_route(struct fragment_route *r, struct bundle *b)
 	if (rb == NULL)
 		return 0;
 	rb->id = b->id;
-	rb->prio = bundle_get_routing_priority(b);
-	rb->size = bundle_get_serialized_size(b);
-	rb->exp_time = bundle_get_expiration_time_s(b);
-	rb->destination = strdup(b->destination);
+    rb->prio = bundle_get_routing_priority(b);
+    rb->size = bundle_get_serialized_size(b);
+    rb->exp_time = bundle_get_expiration_time_s(b);
+    rb->destination = strdup(b->destination);
 	if (rb->destination == NULL) {
 		free(rb);
 		return 0;

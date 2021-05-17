@@ -2,6 +2,7 @@
 #define BUNDLEPROCESSOR_H_INCLUDED
 
 #include "ud3tn/bundle.h"
+#include "ud3tn/known_bundle_list.h"
 
 #include "platform/hal_types.h"
 
@@ -61,5 +62,10 @@ int bundle_processor_perform_agent_action(
 
 
 void bundle_processor_task(void *param);
+
+/**
+ * Use to access the list of known bundles
+ */
+enum ud3tn_result bundle_processor_get_known_bundle_list(struct known_bundle_list **dest);
 
 #endif /* BUNDLEPROCESSOR_H_INCLUDED */

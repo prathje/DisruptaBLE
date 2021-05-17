@@ -21,6 +21,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef CONFIG_BUNDLE_PROCESSOR_AUTO_REMOVE_EXPIRED_KNOWN_BUNDLES
+#define CONFIG_BUNDLE_PROCESSOR_AUTO_REMOVE_EXPIRED_KNOWN_BUNDLES 1
+#endif
+
+
 enum bundle_handling_result {
 	BUNDLE_HRESULT_OK = 0,
 	BUNDLE_HRESULT_DELETED,
@@ -41,11 +46,7 @@ static struct reassembly_list {
 	struct reassembly_list *next;
 } *reassembly_list;
 
-static struct known_bundle_list {
-	struct bundle_unique_identifier id;
-	uint64_t deadline;
-	struct known_bundle_list *next;
-} *known_bundle_list;
+static struct known_bundle_list *known_bundle_list;
 
 // for performing (de)register operations
 struct agent_manager_parameters {
@@ -200,6 +201,14 @@ void bundle_processor_task(void * const param)
 
 	custody_manager_init(p->local_eid);
 
+	// Initialize known_bundle_list
+
+    known_bundle_list = known_bundle_list_create();
+    if (known_bundle_list == NULL) {
+        LOG("BundleProcessor: Could not initialize known_bundle_list!");
+        return;
+    }
+
 	LOGF("BundleProcessor: BPA initialized for \"%s\", status reports %s",
 	     p->local_eid, p->status_reporting ? "enabled" : "disabled");
 
@@ -210,6 +219,8 @@ void bundle_processor_task(void * const param)
 			handle_signal(signal);
 		}
 	}
+
+    known_bundle_list_destroy(known_bundle_list);
 }
 
 static inline void handle_signal(const struct bundle_processor_signal signal)
@@ -1014,90 +1025,39 @@ static const char *get_agent_id(const char *dest_eid)
 // Checks whether we know the bundle. If not, adds it to the list.
 static bool bundle_record_add_and_check_known(const struct bundle *bundle)
 {
-	struct known_bundle_list **cur_entry = &known_bundle_list;
-	uint64_t cur_time = hal_time_get_timestamp_s();
-	const uint64_t bundle_deadline = bundle_get_expiration_time_s(bundle);
+    uint64_t cur_time = hal_time_get_timestamp_s();
 
-	if (bundle_deadline < cur_time)
-		return true; // We assume we "know" all expired bundles.
-	// 1. Cleanup and search
-	while (*cur_entry != NULL) {
-		struct known_bundle_list *e = *cur_entry;
+    // we first remove all expired bundles (easy as they are at the front of the list)
+    known_bundle_list_remove_before(known_bundle_list, cur_time);
 
-		if (bundle_is_equal(bundle, &e->id)) {
-			return true;
-		} else if (e->deadline < cur_time) {
-			*cur_entry = e->next;
-			bundle_free_unique_identifier(&e->id);
-			free(e);
-			continue;
-		} else if (e->deadline > bundle_deadline) {
-			// Won't find, insert here!
-			break;
-		}
-		cur_entry = &(*cur_entry)->next;
-	}
+    const uint64_t bundle_deadline = bundle_get_expiration_time_s(bundle);
 
-	// 2. If not found, add at current slot (ordered by deadline)
-	struct known_bundle_list *new_entry = malloc(
-		sizeof(struct known_bundle_list)
-	);
+    // as we removed all expired bundles, We assume we "know" all expired bundles.
+    if (bundle_deadline < cur_time)
+        return true;
 
-	if (!new_entry)
-		return false;
-	new_entry->id = bundle_get_unique_identifier(bundle);
-	new_entry->deadline = bundle_deadline;
-	new_entry->next = *cur_entry;
-	*cur_entry = new_entry;
-
-	return false;
+    return known_bundle_list_add(known_bundle_list, bundle);
 }
 
 static bool bundle_reassembled_is_known(const struct bundle *bundle)
 {
-	struct known_bundle_list **cur_entry = &known_bundle_list;
-	const uint64_t bundle_deadline = bundle_get_expiration_time_s(bundle);
-
-	while (*cur_entry != NULL) {
-		struct known_bundle_list *e = *cur_entry;
-
-		if (bundle_is_equal_parent(bundle, &e->id) &&
-				e->id.fragment_offset == 0 &&
-				e->id.payload_length ==
-					bundle->total_adu_length) {
-			return true;
-		} else if (e->deadline > bundle_deadline) {
-			// Won't find...
-			break;
-		}
-		cur_entry = &(*cur_entry)->next;
-	}
-	return false;
+    // TODO: This is not yet tested...
+    return known_bundle_list_contains_reassembled_parent(known_bundle_list, bundle);
 }
 
 static void bundle_add_reassembled_as_known(const struct bundle *bundle)
 {
-	struct known_bundle_list **cur_entry = &known_bundle_list;
-	const uint64_t bundle_deadline = bundle_get_expiration_time_s(bundle);
+    // TODO: This is not yet tested...
+    known_bundle_list_add_reassembled_parent(known_bundle_list, bundle);
+}
 
-	while (*cur_entry != NULL) {
-		struct known_bundle_list *e = *cur_entry;
-
-		if (e->deadline > bundle_deadline)
-			break;
-		cur_entry = &(*cur_entry)->next;
-	}
-
-	struct known_bundle_list *new_entry = malloc(
-		sizeof(struct known_bundle_list)
-	);
-
-	if (!new_entry)
-		return;
-	new_entry->id = bundle_get_unique_identifier(bundle);
-	new_entry->id.fragment_offset = 0;
-	new_entry->id.payload_length = bundle->total_adu_length;
-	new_entry->deadline = bundle_deadline;
-	new_entry->next = *cur_entry;
-	*cur_entry = new_entry;
+enum ud3tn_result bundle_processor_get_known_bundle_list(struct known_bundle_list **dest) {
+    if(known_bundle_list) {
+        // TODO: Do we want to copy this list?
+        // For now, the list's semaphore prevent race conditions...
+        *dest = known_bundle_list;
+        return UD3TN_OK;
+    } else {
+        return UD3TN_FAIL;
+    }
 }

@@ -7,9 +7,6 @@
 
 #include <stdint.h>
 
-#ifndef EID_NONE
-#define EID_NONE "dtn:none"
-#endif
 
 #define IS_EID_NONE(eid) (!strcmp(eid, (EID_NONE)))
 
@@ -22,30 +19,31 @@ enum contact_manager_event {
 };
 
 typedef void (*contact_manager_cb)(void *context, enum contact_manager_event event, const struct contact *contact);
-void contact_manager_set_event_callback(contact_manager_cb cb, void *context);
+void contact_manager_add_event_callback(contact_manager_cb cb, void *context);
 
+void contact_manager_get_current_contacts(contact_manager_cb cb, void *context);
 
 uint8_t remove_and_free_expired_contacts();
 
-enum ud3tn_result send_bundle(const char *const eid, struct routed_bundle *routed_bundle);
+enum ud3tn_result contact_manager_try_to_send_bundle(const char *const eid, struct routed_bundle *routed_bundle, int timeout);
 
 
 /**
  * Handle a new neighbor, node needs to be freed (!)
  */
-void handle_discovered_neighbor(struct node * node);
+void contact_manager_handle_discovered_neighbor(struct node * node);
 
 /**
  * Called if a new connection is available, cla_address needs to be copied
  * It is not guaranteed that we already know this neighbor (!)
  * (however we assume that neighbor discovery runs in the background so we eventually know the corresponding EID)
  */
-void handle_conn_up(const char *cla_address);
+void contact_manager_handle_conn_up(const char *cla_address);
 
 /**
  * Called if a connection is not anymore available, cla_address needs to be copied
  */
-void handle_conn_down(const char *cla_address);
+void contact_manager_handle_conn_down(const char *cla_address);
 
 
 #endif /* CONTACTMANAGER_H_INCLUDED */

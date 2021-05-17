@@ -20,9 +20,6 @@
 #include <string.h>
 
 
-#include "routing/epidemic/routing_agent.h"
-
-
 #ifndef CONFIG_CONTACT_TIMEOUT_S
 #define CONFIG_CONTACT_TIMEOUT_S 60
 #endif
@@ -35,18 +32,29 @@ struct contact_info {
 static struct contact_info current_contacts[MAX_CONCURRENT_CONTACTS];
 static int8_t current_contact_count;
 
+// we just use two callbacks atm, one for the routing agent and another for the actual router
+// we use callbacks as there is not really a need for this contact manager to now any specific functionality
+#define CONTACT_MANAGER_NUM_CALLBACKS 2
+static uint8_t num_event_cb = 0;
+static contact_manager_cb event_cb[CONTACT_MANAGER_NUM_CALLBACKS];
+static void *event_cb_context[CONTACT_MANAGER_NUM_CALLBACKS];
 
-static contact_manager_cb event_cb;
-static void *event_cb_context;
-
-void contact_manager_set_event_callback(contact_manager_cb cb, void *context) {
-    event_cb = cb;
-    event_cb_context = context;
+/**
+ * TODO: This is not yet thread-safe!
+ */
+void contact_manager_add_event_callback(contact_manager_cb cb, void *context) {
+    if (num_event_cb < CONTACT_MANAGER_NUM_CALLBACKS) {
+        event_cb[num_event_cb] = cb;
+        event_cb_context[num_event_cb] = context;
+        num_event_cb++;
+    }
 }
 
 static void on_event(enum contact_manager_event event, const struct contact *contact) {
-    if (event_cb) {
-        event_cb(event_cb_context, event, contact);
+    for(uint8_t i; i < num_event_cb; i++) {
+        if (event_cb[i] != NULL) {
+            event_cb[i](event_cb_context[i], event, contact);
+        }
     }
 }
 
@@ -110,7 +118,6 @@ uint8_t remove_and_free_expired_contacts()
     static struct contact_info removed_contacts[MAX_CONCURRENT_CONTACTS];
 
     int8_t i;
-    static struct contact_info added_contacts[MAX_CONCURRENT_CONTACTS];
     uint64_t current_timestamp = hal_time_get_timestamp_s();
     int8_t removed_count = remove_expired_contacts(
             current_timestamp,
@@ -178,7 +185,7 @@ static struct contact_info * find_contact_info_by_cla_addr(const char *const cla
  * TODO: This is not yet thread-safe!
  * TODO: This is currently not efficient
  */
-enum ud3tn_result send_bundle(const char *const eid, struct routed_bundle *routed_bundle) {
+enum ud3tn_result contact_manager_try_to_send_bundle(const char *const eid, struct routed_bundle *routed_bundle, int timeout) {
 
     struct contact_info * contact_info = find_contact_info_by_eid(eid);
     struct contact * contact = contact_info->contact;
@@ -224,10 +231,14 @@ enum ud3tn_result send_bundle(const char *const eid, struct routed_bundle *route
     command.bundles->data = routed_bundle;
     command.bundles->next = NULL;
 
-    hal_queue_push_to_back(tx_queue.tx_queue_handle, &command);
+    enum ud3tn_result res = hal_queue_try_push_to_back(tx_queue.tx_queue_handle, &command, timeout);
+    if (res == UD3TN_FAIL) {
+        free(command.bundles);
+    }
+
     hal_semaphore_release(tx_queue.tx_queue_sem); // taken by get_tx_queue
 
-    return UD3TN_OK;
+    return res;
 }
 
 
@@ -236,7 +247,7 @@ enum ud3tn_result send_bundle(const char *const eid, struct routed_bundle *route
  * uses the current timestamp to update the contacts from and to times
  *  TODO: This is not yet thread-safe!
  */
-void handle_discovered_neighbor(struct node * node) {
+void contact_manager_handle_discovered_neighbor(struct node * node) {
 
 
     //LOGF("handle_discovered_neighbor: %s, %s", node->eid, node->cla_addr);
@@ -296,10 +307,10 @@ static void handle_missing_cla_address(const char *cla_address) {
         return;
     }
     node->cla_addr = strdup(cla_address);
-    handle_discovered_neighbor(node);
+    contact_manager_handle_discovered_neighbor(node);
 }
 
-void handle_conn_up(const char *cla_address) {
+void contact_manager_handle_conn_up(const char *cla_address) {
     struct contact_info *info = find_contact_info_by_cla_addr(cla_address);
 
     if (!info) {
@@ -322,7 +333,7 @@ void handle_conn_up(const char *cla_address) {
     }
 }
 
-void handle_conn_down(const char *cla_address) {
+void contact_manager_handle_conn_down(const char *cla_address) {
 
     struct contact_info *info = find_contact_info_by_cla_addr(cla_address);
 

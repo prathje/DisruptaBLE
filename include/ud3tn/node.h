@@ -6,6 +6,10 @@
 
 #include <stdint.h>
 
+#ifndef EID_NONE
+#define EID_NONE "dtn:none"
+#endif
+
 struct routed_bundle {
 	bundleid_t id;
 	char *destination; /* TODO: Optimize */
