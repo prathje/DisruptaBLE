@@ -162,13 +162,44 @@ send_info_bundle(const struct bundle_agent_interface *bundle_agent_interface, ch
 // as uD3TN does currently not support registration of multiple endpoints -> we use the simple fact that bundles get directly forwarded to routing again
 
 static void agent_msg_recv(struct bundle_adu data, void *param) {
-    struct routing_agent_config *const config = (
-            (struct routing_agent_config *) param
-    );
-
-    (void) config;
-
     LOGF("Routing Agent: Got Bundle from \"%s\"", data.source);
+
+    char *eid = routing_agent_create_eid_from_info_bundle_eid(data.source);
+
+    // create summary_vector from this message
+    struct summary_vector *new_sv = summary_vector_create_from_memory(data.payload, data.length);
+
+    if (new_sv != NULL) {
+    LOGF("RoutingAgent: Received summary vector with length %d from %s", new_sv->length, eid);
+        bool success = false;
+
+        hal_semaphore_take_blocking(routing_agent_config.routing_agent_contact_htab_sem);
+
+        struct routing_agent_contact *rc = htab_get(
+                &routing_agent_config.routing_agent_contact_htab,
+                eid
+        );
+
+        if (rc) {
+            if (rc->sv) {
+                summary_vector_destroy(rc->sv);
+            }
+            rc->sv = new_sv;
+            success = true;
+        }
+        hal_semaphore_release(routing_agent_config.routing_agent_contact_htab_sem);
+
+        if (!success) {
+            summary_vector_destroy(new_sv);
+            LOGF("RoutingAgent: Could not store sv contact for eid %s", eid);
+        }
+    } else {
+        LOGF("RoutingAgent: Received invalid message with size %d from %s", data.length, eid);
+    }
+
+
+
+    free(eid);
     // TODO: Process Bundle, extract SV :)
     bundle_adu_free_members(data);
 }
