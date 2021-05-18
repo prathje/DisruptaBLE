@@ -251,13 +251,21 @@ void route_epidemic_bundle(struct bundle *bundle) {
         router_config.bundle_info_list.head = info;
     }
 
+
+    bool needs_update = false;
+
     // we now add this bundle to every currently known contact that has no other candidates
     for(int i = router_config.num_router_contacts-1; i >= 0; i--) {
         struct router_contact *rc = router_config.router_contacts[i];
         if (rc->next_bundle_candidate == NULL) {
             rc->next_bundle_candidate = info;
             LOGF("Router: Found new candidate for contact %s", rc->contact->node->eid);
+            needs_update = true;
         }
+    }
+
+    if (needs_update) {
+        send_bundles(); // we directly try to send outstanding bundles
     }
 }
 
