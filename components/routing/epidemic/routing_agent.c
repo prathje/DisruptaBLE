@@ -50,7 +50,7 @@
 
 
 struct routing_agent_contact {
-    struct contact *contact;    // a pointer to contact_manager's contact
+    const struct contact *contact;    // a pointer to contact_manager's contact
     struct summary_vector *sv; // we use a pointer to mark that a summary vector is uninitialized
     uint64_t sv_received_ts;
 };
