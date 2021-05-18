@@ -184,7 +184,7 @@ static void send_bundles_to_contact(struct router_contact *router_contact ) {
 }
 
 static void send_bundles() {
-    for(int i = router_config.num_router_contacts; i >= 0; i--) {
+    for(int i = router_config.num_router_contacts-1; i >= 0; i--) {
         send_bundles_to_contact(router_config.router_contacts[i]);
     }
 }
