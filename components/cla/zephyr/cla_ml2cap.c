@@ -351,7 +351,7 @@ static int chan_recv_cb(struct bt_l2cap_chan *chan, struct net_buf *buf) {
             // TODO: This message queue abuse is quite inefficient!
             // TODO: Check that this conversion is correct!
             size_t b = (size_t) net_buf_pull_u8(buf);
-            hal_queue_push_to_back(link->rx_queue, (void *) b);
+            hal_queue_push_to_back(link->rx_queue, (void *) &b);
         }
     }
     // TODO: Can we release this already before?
