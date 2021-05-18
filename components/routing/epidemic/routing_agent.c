@@ -90,7 +90,7 @@ char *create_routing_endpoint(const char *eid) {
 char * routing_agent_create_eid_from_info_bundle_eid(const char* source_or_destination_eid) {
 
     char * dup = strdup(source_or_destination_eid);
-    char *pos = strstr(dup, ROUTING_AGENT_SINK_IDENTIFIER);
+    char *pos = strstr(dup, "/" ROUTING_AGENT_SINK_IDENTIFIER);
     if(pos != NULL) {
         *pos = '\0'; // we end the string already
     }
