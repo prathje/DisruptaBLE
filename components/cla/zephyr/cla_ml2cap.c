@@ -720,7 +720,7 @@ static enum ud3tn_result ml2cap_end_scheduled_contact(
 // This currently assumes that we only have one call to ml2cap_send_packet_data active at a time (see tx_task)
 // TODO: We might want to use more than CONFIG_BT_MAX_CONN buffers, (who knows?)
 K_SEM_DEFINE(ml2cap_send_packet_data_pool_sem,
-        CONFIG_BT_MAX_CONN, CONFIG_BT_MAX_CONN);
+        1, 1);
 
 // This destroy callback ensures that we do not allocate too many buffers
 static void ml2cap_send_packet_data_pool_buf_destroy(struct net_buf *buf) {
@@ -729,7 +729,7 @@ static void ml2cap_send_packet_data_pool_buf_destroy(struct net_buf *buf) {
 }
 
 // TODO: we might need to define a fixed memory region and i.e. limit the maximum packet size
-NET_BUF_POOL_HEAP_DEFINE(ml2cap_send_packet_data_pool, CONFIG_BT_MAX_CONN, ml2cap_send_packet_data_pool_buf_destroy
+NET_BUF_POOL_HEAP_DEFINE(ml2cap_send_packet_data_pool, 1, ml2cap_send_packet_data_pool_buf_destroy
 );
 
 
@@ -810,7 +810,7 @@ static struct cla_tx_queue ml2cap_get_tx_queue(
     (void) eid;
     struct ml2cap_config *const ml2cap_config = (struct ml2cap_config *) config;
 
-    LOGF("ml2cap_get_tx_queue addr: %s", cla_addr);
+    //LOGF("ml2cap_get_tx_queue addr: %s", cla_addr);
 
     hal_semaphore_take_blocking(ml2cap_config->link_htab_sem);
 
