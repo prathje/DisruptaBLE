@@ -16,3 +16,20 @@ config CONTACT_TIMEOUT_S
 config BUNDLE_PROCESSOR_AUTO_REMOVE_EXPIRED_KNOWN_BUNDLES
     bool "Automatically delete expired bundles (i.e. deadline in the past)"
 	default n
+
+
+config FAKE_BUNDLE_INTERVAL
+    int "The interval to generate fake bundles (in seconds). 0 for no generation"
+	default 0
+
+config FAKE_BUNDLE_SIZE_MIN
+    int "The minimum size of a fake bundle (in bytes)"
+	default 0
+
+config FAKE_BUNDLE_SIZE_MAX
+    int "The maximum size of a fake bundle (in bytes)"
+	default 512
+
+config FAKE_BUNDLE_LIFETIME
+    int "The interval to generate fake bundles (in seconds). 0 for no generation"
+	default 0

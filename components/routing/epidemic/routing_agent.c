@@ -149,8 +149,6 @@ send_info_bundle(const struct bundle_agent_interface *bundle_agent_interface, ch
     return b;
 }
 
-
-
 // TODO: Maybe store the bundles in this agent temporarily?!?
 
 // This routing agent is also a normal agent as for example an application agent, it uses a special
@@ -305,7 +303,8 @@ static void send_sv_unsafe(struct routing_agent_contact *rc) {
 
     if (payload) {
        // bundleid_t b =
-                send_info_bundle(routing_agent_config.bundle_agent_interface, eid, payload, payload_size);
+        summary_vector_copy_to_memory(routing_agent_config.own_sv, payload);
+        send_info_bundle(routing_agent_config.bundle_agent_interface, eid, payload, payload_size);
         LOGF("Routing Agent: Send SV with size %d to %s", payload_size, eid);
     } else {
         LOGF("RoutingAgent: Could not send summary vector with size %d to %s", payload_size, eid);
@@ -397,12 +396,69 @@ bool routing_agent_contact_active(const char *eid) {
     return ret;
 }
 
+#if CONFIG_FAKE_BUNDLE_INTERVAL > 0
+
+#define FAKE_DESTINATION "dtn://fake"
+#include "platform/hal_random.h"
+
+void generate_fake_bundles() {
+
+    static uint32_t num_generated = 0;
+    uint64_t cur = hal_time_get_timestamp_s();
+
+    uint32_t planned = cur / CONFIG_FAKE_BUNDLE_INTERVAL;
+
+    while(num_generated < planned) {
+        uint32_t payload_length = (hal_random_get() % (CONFIG_FAKE_BUNDLE_SIZE_MAX-CONFIG_FAKE_BUNDLE_SIZE_MIN)) + CONFIG_FAKE_BUNDLE_SIZE_MIN;
+
+        uint8_t *payload = malloc(payload_length);
+        if (!payload) {
+            LOG("RoutingAgent: Could not allocate fake payload!");
+            return;
+        }
+
+        memset(payload, 0, payload_length);
+
+         struct bundle *bundle = bundle7_create_local(
+            payload, payload_length, routing_agent_config.bundle_agent_interface->local_eid, FAKE_DESTINATION,
+            hal_time_get_timestamp_s(),
+            CONFIG_FAKE_BUNDLE_LIFETIME,
+            0);
+        if (bundle == NULL) {
+            LOG("RoutingAgent: Could not create fake bundle!");
+            return;
+        }
+
+        bundleid_t bundle_id = bundle_storage_add(bundle);
+
+        if (bundle_id != BUNDLE_INVALID_ID)
+            bundle_processor_inform(
+                    routing_agent_config.bundle_agent_interface->bundle_signaling_queue,
+                    bundle_id,
+                    BP_SIGNAL_BUNDLE_LOCAL_DISPATCH,
+                    BUNDLE_SR_REASON_NO_INFO
+            );
+        else {
+            bundle_free(bundle);
+             LOG("RoutingAgent: Could not store fake bundle!");
+            return;
+        }
+        num_generated++;
+    }
+}
+#endif
+
 
 void routing_agent_update() {
+
+#if CONFIG_FAKE_BUNDLE_INTERVAL > 0
+    generate_fake_bundles();
+#endif
 
     uint64_t cur = hal_time_get_timestamp_s();
     if (routing_agent_config.own_sv_ts + CONFIG_ROUTING_AGENT_SV_UPDATE_INTERVAL_S < cur) {
         update_own_sv(); // sv needs an update
+        routing_agent_config.own_sv_ts = cur;
     }
 
     // TODO: resend sv to contacts every X seconds?
