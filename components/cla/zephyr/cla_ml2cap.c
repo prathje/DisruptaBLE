@@ -724,8 +724,8 @@ K_SEM_DEFINE(ml2cap_send_packet_data_pool_sem,
 
 // This destroy callback ensures that we do not allocate too many buffers
 static void ml2cap_send_packet_data_pool_buf_destroy(struct net_buf *buf) {
-    k_sem_give(&ml2cap_send_packet_data_pool_sem);
     net_buf_destroy(buf);
+    k_sem_give(&ml2cap_send_packet_data_pool_sem);
 }
 
 // TODO: we might need to define a fixed memory region and i.e. limit the maximum packet size
