@@ -323,9 +323,9 @@ void routing_agent_handle_contact_event(void *context, enum contact_manager_even
                 // TODO: Initialize everything
                 rc->sv = NULL; // this will be initialized once we got a valid sv
                 rc->sv_received_ts = 0; // this will be initialized once we got a valid sv
+                rc->contact = contact;
 
                 // we send our sv bundle to the other node
-
                 send_sv_unsafe(rc);
             } else {
                 free(rc);
