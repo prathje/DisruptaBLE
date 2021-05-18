@@ -193,6 +193,18 @@ static void send_bundles() {
 enum ud3tn_result router_init(const struct bundle_agent_interface *bundle_agent_interface) {
     memset(&router_config, 0, sizeof(struct router_config));
     router_config.bundle_agent_interface = bundle_agent_interface;
+
+    htab_init(&router_config.router_contact_htab, CONFIG_BT_MAX_CONN, router_config.router_contact_htab_elem);
+
+    router_config.router_contact_htab_sem = hal_semaphore_init_binary();
+
+    if (!router_config.router_contact_htab_sem) {
+        return UD3TN_FAIL;
+    }
+
+    hal_semaphore_release(router_config.router_contact_htab_sem);
+
+
     return UD3TN_OK;
 }
 
@@ -274,6 +286,7 @@ bool route_info_bundle(struct bundle *bundle) {
 
         free(destination);
     }
+
     return success;
 }
 
@@ -281,6 +294,8 @@ bool route_info_bundle(struct bundle *bundle) {
  * We store the relevant bundle info in the bundle_info_list, if we have contacts, that
  */
 void router_route_bundle(struct bundle *bundle) {
+
+    LOGF("Router: Routing bundle %d to %s", bundle->id, bundle->destination);
 
     bool success = false;
     if(routing_agent_is_info_bundle(bundle->destination)) {
@@ -303,6 +318,7 @@ void router_route_bundle(struct bundle *bundle) {
 
 void router_signal_bundle_transmission(struct routed_bundle *routed_bundle, bool success) {
 
+    LOGF("Router: bundle %d transmission status %d", routed_bundle->id, (int)success);
     if(routing_agent_is_info_bundle(routed_bundle->destination)) {
         bundle_processor_inform(
                 router_config.bundle_agent_interface->bundle_signaling_queue,
