@@ -67,7 +67,7 @@ void update_bundle_info_list() {
             delete = true;
             // this bundle is invalid -> we try to delete it!
             // but only if no contact is trying to send it right now
-            for(int i = router_config.num_router_contacts; i >= 0; i--) {
+            for(int i = router_config.num_router_contacts-1; i >= 0; i--) {
                 if (current == router_config.router_contacts[i]->current_bundle) {
                     delete = false;
                     break;
@@ -92,7 +92,7 @@ void update_bundle_info_list() {
             }
 
             // we now need to update all references of the contacts (so they do not reference an old bundle!
-            for(int i = router_config.num_router_contacts; i >= 0; i--) {
+            for(int i = router_config.num_router_contacts-1; i >= 0; i--) {
                 if (current == router_config.router_contacts[i]->next_bundle_candidate) {
                     router_config.router_contacts[i]->next_bundle_candidate = next;
                 }
@@ -252,7 +252,7 @@ void route_epidemic_bundle(struct bundle *bundle) {
     }
 
     // we now add this bundle to every currently known contact that has no other candidates
-    for(int i = router_config.num_router_contacts; i >= 0; i--) {
+    for(int i = router_config.num_router_contacts-1; i >= 0; i--) {
         struct router_contact *rc = router_config.router_contacts[i];
         if (rc->next_bundle_candidate == NULL) {
             rc->next_bundle_candidate = info;
