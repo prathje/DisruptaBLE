@@ -188,12 +188,12 @@ static struct contact_info * find_contact_info_by_cla_addr(const char *const cla
 enum ud3tn_result contact_manager_try_to_send_bundle(const char *const eid, struct routed_bundle *routed_bundle, int timeout) {
 
     struct contact_info * contact_info = find_contact_info_by_eid(eid);
-    struct contact * contact = contact_info->contact;
-    struct node * node = contact->node;
-
     if (!contact_info) {
         return UD3TN_FAIL;
     }
+
+    struct contact * contact = contact_info->contact;
+    struct node * node = contact->node;
 
     ASSERT(node->cla_addr != NULL);
 
