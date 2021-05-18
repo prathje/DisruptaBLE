@@ -676,6 +676,7 @@ static enum ud3tn_result ml2cap_read(struct cla_link *link,
 
     // Receive at least one byte in blocking manner from the RX queue
     while (hal_queue_receive(rx_queue, stream, -1) != UD3TN_OK);
+
     length--;
     stream++;
 
@@ -719,13 +720,15 @@ static enum ud3tn_result ml2cap_end_scheduled_contact(
 // This currently assumes that we only have one call to ml2cap_send_packet_data active at a time (see tx_task)
 // TODO: We might want to use more than CONFIG_BT_MAX_CONN buffers, (who knows?)
 K_SEM_DEFINE(ml2cap_send_packet_data_pool_sem,
-0, CONFIG_BT_MAX_CONN);
+        CONFIG_BT_MAX_CONN, CONFIG_BT_MAX_CONN);
 
 // This destroy callback ensures that we do not allocate too many buffers
 static void ml2cap_send_packet_data_pool_buf_destroy(struct net_buf *buf) {
     k_sem_give(&ml2cap_send_packet_data_pool_sem);
+    net_buf_destroy(buf);
 }
 
+// TODO: we might need to define a fixed memory region and i.e. limit the maximum packet size
 NET_BUF_POOL_HEAP_DEFINE(ml2cap_send_packet_data_pool, CONFIG_BT_MAX_CONN, ml2cap_send_packet_data_pool_buf_destroy
 );
 
@@ -740,18 +743,24 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
     // overall length could be more than the supported MTU -> we need to
     uint32_t mtu = ml2cap_link->chan.tx.mtu;
 
+    LOGF("l2cap_transmit_bytes %d with mtu %d", length, mtu);
+
     uint32_t sent = 0;
 
-    // K_NO_WAIT is used per specification of NET_BUF_POOL_HEAP_DEFINE
 
     while (sent < length) {
+        LOGF("l2cap_transmit_bytes sent %d", sent);
         uint32_t frag_size = MIN(mtu, length - sent);
 
         // TODO: Not ideal to use the hal method here but define using zephyr specific macro!
         // This semaphore also ensures that we limit the maximum amout of stalled data (waiting to be sent by zephyr)
         hal_semaphore_take_blocking(&ml2cap_send_packet_data_pool_sem);
-        struct net_buf *buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, frag_size, K_NO_WAIT);
 
+        // K_NO_WAIT is used per specification of NET_BUF_POOL_HEAP_DEFINE
+        struct net_buf *buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, BT_L2CAP_BUF_SIZE(mtu), K_NO_WAIT);
+
+
+        // buf->len + sdu_hdr_len > ch->tx.mps?!
         if (!buf) {
             LOG("ml2cap: net_buf_alloc_len failed");
             k_sem_give(&ml2cap_send_packet_data_pool_sem);
@@ -759,6 +768,7 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
             return;
         }
 
+        net_buf_reserve(buf, BT_L2CAP_SDU_CHAN_SEND_RESERVE);
         net_buf_add_mem(buf, ((char *)data) + sent, frag_size);
 
         int ret = bt_l2cap_chan_send(&ml2cap_link->chan.chan, buf);
