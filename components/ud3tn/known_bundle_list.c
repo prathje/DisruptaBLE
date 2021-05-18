@@ -44,6 +44,7 @@ struct known_bundle_list *known_bundle_list_create() {
     struct known_bundle_list * list = malloc(sizeof(struct known_bundle_list));
 
     if (!list) {
+        hal_semaphore_delete(sem);
         return NULL;
     }
 
@@ -76,7 +77,7 @@ static struct known_bundle_list_entry *pop_before_unsafe(struct known_bundle_lis
     struct known_bundle_list_entry *ret = NULL;
 
     struct known_bundle_list_entry *cur = list->head;
-    if (cur->deadline < remove_before_ts) {
+    if (cur != NULL && cur->deadline < remove_before_ts) {
 
         // move list to next element
         list->head = cur->next;
