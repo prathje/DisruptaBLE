@@ -51,7 +51,7 @@ void contact_manager_add_event_callback(contact_manager_cb cb, void *context) {
 }
 
 static void on_event(enum contact_manager_event event, const struct contact *contact) {
-    for(uint8_t i; i < num_event_cb; i++) {
+    for(uint8_t i = 0; i < num_event_cb; i++) {
         if (event_cb[i] != NULL) {
             event_cb[i](event_cb_context[i], event, contact);
         }
