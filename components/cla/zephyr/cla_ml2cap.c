@@ -719,8 +719,7 @@ static enum ud3tn_result ml2cap_end_scheduled_contact(
 // TODO: This net buf pool should be worked into ml2cap_send_packet_data when dynamic allocation is allowed
 // This currently assumes that we only have one call to ml2cap_send_packet_data active at a time (see tx_task)
 // TODO: We might want to use more than CONFIG_BT_MAX_CONN buffers, (who knows?)
-K_SEM_DEFINE(ml2cap_send_packet_data_pool_sem,
-        1, 1);
+K_SEM_DEFINE(ml2cap_send_packet_data_pool_sem, CONFIG_BT_MAX_CONN, CONFIG_BT_MAX_CONN);
 
 // This destroy callback ensures that we do not allocate too many buffers
 static void ml2cap_send_packet_data_pool_buf_destroy(struct net_buf *buf) {
@@ -729,7 +728,9 @@ static void ml2cap_send_packet_data_pool_buf_destroy(struct net_buf *buf) {
 }
 
 // TODO: we might need to define a fixed memory region and i.e. limit the maximum packet size
-NET_BUF_POOL_HEAP_DEFINE(ml2cap_send_packet_data_pool, 1, ml2cap_send_packet_data_pool_buf_destroy
+NET_BUF_POOL_FIXED_DEFINE(ml2cap_send_packet_data_pool, CONFIG_BT_MAX_CONN,
+        BT_L2CAP_BUF_SIZE(CONFIG_BT_L2CAP_TX_MTU),
+                          ml2cap_send_packet_data_pool_buf_destroy
 );
 
 
@@ -746,7 +747,6 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
     LOGF("l2cap_transmit_bytes %d with mtu %d", length, mtu);
 
     uint32_t sent = 0;
-
 
     while (sent < length) {
         LOGF("l2cap_transmit_bytes sent %d", sent);
