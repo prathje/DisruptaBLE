@@ -15,7 +15,7 @@ struct __attribute__((__packed__)) summary_vector_entry_hashable {
 
 static void summary_vector_increase_size(struct summary_vector *sv) {
 
-    uint32_t new_capacity = sv->capacity + SUMMARY_VECTOR_DEFAULT_CAPACITY;
+    uint32_t new_capacity = sv->capacity * 2;
 
     struct summary_vector_entry *new_entries = malloc(new_capacity * sizeof(struct summary_vector_entry));
 
@@ -127,10 +127,6 @@ void summary_vector_entry_from_bundle(struct summary_vector_entry *dest, struct 
 
 bool summary_vector_contains_entry(struct summary_vector *sv, struct summary_vector_entry *entry) {
 
-    if (sv->length == 0 || sv->entries == NULL) {
-        return false;
-    }
-
     // TODO: Do not loop through all entries, build a hashmap or bloom filter instead?
     for (int i = 0; i < sv->length; i++) {
         if (summary_vector_entry_equal(entry, &sv->entries[i])) {
@@ -142,14 +138,13 @@ bool summary_vector_contains_entry(struct summary_vector *sv, struct summary_vec
 }
 
 bool summary_vector_contains_bundle_unique_identifier(struct summary_vector *sv, struct bundle_unique_identifier *uid) {
-    // 57 bytes on the stack!
     struct summary_vector_entry entry;
     summary_vector_entry_from_bundle_unique_identifier(&entry, uid);
     return summary_vector_contains_entry(sv, &entry);
 }
 
 
-enum ud3tn_result summary_vector_add_entry(struct summary_vector *sv, struct summary_vector_entry *entry) {
+enum ud3tn_result summary_vector_add_entry_by_copy(struct summary_vector *sv, struct summary_vector_entry *entry) {
     if (sv->entries == NULL) {
         return UD3TN_FAIL;
     }
@@ -164,4 +159,27 @@ enum ud3tn_result summary_vector_add_entry(struct summary_vector *sv, struct sum
     memcpy(&(sv->entries[sv->length]), entry, sizeof(struct summary_vector_entry));
     sv->length++;
     return UD3TN_OK;
+}
+
+// TODO: This is very inefficient (just as the other methods...)
+struct summary_vector *summary_vector_create_diff(struct summary_vector *a, struct summary_vector_entry *b) {
+
+    // we might want to initialize the capacity?
+    struct summary_vector *diff = summary_vector_create();
+
+    if (!diff) {
+        return NULL;
+    }
+
+    for(uint32_t i = 0; i < a->length; i++) {
+        struct summary_vector_entry *entry = a->entries[i];
+        if (!summary_vector_contains_entry(b, entry)) {
+            if (summary_vector_add_entry_by_copy(diff, entry) !== UD3DTN_OK) {
+                free(diff);
+                return NULL;
+            }
+        }
+    }
+
+    return diff;
 }

@@ -18,7 +18,7 @@ void routing_agent_handle_contact_event(void *context, enum contact_manager_even
 /*
  * eid will be handled by caller
  */
-bool routing_agent_contact_knows(const char *eid, struct summary_vector_entry *entry);
+bool routing_agent_contact_requested_entry(const char *eid, struct summary_vector_entry *entry);
 
 bool routing_agent_contact_active(const char *eid);
 

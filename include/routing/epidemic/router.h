@@ -35,6 +35,8 @@ struct router_contact {
 
     struct bundle_info_list_entry *current_bundle; // the current bundle that is being transmitted
     struct bundle_info_list_entry *next_bundle_candidate; // the next bundle that MIGHT be transmitted, i.e. we need to check that first
+
+    struct summary_vector *request_sv; // the currently requested entries
 };
 
 
@@ -57,6 +59,12 @@ void router_update();
 void router_signal_bundle_transmission(struct routed_bundle *routed_bundle, bool success);
 
 void router_route_bundle(struct bundle *bundle);
+
+
+/**
+ * Update the corresponding requested summary vector, ownership of requested_sv is transferred (!)
+ */
+void router_update_request_sv(const char* eid, struct summary_vector *requested_sv);
 
 
 //unused but called in init.c

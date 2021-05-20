@@ -1,5 +1,6 @@
 #include "routing/epidemic/routing_agent.h"
 #include "routing/epidemic/summary_vector.h"
+#include "routing/epidemic/router.h"
 
 #include "platform/hal_types.h"
 
@@ -29,11 +30,16 @@
 #include "platform/hal_task.h"
 #include "platform/hal_semaphore.h"
 
-#define ROUTING_AGENT_SINK_IDENTIFIER "routing/epidemic"
+#define ROUTING_AGENT_SINK_PREFIX "routing/epidemic"
+#define ROUTING_AGENT_SINK_OFFER (ROUTING_AGENT_SINK_PREFIX "/offer")
+#define ROUTING_AGENT_SINK_REQUEST (ROUTING_AGENT_SINK_PREFIX "/request")
 
 // TODO: Do we want to support even values below one second?
 #define CONFIG_ROUTING_AGENT_SV_UPDATE_INTERVAL_S 5
 #define CONFIG_ROUTING_AGENT_SV_EXPIRATION_BUFFER_S 2
+
+#define EPIDEMIC_ROUTING_INFO_BUNDLE_TYPE_OFFER 0
+#define EPIDEMIC_ROUTING_INFO_BUNDLE_TYPE_REQUEST 1
 
 // TODO: CONFIG_ROUTING_AGENT_SV_RESEND_INTERVAL_S?
 
@@ -51,7 +57,7 @@
 
 struct routing_agent_contact {
     const struct contact *contact;    // a pointer to contact_manager's contact
-    struct summary_vector *sv; // we use a pointer to mark that a summary vector is uninitialized
+    struct summary_vector *sv;
     uint64_t sv_received_ts;
 };
 
@@ -61,7 +67,7 @@ static struct routing_agent_config {
     struct htab_entrylist *routing_agent_contact_htab_elem[CONFIG_BT_MAX_CONN]; // we should not have really more entries than active connections?
     struct htab routing_agent_contact_htab;
     Semaphore_t routing_agent_contact_htab_sem;
-    struct known_bundle_list *known_bundle_list;
+    struct known_bundle_list *known_bundle_list; // TODO: This also contains our custom bundles (which we do not need to offer -> use current bundles from router)
     struct summary_vector *own_sv;
     uint64_t own_sv_ts;
     char *source_eid;
@@ -69,23 +75,32 @@ static struct routing_agent_config {
 
 
 bool routing_agent_is_info_bundle(const char* source_or_destination_eid) {
-    const char *pos = strstr(source_or_destination_eid, ROUTING_AGENT_SINK_IDENTIFIER);
+    const char *pos = strstr(source_or_destination_eid, ROUTING_AGENT_SINK_PREFIX);
     return pos != NULL;
 }
 
-char *create_routing_endpoint(const char *eid) {
+static char *create_endpoint(const char *eid, const char* sink_identifier) {
 
     char *ep = malloc(
-            strlen(eid) + strlen(ROUTING_AGENT_SINK_IDENTIFIER) + 2); // 1 byte for "/", 1 for null termination
+            strlen(eid) + strlen(sink_identifier) + 2); // 1 byte for "/", 1 for null termination
 
     if (!ep) {
         return NULL;
     }
 
-    sprintf(ep, "%s/%s", eid, ROUTING_AGENT_SINK_IDENTIFIER);
+    sprintf(ep, "%s/%s", eid, sink_identifier);
 
     return ep;
 }
+
+static inline char *create_offer_endpoint(const char *eid) {
+    return create_endpoint(eid, ROUTING_AGENT_SINK_OFFER);
+}
+
+static inline char *create_request_endpoint(const char *eid) {
+    return create_endpoint(eid, ROUTING_AGENT_SINK_REQUEST);
+}
+
 
 char * routing_agent_create_eid_from_info_bundle_eid(const char* source_or_destination_eid) {
 
@@ -149,57 +164,96 @@ send_info_bundle(const struct bundle_agent_interface *bundle_agent_interface, ch
     return b;
 }
 
+static enum d3tn_result send_sv(const char *eid, const char* sink) {
+    
+}
+
 // TODO: Maybe store the bundles in this agent temporarily?!?
 
 // This routing agent is also a normal agent as for example an application agent, it uses a special
 // the associated router task further informs this routing agent, so that the epidemic routing is both an agent an the router task
 
 
-// the routing agent registers a special endpoint to match the underlying cla address (namely the
+// the routing agent registers a special endpoint to match the underlying cla address
 
 // as uD3TN does currently not support registration of multiple endpoints -> we use the simple fact that bundles get directly forwarded to routing again
+void update_own_sv();
+
+
+/**
+ * Sv would need to be freed, eid will be freed automatically
+ */
+static void handle_offer_sv(const char *eid, struct summary_vector *offer_sv) {
+    summary_vector_create_diff // TODO!
+}
+
+/**
+ * Sv would need to be freed, eid will be freed automatically
+ */
+static void handle_request_sv(const char *eid, struct summary_vector *request_sv) {
+    hal_semaphore_take_blocking(routing_agent_config.routing_agent_contact_htab_sem);
+
+    struct routing_agent_contact *rc = htab_get(
+            &routing_agent_config.routing_agent_contact_htab,
+            eid
+    );
+
+    if (rc) {
+        if (rc->sv) {
+            summary_vector_destroy(rc->sv);
+        }
+        rc->sv = new_sv;
+        success = true;
+    }
+    hal_semaphore_release(routing_agent_config.routing_agent_contact_htab_sem);
+
+    if (!success) {
+        summary_vector_destroy(new_sv);
+        LOGF("RoutingAgent: Could not store sv contact for eid %s", eid);
+    }
+}
 
 static void agent_msg_recv(struct bundle_adu data, void *param) {
     LOGF("Routing Agent: Got Bundle from \"%s\"", data.source);
 
     char *eid = routing_agent_create_eid_from_info_bundle_eid(data.source);
 
+    if (!eid) {
+        goto release;
+    }
+
+    if (data.length < 1) {
+        LOGF("RoutingAgent: Received invalid bundle from %s", eid);
+        goto release;
+    }
+
+    uint8_t sv_type = data.payload[0];
+
+    if (type != EPIDEMIC_ROUTING_INFO_BUNDLE_TYPE_OFFER && type != EPIDEMIC_ROUTING_INFO_BUNDLE_TYPE_REQUEST) {
+        LOGF("RoutingAgent: Received invalid bundle with type %d from %s", type, eid);
+        goto release;
+    }
+
     // create summary_vector from this message
-    struct summary_vector *new_sv = summary_vector_create_from_memory(data.payload, data.length);
+    struct summary_vector *new_sv = summary_vector_create_from_memory(data.payload+1, data.length-1);
 
     if (new_sv != NULL) {
-    LOGF("RoutingAgent: Received summary vector with length %d from %s", new_sv->length, eid);
-        bool success = false;
+        LOGF("RoutingAgent: Received summary vector with length %d from %s", new_sv->length, eid);
 
-        hal_semaphore_take_blocking(routing_agent_config.routing_agent_contact_htab_sem);
-
-        struct routing_agent_contact *rc = htab_get(
-                &routing_agent_config.routing_agent_contact_htab,
-                eid
-        );
-
-        if (rc) {
-            if (rc->sv) {
-                summary_vector_destroy(rc->sv);
-            }
-            rc->sv = new_sv;
-            success = true;
-        }
-        hal_semaphore_release(routing_agent_config.routing_agent_contact_htab_sem);
-
-        if (!success) {
-            summary_vector_destroy(new_sv);
-            LOGF("RoutingAgent: Could not store sv contact for eid %s", eid);
+        if (type == EPIDEMIC_ROUTING_INFO_BUNDLE_TYPE_OFFER) {
+            // this is an offer -> pick the bundles that we want
+            handle_offer_sv(eid, new_sv);
+        } else {
+            // this is a request
+            handle_request_sv(eid, new_sv);
         }
     } else {
         LOGF("RoutingAgent: Received invalid message with size %d from %s", data.length, eid);
     }
 
-
-
-    free(eid);
-    // TODO: Process Bundle, extract SV :)
+release:
     bundle_adu_free_members(data);
+    free(eid);
 }
 
 // TODO: How can we prevent that we send the bundles to their original sender?
@@ -232,7 +286,7 @@ static void update_own_sv() {
 
         struct summary_vector_entry sv_entry;
         summary_vector_entry_from_bundle_unique_identifier(&sv_entry, &bundle_entry->unique_identifier);
-        summary_vector_add_entry(routing_agent_config.own_sv, &sv_entry); // TODO: Check if this was successful!
+        summary_vector_add_entry_by_copy(routing_agent_config.own_sv, &sv_entry); // TODO: Check if this was successful!
     }
     known_bundle_list_unlock(routing_agent_config.known_bundle_list);
 }
@@ -294,16 +348,17 @@ enum ud3tn_result routing_agent_init(const struct bundle_agent_interface *bundle
     return UD3TN_OK;
 }
 
-static void send_sv_unsafe(struct routing_agent_contact *rc) {
+static void send_offer_sv_unsafe(struct routing_agent_contact *rc) {
 
-    size_t payload_size = summary_vector_memory_size(routing_agent_config.own_sv);
-    void *payload = malloc(payload_size);
+    size_t payload_size = 1+summary_vector_memory_size(routing_agent_config.own_sv);
+    uint8_t *payload = malloc(payload_size);
 
     char *eid = rc->contact->node->eid;
 
     if (payload) {
        // bundleid_t b =
-        summary_vector_copy_to_memory(routing_agent_config.own_sv, payload);
+        payload[0] = EPIDEMIC_ROUTING_INFO_BUNDLE_TYPE_OFFER;
+        summary_vector_copy_to_memory(routing_agent_config.own_sv, payload+1);
         send_info_bundle(routing_agent_config.bundle_agent_interface, eid, payload, payload_size);
         LOGF("Routing Agent: Send SV with size %d to %s", payload_size, eid);
     } else {
@@ -355,8 +410,9 @@ void routing_agent_handle_contact_event(void *context, enum contact_manager_even
                 rc->sv_received_ts = 0; // this will be initialized once we got a valid sv
                 rc->contact = contact;
 
-                // we send our sv bundle to the other node
-                send_sv_unsafe(rc);
+                // we send our sv offer bundle to the other node
+                update_own_sv();
+                send_offer_sv_unsafe(rc);
             } else {
                 free(rc);
                 LOG("Routing Agent: Error creating htab entry!");
@@ -464,7 +520,7 @@ void routing_agent_update() {
     // TODO: resend sv to contacts every X seconds?
 }
 
-bool routing_agent_contact_knows(const char *eid, struct summary_vector_entry *entry) {
+bool routing_agent_contact_requested_entry(const char *eid, struct summary_vector_entry *entry) {
 
     if (IS_EID_NONE(eid)) {
         return true;

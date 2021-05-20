@@ -37,7 +37,7 @@ void summary_vector_destroy(struct summary_vector* sv);
 /**
  * entry is not freed!
  */
-enum ud3tn_result summary_vector_add_entry(struct summary_vector *sv, struct summary_vector_entry *entry);
+enum ud3tn_result summary_vector_add_entry_by_copy(struct summary_vector *sv, struct summary_vector_entry *entry);
 
 /**
  * Some memory handling
@@ -50,5 +50,6 @@ void summary_vector_copy_to_memory(struct summary_vector* sv, void *dest);
 bool summary_vector_contains_bundle_unique_identifier(struct summary_vector *sv, struct bundle_unique_identifier *uid);
 bool summary_vector_contains_entry(struct summary_vector *sv, struct summary_vector_entry *entry);
 
+struct summary_vector *summary_vector_create_diff(struct summary_vector *a, struct summary_vector_entry *b)
 
 #endif //SUMMARYVECTOR_H_INCLUDED

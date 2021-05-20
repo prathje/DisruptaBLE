@@ -32,11 +32,8 @@ bool contact_should_receive(const char *eid, struct bundle_info_list_entry *cand
         return false; // bundle is sadly expired -> will be removed eventually
     }
 
-    if (routing_agent_contact_knows(eid, &candidate->sv)) {
-        return false; // bundle already known!
-    }
-
-    return true; // seems like this is a good candidate!
+    // check if the contact requested this entry
+    return routing_agent_contact_requested_entry(eid, &candidate->sv);
 }
 
 
@@ -253,7 +250,7 @@ void route_epidemic_bundle(struct bundle *bundle) {
     }
 
 
-    bool needs_update = false;
+    /*bool needs_update = false;
 
     // we now add this bundle to every currently known contact that has no other candidates
     for(int i = router_config.num_router_contacts-1; i >= 0; i--) {
@@ -267,7 +264,7 @@ void route_epidemic_bundle(struct bundle *bundle) {
 
     if (needs_update) {
         send_bundles(); // we directly try to send outstanding bundles
-    }
+    }*/
 }
 
 bool route_info_bundle(struct bundle *bundle) {
@@ -385,8 +382,10 @@ void router_signal_bundle_transmission(struct routed_bundle *routed_bundle, bool
 }
 
 void router_update() {
+    hal_semaphore_take_blocking(router_config.router_contact_htab_sem);
     update_bundle_info_list();
     send_bundles();
+    hal_semaphore_release(router_config.router_contact_htab_sem);
 }
 
 
@@ -434,6 +433,7 @@ void router_handle_contact_event(void *context, enum contact_manager_event event
                     rc->index = router_config.num_router_contacts;
                     rc->current_bundle = NULL;
                     rc->next_bundle_candidate = NULL;
+                    rc->request_sv = NULL;
                     rc->contact = contact;
 
                     router_config.router_contacts[router_config.num_router_contacts] = rc;
@@ -465,6 +465,13 @@ void router_handle_contact_event(void *context, enum contact_manager_event event
         router_config.router_contacts[router_config.num_router_contacts-1] = NULL;
         router_config.num_router_contacts--;
 
+
+        // destroy other resources
+        if (rc->request_sv) {
+            summary_vector_destroy(rc->request_sv);
+            rc->request_sv = NULL;
+        }
+
         free(rc);
         LOGF("Router: Removed routing contact %s", eid);
     }
@@ -481,4 +488,34 @@ struct router_config router_get_config() {
 enum ud3tn_result router_update_config(struct router_config config) {
     (void)config;
     return UD3TN_OK;
+}
+
+
+void router_update_request_sv(const char* eid, struct summary_vector *request_sv) {
+    hal_semaphore_take_blocking(router_config.router_contact_htab_sem);
+
+    struct router_contact *rc = htab_get(
+            &router_config.router_contact_htab,
+            eid
+    );
+
+    if (rc) {
+        // destroy current summary_vector!
+        if (rc->request_sv) {
+            summary_vector_destroy(rc->request_sv);
+        }
+        rc->request_sv = request_sv;
+
+        // as we updated the requested sv, we schedule all bundles again
+        rc->next_bundle_candidate = router_config.bundle_info_list.head;
+
+        if (rc->current_bundle == NULL) {
+            // reschedule directly
+            send_bundles_to_contact(rc);
+        }
+    } else {
+        summary_vector_destroy(request_sv);
+    }
+
+    hal_semaphore_release(router_config.router_contact_htab_sem);
 }

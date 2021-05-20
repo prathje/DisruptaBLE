@@ -24,36 +24,56 @@
 #define CONFIG_CONTACT_TIMEOUT_S 60
 #endif
 
+
 struct contact_info {
     struct contact *contact;
     struct cla_config *cla_conf;
 };
 
-static struct contact_info current_contacts[MAX_CONCURRENT_CONTACTS];
-static int8_t current_contact_count;
-
 // we just use two callbacks atm, one for the routing agent and another for the actual router
 // we use callbacks as there is not really a need for this contact manager to now any specific functionality
 #define CONTACT_MANAGER_NUM_CALLBACKS 2
-static uint8_t num_event_cb = 0;
-static contact_manager_cb event_cb[CONTACT_MANAGER_NUM_CALLBACKS];
-static void *event_cb_context[CONTACT_MANAGER_NUM_CALLBACKS];
+
+static struct contact_manager_config {
+    uint8_t num_event_cb;
+    contact_manager_cb event_cb[CONTACT_MANAGER_NUM_CALLBACKS];
+    void *event_cb_context[CONTACT_MANAGER_NUM_CALLBACKS];
+    int8_t current_contact_count;
+    struct contact_info current_contacts[MAX_CONCURRENT_CONTACTS];
+    Semaphore_t sem;
+} cm_config;
+
+
+enum ud3tn_result contact_manager_init() {
+    cm_config.num_event_cb = 0;
+    cm_config.current_contact_count = 0;
+    cm_config.sem = hal_semaphore_init_binary();
+
+    if (!cm_config.sem) {
+        return UD3TN_FAIL;
+    }
+    hal_semaphore_release(cm_config.sem);
+
+
+    return UD3TN_OK;
+}
+
 
 /**
  * TODO: This is not yet thread-safe!
  */
 void contact_manager_add_event_callback(contact_manager_cb cb, void *context) {
-    if (num_event_cb < CONTACT_MANAGER_NUM_CALLBACKS) {
-        event_cb[num_event_cb] = cb;
-        event_cb_context[num_event_cb] = context;
-        num_event_cb++;
+    if (cm_config.num_event_cb < CONTACT_MANAGER_NUM_CALLBACKS) {
+        cm_config.event_cb[cm_config.num_event_cb] = cb;
+        cm_config.event_cb_context[cm_config.num_event_cb] = context;
+        cm_config.num_event_cb++;
     }
 }
 
 static void on_event(enum contact_manager_event event, const struct contact *contact) {
-    for(uint8_t i = 0; i < num_event_cb; i++) {
-        if (event_cb[i] != NULL) {
-            event_cb[i](event_cb_context[i], event, contact);
+    for(uint8_t i = 0; i < cm_config.num_event_cb; i++) {
+        if (cm_config.event_cb[i] != NULL) {
+            cm_config.event_cb[i](cm_config.event_cb_context[i], event, contact);
         }
     }
 }
@@ -71,36 +91,36 @@ static int8_t remove_expired_contacts(
 	int8_t i, c, removed = 0;
 
 	// update all active contacts to be active as of this current_timestamp
-    for (i = current_contact_count - 1; i >= 0; i--) {
-        if (current_contacts[i].contact->active) {
-            current_contacts[i].contact->to = MAX(current_timestamp, current_contacts[i].contact->to);
+    for (i = cm_config.current_contact_count - 1; i >= 0; i--) {
+        if (cm_config.current_contacts[i].contact->active) {
+            cm_config.current_contacts[i].contact->to = MAX(current_timestamp, cm_config.current_contacts[i].contact->to);
         }
     }
 
 	// we add a timeout so we do not directly remove the contacts
 	uint64_t timeout = current_timestamp + CONFIG_CONTACT_TIMEOUT_S;
 
-	for (i = current_contact_count - 1; i >= 0; i--) {
-		if (current_contacts[i].contact->to <= timeout) {
+	for (i = cm_config.current_contact_count - 1; i >= 0; i--) {
+		if (cm_config.current_contacts[i].contact->to <= timeout) {
 			ASSERT(i <= MAX_CONCURRENT_CONTACTS);
 
 			/* Unset "active" constraint */
-			if (current_contacts[i].contact->active) {
-			    current_contacts[i].contact->active = 0;
-                on_event(CONTACT_EVENT_INACTIVE, current_contacts[i].contact);
+			if (cm_config.current_contacts[i].contact->active) {
+                cm_config.current_contacts[i].contact->active = 0;
+                on_event(CONTACT_EVENT_INACTIVE, cm_config.current_contacts[i].contact);
 			}
 
-            on_event(CONTACT_EVENT_REMOVED, current_contacts[i].contact);
+            on_event(CONTACT_EVENT_REMOVED, cm_config.current_contacts[i].contact);
 
 			/* The TX task takes care of re-scheduling */
-			list[removed++] = current_contacts[i];
+			list[removed++] = cm_config.current_contacts[i];
 			/* If it's not the last element, we have to move mem */
-			if (i != current_contact_count - 1) {
-				for (c = i; c < current_contact_count; c++)
-					current_contacts[c] =
-						current_contacts[c+1];
+			if (i != cm_config.current_contact_count - 1) {
+				for (c = i; c < cm_config.current_contact_count; c++)
+                    cm_config.current_contacts[c] =
+                            cm_config.current_contacts[c+1];
 			}
-			current_contact_count--;
+            cm_config.current_contact_count--;
 		}
 	}
 
@@ -112,7 +132,7 @@ static int8_t remove_expired_contacts(
  * This does also free the contacts!
  * TODO: This is not yet thread-safe!
  */
-uint8_t remove_and_free_expired_contacts()
+static uint8_t remove_and_free_expired_contacts()
 {
     // TODO: This could be a bit heavy for the stack ;)
     static struct contact_info removed_contacts[MAX_CONCURRENT_CONTACTS];
@@ -142,6 +162,13 @@ uint8_t remove_and_free_expired_contacts()
     return removed_count;
 }
 
+uint8_t contact_manager_remove_and_free_expired_contacts() {
+    hal_semaphore_take_blocking(cm_config.sem);
+    uint8_t res = remove_and_free_expired_contacts();
+    hal_semaphore_release(cm_config.sem);
+    return res;
+}
+
 /**
  * TODO: This is not yet thread-safe!
  * TODO: This is currently not efficient
@@ -150,10 +177,10 @@ static struct contact_info * find_contact_info_by_eid(const char *const eid) {
 
     struct contact_info *found = NULL;
 
-    for (int i = current_contact_count - 1; i >= 0; i--) {
-        const char * const contact_eid = current_contacts[i].contact->node->eid;
+    for (int i = cm_config.current_contact_count - 1; i >= 0; i--) {
+        const char * const contact_eid = cm_config.current_contacts[i].contact->node->eid;
         if (!strcmp(eid, contact_eid)) {
-            found = &current_contacts[i];
+            found = &cm_config.current_contacts[i];
             break;
         }
     }
@@ -169,10 +196,10 @@ static struct contact_info * find_contact_info_by_cla_addr(const char *const cla
 
     struct contact_info *found = NULL;
 
-    for (int i = current_contact_count - 1; i >= 0; i--) {
-        const char * const contact_cla_addr = current_contacts[i].contact->node->cla_addr;
+    for (int i = cm_config.current_contact_count - 1; i >= 0; i--) {
+        const char * const contact_cla_addr = cm_config.current_contacts[i].contact->node->cla_addr;
         if (!strcmp(cla_addr, contact_cla_addr)) {
-            found = &current_contacts[i];
+            found = &cm_config.current_contacts[i];
             break;
         }
     }
@@ -182,10 +209,9 @@ static struct contact_info * find_contact_info_by_cla_addr(const char *const cla
 
 
 /**
- * TODO: This is not yet thread-safe!
  * TODO: This is currently not efficient
  */
-enum ud3tn_result contact_manager_try_to_send_bundle(const char *const eid, struct routed_bundle *routed_bundle, int timeout) {
+static enum ud3tn_result try_to_send_bundle(const char *const eid, struct routed_bundle *routed_bundle, int timeout) {
 
     struct contact_info * contact_info = find_contact_info_by_eid(eid);
     if (!contact_info) {
@@ -241,14 +267,20 @@ enum ud3tn_result contact_manager_try_to_send_bundle(const char *const eid, stru
     return res;
 }
 
+enum ud3tn_result contact_manager_try_to_send_bundle(const char *const eid, struct routed_bundle *routed_bundle, int timeout) {
+    hal_semaphore_take_blocking(cm_config.sem);
+    enum ud3tn_result res = try_to_send_bundle(eid, routed_bundle, timeout);
+    hal_semaphore_release(cm_config.sem);
+    return res;
+}
+
 
 /**
  * Adds node as a recent contact if not yet known. The node pointer will be handled by the contact manager, so its ownership is transferred to the callee.
  * uses the current timestamp to update the contacts from and to times
- *  TODO: This is not yet thread-safe!
+ * This is not yet thread-safe!
  */
-void contact_manager_handle_discovered_neighbor(struct node * node) {
-
+static void handle_discovered_neighbor(struct node * node) {
 
     //LOGF("handle_discovered_neighbor: %s, %s", node->eid, node->cla_addr);
     ASSERT(node->eid != NULL);
@@ -264,9 +296,9 @@ void contact_manager_handle_discovered_neighbor(struct node * node) {
 
     if (!contact_info) {
         // we initialize contact_info
-        if (current_contact_count < MAX_CONCURRENT_CONTACTS) {
-            contact_info = &current_contacts[current_contact_count];
-            current_contact_count++;
+        if (cm_config.current_contact_count < MAX_CONCURRENT_CONTACTS) {
+            contact_info = &cm_config.current_contacts[current_contact_count];
+            cm_config.current_contact_count++;
 
             // reset values
             memset(contact_info, 0, sizeof(struct contact_info));
@@ -275,7 +307,7 @@ void contact_manager_handle_discovered_neighbor(struct node * node) {
 
             if (!contact_info->contact) {
                 LOGF("Contact Manager: No place to handle contact for eid \"%s\"", node->eid);
-                current_contact_count--;
+                cm_config.current_contact_count--;
                 free_node(node);
                 return;
             }
@@ -310,7 +342,7 @@ static void handle_missing_cla_address(const char *cla_address) {
     contact_manager_handle_discovered_neighbor(node);
 }
 
-void contact_manager_handle_conn_up(const char *cla_address) {
+static void handle_conn_up(const char *cla_address) {
     struct contact_info *info = find_contact_info_by_cla_addr(cla_address);
 
     if (!info) {
@@ -333,7 +365,7 @@ void contact_manager_handle_conn_up(const char *cla_address) {
     }
 }
 
-void contact_manager_handle_conn_down(const char *cla_address) {
+static void handle_conn_down(const char *cla_address) {
 
     struct contact_info *info = find_contact_info_by_cla_addr(cla_address);
 
@@ -354,4 +386,22 @@ void contact_manager_handle_conn_down(const char *cla_address) {
         info->contact->active = false;
         on_event(CONTACT_EVENT_INACTIVE, info->contact);
     }
+}
+
+void contact_manager_handle_discovered_neighbor(struct node * node) {
+    hal_semaphore_take_blocking(cm_config.sem);
+    handle_discovered_neighbor(node);
+    hal_semaphore_release(cm_config.sem);
+}
+
+void contact_manager_handle_conn_up(const char *cla_address) {
+    hal_semaphore_take_blocking(cm_config.sem);
+    handle_conn_up(node);
+    hal_semaphore_release(cm_config.sem);
+}
+
+void contact_manager_handle_conn_down(const char *cla_address) {
+    hal_semaphore_take_blocking(cm_config.sem);
+    handle_conn_down(node);
+    hal_semaphore_release(cm_config.sem);
 }
