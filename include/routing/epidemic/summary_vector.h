@@ -59,6 +59,7 @@ struct summary_vector *summary_vector_create_diff(struct summary_vector *a, stru
 
 // TODO: THis currently depends on the SUMMARY_VECTOR_ENTRY_HASH_LENGTH
 static inline void summary_vector_entry_print(const char *msg, struct summary_vector_entry *entry)  {
+    uint8_t *hash = entry->hash;
     LOGF("%s%x%x%x%x%x%x%x%x",
          msg,
          hash[0],
@@ -87,7 +88,7 @@ static inline void summary_vector_print_bundle(const char *msg, struct bundle *b
 static inline void summary_vector_print(const char *msg, struct summary_vector *sv)  {
     LOGF("========== %s(%p with %d elements)", msg, sv, sv->length);
     for(int i = 0; i < sv->length; i++) {
-        summary_vector_entry_print(""; &v->entries[i]);
+        summary_vector_entry_print("", &sv->entries[i]);
     }
     LOGF("========== End summary of vector %p ", sv);
 };
