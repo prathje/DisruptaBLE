@@ -249,32 +249,33 @@ enum ud3tn_result router_init(const struct bundle_agent_interface *bundle_agent_
 }
 
 
-void route_epidemic_bundle(struct bundle *bundle) {
+bool route_epidemic_bundle(struct bundle *bundle) {
 
     summary_vector_print_bundle("Router: Routing Epidemic Bundle ", bundle);
 
     struct bundle_info_list_entry *info = malloc(sizeof(struct bundle_info_list_entry));
 
     if (!info) {
-        //TODO: directly signal that we could not route this bundle!
-        const enum bundle_status_report_reason reason = BUNDLE_SR_REASON_NO_KNOWN_ROUTE;
-        const enum bundle_processor_signal_type signal = BP_SIGNAL_FORWARDING_CONTRAINDICATED;
+        return false;
+    }
 
-        LOGF("Routing: Can not route bundle %d", bundle->id);
+    summary_vector_entry_from_bundle(&info->sv_entry, bundle);
 
-        bundle_processor_inform(
-                router_config.bundle_agent_interface->bundle_signaling_queue,
-                bundle->id,
-                signal,
-                reason
-        );
+    // we now check if this entry is already present in our list
+    struct bundle_info_list_entry *current = router_config.bundle_info_list.head;
+    while (current != NULL) {
+        if (summary_vector_entry_equal(&info->sv_entry, &current->sv_entry)) {
+            summary_vector_entry_print("Router: Dropping duplicate bundle ", &info->sv_entry);
 
-        return;
+            // oh yes, that's a match...
+            free(info);
+            return false;
+        }
+        current = current->next;
     }
 
     info->id = bundle->id;
 
-    summary_vector_entry_from_bundle(&info->sv_entry, bundle);
     info->num_pending_transmissions = CONFIG_EPIDEMIC_ROUTING_NUM_REPLICAS; // -1 will result in infinite retransmissions, see CONFIG_EPIDEMIC_ROUTING_NUM_REPLICAS
 
     info->prio = bundle_get_routing_priority(bundle);
@@ -305,6 +306,7 @@ void route_epidemic_bundle(struct bundle *bundle) {
             send_offer_sv(rc);
         }
     }
+    return true; //routing is otherwise always successfull!
 }
 
 bool route_info_bundle(struct bundle *bundle) {
@@ -342,14 +344,13 @@ bool route_info_bundle(struct bundle *bundle) {
 void router_route_bundle(struct bundle *bundle) {
     hal_semaphore_take_blocking(router_config.router_contact_htab_sem);
 
-    LOGF("Router: Routing bundle %d to %s", bundle->id, bundle->destination);
+    LOGF("Router: Routing info bundle %d to %s", bundle->id, bundle->destination);
 
     bool success = false;
     if(routing_agent_is_info_bundle(bundle->destination)) {
         success = route_info_bundle(bundle);
     } else {
-        success = true;
-        route_epidemic_bundle(bundle);
+        success = route_epidemic_bundle(bundle);
     }
 
     const enum bundle_status_report_reason reason = success ? BUNDLE_SR_REASON_NO_INFO : BUNDLE_SR_REASON_NO_KNOWN_ROUTE;
@@ -361,6 +362,7 @@ void router_route_bundle(struct bundle *bundle) {
             signal,
             reason
     );
+
     hal_semaphore_release(router_config.router_contact_htab_sem);
 }
 
@@ -394,18 +396,17 @@ void router_signal_bundle_transmission(struct routed_bundle *routed_bundle, bool
 
                     if (success) {
                         LOGF("Router: transmission success %d for contact %s", routed_bundle->id, eid);
+                        summary_vector_entry_print("Router: transmission success for bundle ", &rc->current_bundle->sv_entry);
                         // TODO: We might be able to transmit more if we have multiple bundles available
                     } else {
-                        // TODO: if the transmission failed, do we even need to schedule more bundles?
+                        // we increase the transmissions at this point so we already limit transmissions
                         if (rc->current_bundle->num_pending_transmissions >= 0) {
                             rc->current_bundle->num_pending_transmissions++;
                         }
-
-                        rc->next_bundle_candidate = rc->current_bundle; // This will reset the current candidate to the very same bundle...
                         LOGF("Router: transmission failed %d for contact %s", routed_bundle->id, eid);
                     }
 
-                    rc->current_bundle = NULL;
+                    rc->current_bundle = NULL; // signals that we are done with transmission
                     send_bundles_to_contact(rc); // try to reschedule directly
                 } else {
                     LOGF("Router: error router_signal_bundle_transmission wrong bundle %d for contact %s", routed_bundle->id, eid);
