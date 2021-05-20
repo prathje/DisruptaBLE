@@ -215,6 +215,7 @@ static void send_bundles_to_contact(struct router_contact *router_contact ) {
                     router_contact->next_bundle_candidate = candidate->next;
                 }
             } else {
+                router_contact->next_bundle_candidate = NULL;
                 // there were no possible candidates, however the router_route_bundle method sets the correct references in case a new bundle is available
             }
         }
