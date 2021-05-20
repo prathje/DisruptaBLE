@@ -123,7 +123,7 @@ size_t select_bundle_parser_version(struct rx_task_data *rx_data,
  * buffer (NULL pointer) and the bulk read flag cleared to trigger further
  * processing.
  *
- * Bytes in the current input buffer are considered and copied appropriatly --
+ * Bytes in the current input buffer are considered and copied appropriately --
  * meaning that non-parsed input bytes are copied into the bulk read buffer and
  * the remaining bytes are read directly from the input stream.
  * @return Pointer to the position up to the input buffer is consumed after the
