@@ -14,19 +14,17 @@ enum ud3tn_result routing_agent_init(const struct bundle_agent_interface *bundle
  */
 void routing_agent_handle_contact_event(void *context, enum contact_manager_event event, const struct contact *contact);
 
-
-/*
- * eid will be handled by caller
- */
-bool routing_agent_contact_requested_entry(const char *eid, struct summary_vector_entry *entry);
-
-bool routing_agent_contact_active(const char *eid);
-
 void routing_agent_update();
 
 
 bool routing_agent_is_info_bundle(const char* source_or_destination_eid);
 
 char * routing_agent_create_eid_from_info_bundle_eid(const char* source_or_destination_eid);
+
+/**
+ * @param eid to send the sv to (ownership is not transferred)
+ * @return
+ */
+void routing_agent_send_offer_sv(const char *eid, struct summary_vector *offer_sv);
 
 #endif /* ROUTING_AGENT_H_INCLUDED */

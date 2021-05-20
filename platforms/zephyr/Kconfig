@@ -31,5 +31,5 @@ config FAKE_BUNDLE_SIZE_MAX
 	default 1024
 
 config FAKE_BUNDLE_LIFETIME
-    int "The interval to generate fake bundles (in seconds). 0 for no generation"
-	default 0
+    int "The interval to generate fake bundles (in seconds)."
+	default 5

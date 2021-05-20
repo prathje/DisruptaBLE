@@ -39,10 +39,6 @@
 // TODO: Move this to KConfig
 #define CONFIG_ML2CAP_PSM 0xc0
 
-#ifndef CONFIG_CLA_ML2CAP_DELAY_MS
-#define CONFIG_CLA_ML2CAP_DELAY_MS 50
-#endif
-
 struct ml2cap_config {
     struct cla_config base;
 
@@ -84,6 +80,9 @@ struct ml2cap_link {
 
     /* <Other ble device address in hex> */
     char *mac_addr;
+
+    Semaphore_t init_sem; // we use this semaphore to coordinate with the callbacks of zephyr
+    bool init_sem_initialized; // we use this bool to signal that the semaphore was initialized,
 
 
     bool bt_connected;
@@ -241,6 +240,12 @@ static void ml2cap_link_management_task(void *p) {
     // the underlying bluetooth connection exists
     // we know need to either start the server or connect to it based on our role
 
+    // we release and directly take the semaphore again
+    // the semaphore will be released by the connect / disconnect callback
+    hal_semaphore_release(ml2cap_link->init_sem);
+    hal_semaphore_take_blocking(ml2cap_link->init_sem);
+
+
     if (ml2cap_link->is_client) {
         LOGF("ML2CAP: Initiating channel connection to \"%s\"", ml2cap_link->cla_addr);
         // we are the client and try to connect to the channel server
@@ -252,9 +257,11 @@ static void ml2cap_link_management_task(void *p) {
     }
 
     while (ml2cap_link->bt_connected && !ml2cap_link->chan_connected) {
+        // we sometimes manually check the connetion state to prevent deadlocks
+        hal_semaphore_try_take(ml2cap_link->init_sem, 50);
         LOGF("ML2CAP: Still waiting... for \"%s\"", ml2cap_link->cla_addr);
-        hal_task_delay(CONFIG_CLA_ML2CAP_DELAY_MS); // delay for 20 msec TODO!
     }
+
 
     if (ml2cap_link->bt_connected && ml2cap_link->chan_connected) {
         LOGF("ML2CAP: Channel established handling connection to \"%s\"", ml2cap_link->cla_addr);
@@ -278,7 +285,6 @@ static void ml2cap_link_management_task(void *p) {
     htab_remove(&ml2cap_link->config->link_htab, ml2cap_link->cla_addr);
     hal_semaphore_release(ml2cap_link->config->link_htab_sem);
 
-
     mtcp_parser_reset(&ml2cap_link->mtcp_parser);
 
     hal_semaphore_take_blocking(ml2cap_link->config->link_htab_sem);
@@ -292,6 +298,9 @@ static void ml2cap_link_management_task(void *p) {
 
     free(ml2cap_link->cla_addr);
     free(ml2cap_link->mac_addr);
+
+    hal_semaphore_release(ml2cap_link->init_sem);
+    hal_semaphore_delete(ml2cap_link->init_sem);
 
     Task_t management_task = ml2cap_link->management_task;
     bt_conn_unref(ml2cap_link->conn);
@@ -310,6 +319,7 @@ static void chan_connected_cb(struct bt_l2cap_chan *chan) {
 
     if (link) {
         link->chan_connected = 1;
+        hal_semaphore_release(link->init_sem);
     }
     // TODO: Can we release this already before?
     // TODO: We might want to introduce more specific semaphores?
@@ -326,6 +336,7 @@ static void chan_disconnected_cb(struct bt_l2cap_chan *chan) {
 
     if (link) {
         link->chan_connected = 0;
+        hal_semaphore_release(link->init_sem);
         // and call the disconnect handler as well if the queue
         // TODO: This will try to shutdown the tx thread which might not have been spawned.
         //link->config->base.vtable->cla_disconnect_handler((struct cla_link *) link);
@@ -373,11 +384,11 @@ static enum ud3tn_result cla_ml2cap_start_link(
 
     ml2cap_link->conn = bt_conn_ref(conn);
 
-    if (!ml2cap_link) {
+    if (!ml2cap_link->conn) {
+        free(ml2cap_link);
         LOG("ML2CAP: Failed to ref connection!");
         return UD3TN_FAIL;
     }
-
 
     // we get the info if we are client or server
     struct bt_conn_info info;
@@ -418,6 +429,13 @@ static enum ud3tn_result cla_ml2cap_start_link(
         goto fail;
     }
 
+    ml2cap_link->init_sem = hal_semaphore_init_binary();
+
+    if (!ml2cap_link->init_sem) {
+        LOG("ML2CAP: Error creating sem!");
+        goto fail_after_queue;
+
+    }
 
     mtcp_parser_reset(&ml2cap_link->mtcp_parser);
 
@@ -431,7 +449,7 @@ static enum ud3tn_result cla_ml2cap_start_link(
 
     if (!htab_entry) {
         LOG("ML2CAP: Error creating htab entry!");
-        goto fail_after_queue;
+        goto fail_after_htab;
     }
 
     ml2cap_link->management_task = hal_task_create(
@@ -445,7 +463,7 @@ static enum ud3tn_result cla_ml2cap_start_link(
 
     if (!ml2cap_link->management_task) {
         LOG("ML2CAP: Error creating management task!");
-        goto fail_after_htab;
+        goto fail_after_sem;
     }
 
     return UD3TN_OK;
@@ -458,6 +476,9 @@ static enum ud3tn_result cla_ml2cap_start_link(
     );
     hal_semaphore_release(ml2cap_config->link_htab_sem);
 
+    fail_after_sem:
+    hal_semaphore_release(ml2cap_link->init_sem);
+    hal_semaphore_delete(ml2cap_link->init_sem);
 
     fail_after_queue:
     hal_queue_delete(ml2cap_link->rx_queue);
@@ -491,6 +512,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason) {
     if (link) {
         // we mark the link as not connected, so we essentially
         link->bt_connected = false;
+        hal_semaphore_release(link->init_sem);
         // and call the disconnect handler as well
         // TODO: This will try to shutdown the tx thread which might not have been spawned.
         //link->config->base.vtable->cla_disconnect_handler((struct cla_link *) link);
@@ -691,6 +713,7 @@ static enum ud3tn_result ml2cap_read(struct cla_link *link,
 
     *bytes_read = stream - buffer;
 
+
     return UD3TN_OK;
 }
 
@@ -744,12 +767,10 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
     // overall length could be more than the supported MTU -> we need to
     uint32_t mtu = ml2cap_link->chan.tx.mtu;
 
-    LOGF("l2cap_transmit_bytes %d with mtu %d", length, mtu);
-
     uint32_t sent = 0;
 
     while (sent < length) {
-        LOGF("l2cap_transmit_bytes sent %d", sent);
+        //LOGF("l2cap_transmit_bytes sent %d", sent);
         uint32_t frag_size = MIN(mtu, length - sent);
 
         // TODO: Not ideal to use the hal method here but define using zephyr specific macro!

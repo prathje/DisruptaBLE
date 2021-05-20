@@ -1,9 +1,9 @@
 #include "routing/epidemic/summary_vector.h"
 #include "platform/hal_crypto.h"
 
-
 #include <stdlib.h>
 
+// TODO: This format will not work in a different endianess!
 struct __attribute__((__packed__)) summary_vector_entry_hashable {
     uint8_t source_hash[UD3TN_HASH_LENGTH];
     uint64_t creation_timestamp_ms;
@@ -31,7 +31,7 @@ static void summary_vector_increase_size(struct summary_vector *sv) {
     sv->entries = new_entries; // use the new entries
 }
 
-struct summary_vector *summary_vector_create() {
+struct summary_vector *summary_vector_create_with_capacity(uint32_t capacity) {
     struct summary_vector *sv = malloc(sizeof(struct summary_vector));
 
     if (sv == NULL) {
@@ -39,7 +39,7 @@ struct summary_vector *summary_vector_create() {
     }
 
     sv->length = 0;
-    sv->capacity = SUMMARY_VECTOR_DEFAULT_CAPACITY;
+    sv->capacity = capacity;
 
     sv->entries = malloc(sv->capacity * sizeof(struct summary_vector_entry));
 
@@ -51,6 +51,9 @@ struct summary_vector *summary_vector_create() {
     return sv;
 }
 
+struct summary_vector *summary_vector_create() {
+    return summary_vector_create_with_capacity(SUMMARY_VECTOR_DEFAULT_CAPACITY);
+}
 
 struct summary_vector *summary_vector_create_from_memory(const void *src, size_t num_bytes) {
 
@@ -60,7 +63,7 @@ struct summary_vector *summary_vector_create_from_memory(const void *src, size_t
 
     uint32_t capacity = num_bytes / sizeof(struct summary_vector_entry);
 
-    struct summary_vector *sv = summary_vector_create(capacity);
+    struct summary_vector *sv = summary_vector_create_with_capacity(capacity);
 
     if (sv == NULL) {
         return NULL;
@@ -96,7 +99,7 @@ void summary_vector_destroy(struct summary_vector *sv) {
 
 
 bool summary_vector_entry_equal(struct summary_vector_entry *a, struct summary_vector_entry *b) {
-    return memcmp(a, b, sizeof(struct summary_vector_entry));
+    return memcmp(a->hash, b->hash, SUMMARY_VECTOR_ENTRY_HASH_LENGTH) == 0;
 }
 
 void summary_vector_entry_from_bundle_unique_identifier(struct summary_vector_entry *dest,
@@ -156,15 +159,15 @@ enum ud3tn_result summary_vector_add_entry_by_copy(struct summary_vector *sv, st
             return UD3TN_FAIL;
         }
     }
-    memcpy(&(sv->entries[sv->length]), entry, sizeof(struct summary_vector_entry));
+    memcpy(&sv->entries[sv->length], entry, sizeof(struct summary_vector_entry));
     sv->length++;
     return UD3TN_OK;
 }
 
 // TODO: This is very inefficient (just as the other methods...)
-struct summary_vector *summary_vector_create_diff(struct summary_vector *a, struct summary_vector_entry *b) {
+struct summary_vector *summary_vector_create_diff(struct summary_vector *a, struct summary_vector *b) {
 
-    // we might want to initialize the capacity?
+    // TODO: we might want to initialize the capacity?
     struct summary_vector *diff = summary_vector_create();
 
     if (!diff) {
@@ -172,9 +175,9 @@ struct summary_vector *summary_vector_create_diff(struct summary_vector *a, stru
     }
 
     for(uint32_t i = 0; i < a->length; i++) {
-        struct summary_vector_entry *entry = a->entries[i];
+        struct summary_vector_entry *entry = &a->entries[i];
         if (!summary_vector_contains_entry(b, entry)) {
-            if (summary_vector_add_entry_by_copy(diff, entry) !== UD3DTN_OK) {
+            if (summary_vector_add_entry_by_copy(diff, entry) != UD3TN_OK) {
                 free(diff);
                 return NULL;
             }

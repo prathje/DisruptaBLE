@@ -18,22 +18,56 @@
 
 static struct router_config router_config;
 
-
-bool contact_should_receive(const char *eid, struct bundle_info_list_entry *candidate) {
-
+bool bundle_should_be_offered(struct router_contact *rc, struct bundle_info_list_entry *candidate) {
     uint64_t cur_time = hal_time_get_timestamp_s();
 
     if (candidate->num_pending_transmissions == 0) {
-        // TODO: Shall we do direct delivery in case the bundle destination is actually this contact?
+        LOG("candidate->num_pending_transmissions == 0");
+        // TODO: Shall we do direct delivery in case the bundle destination is actually this contact? -> hash the eid of the contact and the destination of bundles!
         return false;
     }
 
     if (candidate->exp_time < cur_time) {
         return false; // bundle is sadly expired -> will be removed eventually
     }
+    return true;
+}
 
-    // check if the contact requested this entry
-    return routing_agent_contact_requested_entry(eid, &candidate->sv);
+/**
+ * This sv contains all bundles that our router has to offer for the contact, used by the router agent
+ * @return pointer to summary_vector if successfull, null otherwise
+ */
+static struct summary_vector *create_offer_sv(struct router_contact *rc) {
+
+    struct summary_vector *offer_sv = summary_vector_create();
+
+    if (offer_sv) {
+        struct bundle_info_list_entry *current = router_config.bundle_info_list.head;
+        while(current != NULL) {
+            if (bundle_should_be_offered(rc, current)) {
+                if (summary_vector_add_entry_by_copy(offer_sv, &current->sv_entry) != UD3TN_OK) {
+                    LOGF("Router: Failed to create offer sv for eid %s", rc->contact->node->eid);
+                    summary_vector_destroy(offer_sv);
+                    offer_sv = NULL;
+                    break;
+                }
+            }
+            current = current->next;
+        }
+    }
+    return offer_sv;
+}
+
+
+static void send_offer_sv(struct router_contact *rc) {
+    struct summary_vector *offer_sv = create_offer_sv(rc);
+
+    if (offer_sv) {
+        routing_agent_send_offer_sv(rc->contact->node->eid, offer_sv);
+        summary_vector_destroy(offer_sv);
+    } else {
+        LOGF("Router: Could not create offer sv for %s", rc->contact->node->eid);
+    }
 }
 
 
@@ -79,6 +113,7 @@ void update_bundle_info_list() {
             if (current == router_config.bundle_info_list.head) {
                 // prev could be null in this case and is not relevant
                 router_config.bundle_info_list.head = next;
+                //LOGF("update_bundle_info_list urrent == router_config.bundle_info_list.hea List head %p", router_config.bundle_info_list.head);
             } else {
                 // prev is not null!
                 prev->next = next;
@@ -95,6 +130,8 @@ void update_bundle_info_list() {
                     router_config.router_contacts[i]->next_bundle_candidate = next;
                 }
             }
+
+            summary_vector_entry_print("Router: Deleting Bundle ", &current->sv_entry);
 
             signal_bundle_expired(current);
 
@@ -142,19 +179,22 @@ enum ud3tn_result try_to_send_bundle(const char* eid, struct bundle_info_list_en
 static void send_bundles_to_contact(struct router_contact *router_contact ) {
     const char *eid = router_contact->contact->node->eid;
 
-    // we need to wait for the routing agent to know the summary vector
-    if (routing_agent_contact_active(eid)) {
-
+    // we need to wait to know the request summary vector
+    if (router_contact->request_sv != NULL) {
         if (router_contact->current_bundle == NULL) {
-            // we need a new transmission!
 
+            // we need a new transmission!
             struct bundle_info_list_entry *candidate = router_contact->next_bundle_candidate;
 
             while(candidate != NULL) {
-                // we still have possible candidates to send!
-                if (contact_should_receive(eid, candidate)) {
+                LOGF("C %d, %d", bundle_should_be_offered(router_contact, candidate), summary_vector_contains_entry(router_contact->request_sv, &candidate->sv_entry));
+
+                if (bundle_should_be_offered(router_contact, candidate)
+                    && summary_vector_contains_entry(router_contact->request_sv, &candidate->sv_entry)) {
+                    LOG("Router: FOUND A CANDIDATE!!!!!!");
                     break; // we found a possible candidate! -> keep the candidate for now!
                 } else {
+                    LOG("F");
                     // try the next entry!
                     candidate = candidate->next;
                 }
@@ -208,6 +248,9 @@ enum ud3tn_result router_init(const struct bundle_agent_interface *bundle_agent_
 
 
 void route_epidemic_bundle(struct bundle *bundle) {
+
+    summary_vector_print_bundle("Router: Routing Epidemic Bundle ", bundle);
+
     struct bundle_info_list_entry *info = malloc(sizeof(struct bundle_info_list_entry));
 
     if (!info) {
@@ -215,18 +258,21 @@ void route_epidemic_bundle(struct bundle *bundle) {
         const enum bundle_status_report_reason reason = BUNDLE_SR_REASON_NO_KNOWN_ROUTE;
         const enum bundle_processor_signal_type signal = BP_SIGNAL_FORWARDING_CONTRAINDICATED;
 
+        LOGF("Routing: Can not route bundle %d", bundle->id);
+
         bundle_processor_inform(
                 router_config.bundle_agent_interface->bundle_signaling_queue,
                 bundle->id,
                 signal,
                 reason
         );
+
         return;
     }
 
     info->id = bundle->id;
 
-    summary_vector_entry_from_bundle(&info->sv, bundle);
+    summary_vector_entry_from_bundle(&info->sv_entry, bundle);
     info->num_pending_transmissions = CONFIG_EPIDEMIC_ROUTING_NUM_REPLICAS; // -1 will result in infinite retransmissions, see CONFIG_EPIDEMIC_ROUTING_NUM_REPLICAS
 
 
@@ -249,22 +295,15 @@ void route_epidemic_bundle(struct bundle *bundle) {
         router_config.bundle_info_list.head = info;
     }
 
-
-    /*bool needs_update = false;
-
     // we now add this bundle to every currently known contact that has no other candidates
     for(int i = router_config.num_router_contacts-1; i >= 0; i--) {
         struct router_contact *rc = router_config.router_contacts[i];
         if (rc->next_bundle_candidate == NULL) {
-            rc->next_bundle_candidate = info;
-            LOGF("Router: Found new candidate for contact %s", rc->contact->node->eid);
-            needs_update = true;
+            // OOOPS! It seems like we don't have any bundles to send for this contact -> let's offer some :)
+            // TODO: We are currently sending our whole offer sv everytime, we might want to sent individual entries ;)
+            send_offer_sv(rc);
         }
     }
-
-    if (needs_update) {
-        send_bundles(); // we directly try to send outstanding bundles
-    }*/
 }
 
 bool route_info_bundle(struct bundle *bundle) {
@@ -325,6 +364,7 @@ void router_route_bundle(struct bundle *bundle) {
 void router_signal_bundle_transmission(struct routed_bundle *routed_bundle, bool success) {
 
     LOGF("Router: bundle %d transmission status %d", routed_bundle->id, (int)success);
+
     if(routing_agent_is_info_bundle(routed_bundle->destination)) {
         bundle_processor_inform(
                 router_config.bundle_agent_interface->bundle_signaling_queue,
@@ -382,9 +422,14 @@ void router_signal_bundle_transmission(struct routed_bundle *routed_bundle, bool
 }
 
 void router_update() {
+    //struct summary_vector *known_sv = router_create_known_sv();
+    //LOG("ROUTER_UPDATE");
+    //summary_vector_print(known_sv);
+
     hal_semaphore_take_blocking(router_config.router_contact_htab_sem);
     update_bundle_info_list();
-    send_bundles();
+
+    //send_bundles();
     hal_semaphore_release(router_config.router_contact_htab_sem);
 }
 
@@ -420,7 +465,7 @@ void router_handle_contact_event(void *context, enum contact_manager_event event
 
             rc = malloc(sizeof(struct router_contact));
 
-            if (rc) {
+            if (rc != NULL) {
 
                 struct htab_entrylist *htab_entry = htab_add(
                         &router_config.router_contact_htab,
@@ -439,6 +484,8 @@ void router_handle_contact_event(void *context, enum contact_manager_event event
                     router_config.router_contacts[router_config.num_router_contacts] = rc;
                     router_config.num_router_contacts++;
                     LOGF("Router: Added router contact %s", eid);
+
+                    send_offer_sv(rc); // we directly offer our "bundles"
                 } else {
                     free(rc);
                     LOG("Router: Error creating htab entry!");
@@ -490,9 +537,10 @@ enum ud3tn_result router_update_config(struct router_config config) {
     return UD3TN_OK;
 }
 
-
 void router_update_request_sv(const char* eid, struct summary_vector *request_sv) {
     hal_semaphore_take_blocking(router_config.router_contact_htab_sem);
+
+    summary_vector_print("router_update_request_sv ", request_sv);
 
     struct router_contact *rc = htab_get(
             &router_config.router_contact_htab,
@@ -504,10 +552,13 @@ void router_update_request_sv(const char* eid, struct summary_vector *request_sv
         if (rc->request_sv) {
             summary_vector_destroy(rc->request_sv);
         }
+
         rc->request_sv = request_sv;
 
         // as we updated the requested sv, we schedule all bundles again
         rc->next_bundle_candidate = router_config.bundle_info_list.head;
+
+        LOGF("router_update_request_sv List head %p", router_config.bundle_info_list.head);
 
         if (rc->current_bundle == NULL) {
             // reschedule directly
@@ -515,7 +566,31 @@ void router_update_request_sv(const char* eid, struct summary_vector *request_sv
         }
     } else {
         summary_vector_destroy(request_sv);
+        LOGF("Router: Could not update request_sv for %s", eid);
     }
 
     hal_semaphore_release(router_config.router_contact_htab_sem);
+}
+
+
+struct summary_vector *router_create_known_sv() {
+    hal_semaphore_take_blocking(router_config.router_contact_htab_sem);
+
+    struct summary_vector *known_sv = summary_vector_create();
+
+    if (known_sv) {
+        struct bundle_info_list_entry *current = router_config.bundle_info_list.head;
+
+        while (current != NULL) {
+            if (summary_vector_add_entry_by_copy(known_sv, &current->sv_entry) != UD3TN_OK) {
+                free(known_sv);
+                break;
+            }
+            current = current->next;
+        }
+    }
+
+    hal_semaphore_release(router_config.router_contact_htab_sem);
+
+    return known_sv;
 }

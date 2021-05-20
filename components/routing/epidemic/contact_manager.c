@@ -297,7 +297,7 @@ static void handle_discovered_neighbor(struct node * node) {
     if (!contact_info) {
         // we initialize contact_info
         if (cm_config.current_contact_count < MAX_CONCURRENT_CONTACTS) {
-            contact_info = &cm_config.current_contacts[current_contact_count];
+            contact_info = &cm_config.current_contacts[cm_config.current_contact_count];
             cm_config.current_contact_count++;
 
             // reset values
@@ -339,7 +339,7 @@ static void handle_missing_cla_address(const char *cla_address) {
         return;
     }
     node->cla_addr = strdup(cla_address);
-    contact_manager_handle_discovered_neighbor(node);
+    handle_discovered_neighbor(node);
 }
 
 static void handle_conn_up(const char *cla_address) {
@@ -355,6 +355,7 @@ static void handle_conn_up(const char *cla_address) {
             LOG("Could not handle missing cla address");
             return;
         }
+
 
         on_event(CONTACT_EVENT_ADDED, info->contact);
     }
@@ -389,6 +390,7 @@ static void handle_conn_down(const char *cla_address) {
 }
 
 void contact_manager_handle_discovered_neighbor(struct node * node) {
+
     hal_semaphore_take_blocking(cm_config.sem);
     handle_discovered_neighbor(node);
     hal_semaphore_release(cm_config.sem);
@@ -396,12 +398,12 @@ void contact_manager_handle_discovered_neighbor(struct node * node) {
 
 void contact_manager_handle_conn_up(const char *cla_address) {
     hal_semaphore_take_blocking(cm_config.sem);
-    handle_conn_up(node);
+    handle_conn_up(cla_address);
     hal_semaphore_release(cm_config.sem);
 }
 
 void contact_manager_handle_conn_down(const char *cla_address) {
     hal_semaphore_take_blocking(cm_config.sem);
-    handle_conn_down(node);
+    handle_conn_down(cla_address);
     hal_semaphore_release(cm_config.sem);
 }

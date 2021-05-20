@@ -95,16 +95,24 @@ void router_task(void *rt_parameters)
 {
     struct router_task_parameters *parameters =  (struct router_task_parameters *)rt_parameters;
 
-    // we will use this config to also identify the routing agent in calls
+    if(contact_manager_init() != UD3TN_OK) {
+        LOG("RouterTask: Could not initialize contact manager!");
+        return;
+    }
 
-    contact_manager_add_event_callback(routing_agent_handle_contact_event, NULL);
     contact_manager_add_event_callback(router_handle_contact_event, NULL);
-
+    contact_manager_add_event_callback(routing_agent_handle_contact_event, NULL);
 
     // we now initialize the router and routing_agent
+    if(router_init(parameters->bundle_agent_interface) != UD3TN_OK) {
+        LOG("RouterTask: Could not initialize router!");
+        return;
+    }
 
-    router_init(parameters->bundle_agent_interface);
-    routing_agent_init(parameters->bundle_agent_interface);
+    if(routing_agent_init(parameters->bundle_agent_interface) != UD3TN_OK) {
+        LOG("RouterTask: Could not initialize router agent!");
+        return;
+    }
 
     struct router_signal signal;
 

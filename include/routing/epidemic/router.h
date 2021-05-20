@@ -13,9 +13,11 @@
 #include "routing/epidemic/contact_manager.h"
 #include "routing/epidemic/routing_agent.h"
 
+#include "routing/epidemic/summary_vector.h"
+
 
 struct bundle_info_list_entry {
-    struct summary_vector_entry sv; // we directly compute it so we do not, e.g. hashing it
+    struct summary_vector_entry sv_entry; // we directly compute it so we do not, e.g. hashing it
     bundleid_t id;
     uint64_t num_pending_transmissions; // -1 will result in infinite retransmissions, see CONFIG_EPIDEMIC_ROUTING_NUM_REPLICAS
     enum bundle_routing_priority prio;
@@ -70,5 +72,7 @@ void router_update_request_sv(const char* eid, struct summary_vector *requested_
 //unused but called in init.c
 struct router_config router_get_config(void);
 enum ud3tn_result router_update_config(struct router_config config);
+
+struct summary_vector *router_create_known_sv();
 
 #endif /* ROUTER_H_INCLUDED */
