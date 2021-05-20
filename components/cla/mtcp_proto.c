@@ -35,7 +35,7 @@ size_t mtcp_parser_parse(struct parser *mtcp_parser,
 		// We need more data!
 		return 0;
 	} else if (err != CborNoError) {
-		LOG("mtcp: Invalid CBOR byte string header provided.");
+		LOGF("mtcp: Invalid CBOR byte string header provided. %d", err);
 		// Skip 1 byte
 		return 1;
 	}
