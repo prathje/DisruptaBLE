@@ -191,10 +191,9 @@ static void send_bundles_to_contact(struct router_contact *router_contact ) {
 
                 if (bundle_should_be_offered(router_contact, candidate)
                     && summary_vector_contains_entry(router_contact->request_sv, &candidate->sv_entry)) {
-                    LOG("Router: FOUND A CANDIDATE!!!!!!");
+
                     break; // we found a possible candidate! -> keep the candidate for now!
                 } else {
-                    LOG("F");
                     // try the next entry!
                     candidate = candidate->next;
                 }
@@ -202,6 +201,8 @@ static void send_bundles_to_contact(struct router_contact *router_contact ) {
 
             // we found a good candidate!
             if (candidate != NULL) {
+                //summary_vector_entry_print("Router: CANDIDATE!!!!!! ", &candidate->sv_entry);
+
                 // we try to schedule it
                 if (try_to_send_bundle(eid, candidate) == UD3TN_OK) {
 
@@ -212,9 +213,9 @@ static void send_bundles_to_contact(struct router_contact *router_contact ) {
                     // we could schedule the send process! this means that we get a transmission success / fail in all cases (even in case of a connection failure)
                     // we therefore set the curret bundle and further increment to the next_bundle_candidate (which could be null (!))
                     router_contact->current_bundle = candidate;
-                    router_contact->next_bundle_candidate = candidate->next;
                 }
             } else {
+                //LOG("Router: NO CANDIDATE!!!!!!");
                 router_contact->next_bundle_candidate = NULL;
                 // there were no possible candidates, however the router_route_bundle method sets the correct references in case a new bundle is available
             }
@@ -275,7 +276,6 @@ void route_epidemic_bundle(struct bundle *bundle) {
 
     summary_vector_entry_from_bundle(&info->sv_entry, bundle);
     info->num_pending_transmissions = CONFIG_EPIDEMIC_ROUTING_NUM_REPLICAS; // -1 will result in infinite retransmissions, see CONFIG_EPIDEMIC_ROUTING_NUM_REPLICAS
-
 
     info->prio = bundle_get_routing_priority(bundle);
     info->size = bundle_get_serialized_size(bundle);
@@ -366,9 +366,8 @@ void router_route_bundle(struct bundle *bundle) {
 
 void router_signal_bundle_transmission(struct routed_bundle *routed_bundle, bool success) {
 
-    LOGF("Router: bundle %d transmission status %d", routed_bundle->id, (int)success);
-
     if(routing_agent_is_info_bundle(routed_bundle->destination)) {
+        LOGF("Router: info bundle %d transmission status %d", routed_bundle->id, (int)success);
         bundle_processor_inform(
                 router_config.bundle_agent_interface->bundle_signaling_queue,
                 routed_bundle->id,
@@ -378,6 +377,8 @@ void router_signal_bundle_transmission(struct routed_bundle *routed_bundle, bool
                 BUNDLE_SR_REASON_NO_INFO
         );
     } else {
+
+        LOGF("Router: epidemic bundle %d transmission status %d", routed_bundle->id, (int)success);
 
         hal_semaphore_take_blocking(router_config.router_contact_htab_sem);
         char * eid = routed_bundle->destination;
@@ -543,7 +544,7 @@ enum ud3tn_result router_update_config(struct router_config config) {
 void router_update_request_sv(const char* eid, struct summary_vector *request_sv) {
     hal_semaphore_take_blocking(router_config.router_contact_htab_sem);
 
-    summary_vector_print("router_update_request_sv ", request_sv);
+    //summary_vector_print("router_update_request_sv ", request_sv);
 
     struct router_contact *rc = htab_get(
             &router_config.router_contact_htab,
@@ -560,8 +561,6 @@ void router_update_request_sv(const char* eid, struct summary_vector *request_sv
 
         // as we updated the requested sv, we schedule all bundles again
         rc->next_bundle_candidate = router_config.bundle_info_list.head;
-
-        LOGF("router_update_request_sv List head %p", router_config.bundle_info_list.head);
 
         if (rc->current_bundle == NULL) {
             // reschedule directly
