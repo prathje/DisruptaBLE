@@ -187,7 +187,7 @@ static void send_bundles_to_contact(struct router_contact *router_contact ) {
             struct bundle_info_list_entry *candidate = router_contact->next_bundle_candidate;
 
             while(candidate != NULL) {
-                LOGF("C %d, %d", bundle_should_be_offered(router_contact, candidate), summary_vector_contains_entry(router_contact->request_sv, &candidate->sv_entry));
+                //LOGF("C %d, %d", bundle_should_be_offered(router_contact, candidate), summary_vector_contains_entry(router_contact->request_sv, &candidate->sv_entry));
 
                 if (bundle_should_be_offered(router_contact, candidate)
                     && summary_vector_contains_entry(router_contact->request_sv, &candidate->sv_entry)) {
