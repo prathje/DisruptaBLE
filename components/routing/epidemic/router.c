@@ -60,6 +60,7 @@ void update_bundle_info_list() {
     struct bundle_info_list_entry *prev = NULL;
 
     // this loops through all available bundles and checks for possible expiration,
+    //TODO: Delete old bundles if not enough space for new ones?
     while(current != NULL) {
 
         bool delete = false;
