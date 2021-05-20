@@ -201,6 +201,9 @@ static void send_bundles_to_contact(struct router_contact *router_contact ) {
 
             // we found a good candidate!
             if (candidate != NULL) {
+                // next candidate is the following bundle, ignoring the success of transmisions (for now)
+                router_contact->next_bundle_candidate = candidate->next;
+
                 //summary_vector_entry_print("Router: CANDIDATE!!!!!! ", &candidate->sv_entry);
 
                 // we try to schedule it
@@ -213,6 +216,8 @@ static void send_bundles_to_contact(struct router_contact *router_contact ) {
                     // we could schedule the send process! this means that we get a transmission success / fail in all cases (even in case of a connection failure)
                     // we therefore set the curret bundle and further increment to the next_bundle_candidate (which could be null (!))
                     router_contact->current_bundle = candidate;
+                } else {
+                    summary_vector_entry_print("Router: Failed to send_bundle ", &candidate->sv_entry);
                 }
             } else {
                 //LOG("Router: NO CANDIDATE!!!!!!");
@@ -300,7 +305,7 @@ bool route_epidemic_bundle(struct bundle *bundle) {
     // we now add this bundle to every currently known contact that has no other candidates
     for(int i = router_config.num_router_contacts-1; i >= 0; i--) {
         struct router_contact *rc = router_config.router_contacts[i];
-        if (rc->next_bundle_candidate == NULL) {
+        if (rc->current_bundle == NULL && rc->next_bundle_candidate == NULL) {
             // OOOPS! It seems like we don't have any bundles to send for this contact -> let's offer some :)
             // TODO: We are currently sending our whole offer sv everytime, we might want to sent individual entries ;)
             send_offer_sv(rc);
@@ -408,6 +413,14 @@ void router_signal_bundle_transmission(struct routed_bundle *routed_bundle, bool
 
                     rc->current_bundle = NULL; // signals that we are done with transmission
                     send_bundles_to_contact(rc); // try to reschedule directly
+
+                    if (rc->current_bundle == NULL && rc->next_bundle_candidate == NULL) {
+                        // OOOPS! It seems like we don't have any bundles to send for this contact -> let's offer some :)
+                        // TODO: We are currently sending our whole offer sv everytime, we might want to sent individual entries ;)
+                        // TODO: We might have scheduled two offers as soon as another bundle is available
+                        //       But the other offer would be more up-to-date anyway
+                        send_offer_sv(rc);
+                    }
                 } else {
                     LOGF("Router: error router_signal_bundle_transmission wrong bundle %d for contact %s", routed_bundle->id, eid);
                 }
