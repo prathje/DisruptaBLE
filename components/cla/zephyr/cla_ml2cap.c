@@ -257,8 +257,8 @@ static void ml2cap_link_management_task(void *p) {
     }
 
     while (ml2cap_link->bt_connected && !ml2cap_link->chan_connected) {
-        // we sometimes manually check the connetion state to prevent deadlocks
-        hal_semaphore_try_take(ml2cap_link->init_sem, 50);
+        // we sometimes manually check the connection state to prevent deadlocks
+        hal_semaphore_try_take(ml2cap_link->init_sem, 1000);
         LOGF("ML2CAP: Still waiting... for \"%s\"", ml2cap_link->cla_addr);
     }
 
@@ -282,18 +282,20 @@ static void ml2cap_link_management_task(void *p) {
     LOGF("ML2CAP: Terminating link manager for \"%s\"", ml2cap_link->cla_addr);
 
     hal_semaphore_take_blocking(ml2cap_link->config->link_htab_sem);
+
     htab_remove(&ml2cap_link->config->link_htab, ml2cap_link->cla_addr);
-    hal_semaphore_release(ml2cap_link->config->link_htab_sem);
 
     mtcp_parser_reset(&ml2cap_link->mtcp_parser);
 
     hal_queue_delete(ml2cap_link->rx_queue);
 
-    free(ml2cap_link->cla_addr);
-    free(ml2cap_link->mac_addr);
-
     hal_semaphore_release(ml2cap_link->init_sem);
     hal_semaphore_delete(ml2cap_link->init_sem);
+
+    hal_semaphore_release(ml2cap_link->config->link_htab_sem);
+
+    free(ml2cap_link->cla_addr);
+    free(ml2cap_link->mac_addr);
 
     Task_t management_task = ml2cap_link->management_task;
     bt_conn_unref(ml2cap_link->conn);
@@ -427,7 +429,6 @@ static enum ud3tn_result cla_ml2cap_start_link(
     if (!ml2cap_link->init_sem) {
         LOG("ML2CAP: Error creating sem!");
         goto fail_after_queue;
-
     }
 
     mtcp_parser_reset(&ml2cap_link->mtcp_parser);
@@ -441,7 +442,7 @@ static enum ud3tn_result cla_ml2cap_start_link(
     hal_semaphore_release(ml2cap_config->link_htab_sem);
 
     if (!htab_entry) {
-        LOG("ML2CAP: Error creating htab entry!");
+        LOGF("ML2CAP: Error creating htab entry! for %s", ml2cap_link->cla_addr);
         goto fail_after_sem;
     }
 
@@ -477,6 +478,7 @@ static enum ud3tn_result cla_ml2cap_start_link(
     hal_queue_delete(ml2cap_link->rx_queue);
 
     fail:
+    bt_conn_disconnect(ml2cap_link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
     bt_conn_unref(ml2cap_link->conn);
     free(ml2cap_link->mac_addr);
     free(ml2cap_link->cla_addr);
