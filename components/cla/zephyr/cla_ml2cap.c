@@ -449,7 +449,7 @@ static enum ud3tn_result cla_ml2cap_start_link(
 
     if (!htab_entry) {
         LOG("ML2CAP: Error creating htab entry!");
-        goto fail_after_htab;
+        goto fail_after_sem;
     }
 
     ml2cap_link->management_task = hal_task_create(
@@ -463,7 +463,7 @@ static enum ud3tn_result cla_ml2cap_start_link(
 
     if (!ml2cap_link->management_task) {
         LOG("ML2CAP: Error creating management task!");
-        goto fail_after_sem;
+        goto fail_after_htab;
     }
 
     return UD3TN_OK;
