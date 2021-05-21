@@ -287,13 +287,6 @@ static void ml2cap_link_management_task(void *p) {
 
     mtcp_parser_reset(&ml2cap_link->mtcp_parser);
 
-    hal_semaphore_take_blocking(ml2cap_link->config->link_htab_sem);
-    htab_remove(
-            &ml2cap_link->config->link_htab,
-            ml2cap_link->cla_addr
-    );
-    hal_semaphore_release(ml2cap_link->config->link_htab_sem);
-
     hal_queue_delete(ml2cap_link->rx_queue);
 
     free(ml2cap_link->cla_addr);
