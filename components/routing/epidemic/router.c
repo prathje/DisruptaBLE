@@ -447,6 +447,12 @@ void router_update() {
     hal_semaphore_take_blocking(router_config.router_contact_htab_sem);
     update_bundle_info_list();
 
+    /*LOGF("==== Router: Summary of contacts start (%d)", router_config.num_router_contacts);
+    for(int i = router_config.num_router_contacts-1; i >= 0; i--) {
+        LOGF("%s  %s", router_config.router_contacts[i]->contact->node->eid, router_config.router_contacts[i]->contact->node->cla_addr);
+    }
+    LOG("==== Router: Summary of contacts end");*/
+
     //send_bundles();
     hal_semaphore_release(router_config.router_contact_htab_sem);
 }
