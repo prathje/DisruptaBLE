@@ -328,11 +328,11 @@ enum ud3tn_result routing_agent_init(const struct bundle_agent_interface *bundle
 }
 
 void routing_agent_send_offer_sv(const char *eid, struct summary_vector *offer_sv) {
-    hal_semaphore_take_blocking(routing_agent_config.routing_agent_contact_htab_sem);
+    //hal_semaphore_take_blocking(routing_agent_config.routing_agent_contact_htab_sem);
     if (send_sv(ROUTING_AGENT_SINK_OFFER, eid,  offer_sv) != UD3TN_OK) {
         LOGF("Routing Agent: Could not send offer SV to %s", eid);
     }
-    hal_semaphore_release(routing_agent_config.routing_agent_contact_htab_sem);
+    //hal_semaphore_release(routing_agent_config.routing_agent_contact_htab_sem);
 }
 
 void routing_agent_handle_contact_event(void *context, enum contact_manager_event event, const struct contact *contact) {
