@@ -117,6 +117,7 @@ static void nb_ble_management_task(void *param) {
             free((void*)node_info.eid);
             free((void*)node_info.mac_addr);
         } else {
+            // TODO: This is not optimal!
             nb_ble_start(); // we always try to start the scanning afterward
         }
     }
