@@ -1,5 +1,6 @@
 #include "ud3tn/common.h"
 #include "routing/epidemic/contact_manager.h"
+#include "routing/epidemic/routing_agent.h"
 #include "routing/router_task.h"
 #include "ud3tn/node.h"
 #include "ud3tn/task_tags.h"
@@ -207,13 +208,27 @@ static struct contact_info * find_contact_info_by_cla_addr(const char *const cla
     return found;
 }
 
-
 /**
  * TODO: This is currently not efficient
  */
-static enum ud3tn_result try_to_send_bundle(const char *const eid, struct routed_bundle *routed_bundle, int timeout) {
+static enum ud3tn_result try_to_send_bundle(struct routed_bundle *routed_bundle, int timeout) {
 
-    struct contact_info * contact_info = find_contact_info_by_eid(eid);
+
+    struct contact_info * contact_info = NULL;
+
+    if (routing_agent_is_info_bundle(routed_bundle->destination)) {
+
+        char *destination_override = routing_agent_create_eid_from_info_bundle_eid(routed_bundle->destination);
+
+        if (!destination_override) {
+            return UD3TN_FAIL;
+        }
+        contact_info = find_contact_info_by_eid(destination_override);
+        free(destination_override);
+    } else {
+        contact_info = find_contact_info_by_eid(routed_bundle->destination);
+    }
+
     if (!contact_info) {
         return UD3TN_FAIL;
     }
@@ -267,9 +282,15 @@ static enum ud3tn_result try_to_send_bundle(const char *const eid, struct routed
     return res;
 }
 
-enum ud3tn_result contact_manager_try_to_send_bundle(const char *const eid, struct routed_bundle *routed_bundle, int timeout) {
-    hal_semaphore_take_blocking(cm_config.sem);
-    enum ud3tn_result res = try_to_send_bundle(eid, routed_bundle, timeout);
+
+enum ud3tn_result contact_manager_try_to_send_bundle(struct routed_bundle *routed_bundle, int timeout) {
+
+    // TODO: blocking would lead to deadlocks in case the router or agent sends data in a contact event
+    if (hal_semaphore_try_take(cm_config.sem, timeout) == UD3TN_FAIL) {
+        return UD3TN_FAIL;
+    }
+
+    enum ud3tn_result res = try_to_send_bundle(routed_bundle, timeout);
     hal_semaphore_release(cm_config.sem);
     return res;
 }
@@ -298,7 +319,6 @@ static void handle_discovered_neighbor(struct node * node) {
         // we initialize contact_info
         if (cm_config.current_contact_count < MAX_CONCURRENT_CONTACTS) {
             contact_info = &cm_config.current_contacts[cm_config.current_contact_count];
-            cm_config.current_contact_count++;
 
             // reset values
             memset(contact_info, 0, sizeof(struct contact_info));
@@ -307,13 +327,12 @@ static void handle_discovered_neighbor(struct node * node) {
 
             if (!contact_info->contact) {
                 LOGF("Contact Manager: No place to handle contact for eid \"%s\"", node->eid);
-                cm_config.current_contact_count--;
                 free_node(node);
                 return;
             }
-
             contact_info->contact->to = current_timestamp;
             contact_info->contact->from = current_timestamp;
+            cm_config.current_contact_count++;
             on_event(CONTACT_EVENT_ADDED, contact_info->contact);
         }
 
@@ -356,7 +375,6 @@ static void handle_conn_up(const char *cla_address) {
             return;
         }
 
-
         on_event(CONTACT_EVENT_ADDED, info->contact);
     }
 
@@ -390,7 +408,6 @@ static void handle_conn_down(const char *cla_address) {
 }
 
 void contact_manager_handle_discovered_neighbor(struct node * node) {
-
     hal_semaphore_take_blocking(cm_config.sem);
     handle_discovered_neighbor(node);
     hal_semaphore_release(cm_config.sem);

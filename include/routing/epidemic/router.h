@@ -52,6 +52,7 @@ struct router_config {
 
     struct router_contact *router_contacts[CONFIG_BT_MAX_CONN];
     uint16_t num_router_contacts;
+    uint64_t next_bundle_update;
 };
 
 enum ud3tn_result router_init(const struct bundle_agent_interface *bundle_agent_interface);

@@ -30,11 +30,12 @@ void contact_manager_add_event_callback(contact_manager_cb cb, void *context);
 uint8_t contact_manager_remove_and_free_expired_contacts();
 
 // Thread-safe!
-enum ud3tn_result contact_manager_try_to_send_bundle(const char *const eid, struct routed_bundle *routed_bundle, int timeout);
+enum ud3tn_result contact_manager_try_to_send_bundle(struct routed_bundle *routed_bundle, int timeout);
 
-/**
- * Handle a new neighbor, node needs to be freed (!), Thread-safe
- */
+ /**
+  * Handle a new neighbor, , Thread-safe
+  * @param node (will be freed by this function)
+  */
 void contact_manager_handle_discovered_neighbor(struct node * node);
 
 /**

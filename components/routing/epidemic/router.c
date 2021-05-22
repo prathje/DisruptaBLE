@@ -87,6 +87,13 @@ void signal_bundle_expired(struct bundle_info_list_entry *bundle_info) {
 void update_bundle_info_list() {
 
     uint64_t cur_time = hal_time_get_timestamp_s();
+
+    if (cur_time < router_config.next_bundle_update) {
+        return; // the same second -> probably not much changed (we simply ignore the few bundles that might have been now transmitted)
+    }
+
+    router_config.next_bundle_update = cur_time + 1; // update every second
+
     struct bundle_info_list_entry *current = router_config.bundle_info_list.head;
     struct bundle_info_list_entry *prev = NULL;
 
@@ -166,7 +173,7 @@ enum ud3tn_result try_to_send_bundle(const char* eid, struct bundle_info_list_en
         return UD3TN_FAIL;
     }
 
-    enum ud3tn_result res = contact_manager_try_to_send_bundle(eid, routed_bundle, 0); // TODO: which timeout to use?
+    enum ud3tn_result res = contact_manager_try_to_send_bundle(routed_bundle, 0); // TODO: which timeout to use?
 
     if (res == UD3TN_FAIL) {
         free(routed_bundle->destination);
@@ -177,54 +184,50 @@ enum ud3tn_result try_to_send_bundle(const char* eid, struct bundle_info_list_en
 }
 
 static void send_bundles_to_contact(struct router_contact *router_contact ) {
-    const char *eid = router_contact->contact->node->eid;
 
     // we need to wait to know the request summary vector
-    if (router_contact->request_sv != NULL) {
-        if (router_contact->current_bundle == NULL) {
+    if (router_contact->request_sv == NULL || router_contact->current_bundle != NULL) {
+        return;
+    }
 
-            // we need a new transmission!
-            struct bundle_info_list_entry *candidate = router_contact->next_bundle_candidate;
+    // we need a new transmission!
+    struct bundle_info_list_entry *candidate = router_contact->next_bundle_candidate;
 
-            while(candidate != NULL) {
-                //LOGF("C %d, %d", bundle_should_be_offered(router_contact, candidate), summary_vector_contains_entry(router_contact->request_sv, &candidate->sv_entry));
+    while(candidate != NULL) {
+        //LOGF("C %d, %d", bundle_should_be_offered(router_contact, candidate), summary_vector_contains_entry(router_contact->request_sv, &candidate->sv_entry));
 
-                if (bundle_should_be_offered(router_contact, candidate)
-                    && summary_vector_contains_entry(router_contact->request_sv, &candidate->sv_entry)) {
-
-                    break; // we found a possible candidate! -> keep the candidate for now!
-                } else {
-                    // try the next entry!
-                    candidate = candidate->next;
-                }
-            }
-
-            // we found a good candidate!
-            if (candidate != NULL) {
-                // next candidate is the following bundle, ignoring the success of transmisions (for now)
-                router_contact->next_bundle_candidate = candidate->next;
-
-                //summary_vector_entry_print("Router: CANDIDATE!!!!!! ", &candidate->sv_entry);
-
-                // we try to schedule it
-                if (try_to_send_bundle(eid, candidate) == UD3TN_OK) {
-
-                    if (candidate->num_pending_transmissions > 0) {
-                        candidate->num_pending_transmissions--;
-                    }
-
-                    // we could schedule the send process! this means that we get a transmission success / fail in all cases (even in case of a connection failure)
-                    // we therefore set the curret bundle and further increment to the next_bundle_candidate (which could be null (!))
-                    router_contact->current_bundle = candidate;
-                } else {
-                    summary_vector_entry_print("Router: Failed to send_bundle ", &candidate->sv_entry);
-                }
-            } else {
-                //LOG("Router: NO CANDIDATE!!!!!!");
-                router_contact->next_bundle_candidate = NULL;
-                // there were no possible candidates, however the router_route_bundle method sets the correct references in case a new bundle is available
-            }
+        if (bundle_should_be_offered(router_contact, candidate)
+            && summary_vector_contains_entry(router_contact->request_sv, &candidate->sv_entry)) {
+            break; // we found a possible candidate! -> keep the candidate for now!
         }
+
+        // else: try the next entry!
+        candidate = candidate->next;
+    }
+
+    // we found a good candidate!
+    if (candidate != NULL) {
+        // next candidate is the following bundle, ignoring the success of transmisions (for now)
+        // we try to schedule it
+        if (try_to_send_bundle(router_contact->contact->node->eid, candidate) == UD3TN_OK) {
+            if (candidate->num_pending_transmissions > 0) {
+                candidate->num_pending_transmissions--;
+            }
+            // we could schedule the send process! this means that we get a transmission success / fail in all cases (even in case of a connection failure)
+            // we therefore set the curret bundle and further increment to the next_bundle_candidate (which could be null (!))
+            router_contact->current_bundle = candidate;
+            router_contact->next_bundle_candidate = candidate->next;
+        } else {
+            // TODO: This might also be the case when we simply try to schedule the request sv while also handling a contact event
+            // In all cases, this failure means that the packet could not be queued (and not
+            // as we do not set the current bundle, the update function will eventually reschedule it -> keep the same candidate
+            router_contact->next_bundle_candidate = candidate;
+            summary_vector_entry_print("Router: Failed to schedule bundle", &candidate->sv_entry);
+        }
+    } else {
+        //LOG("Router: NO CANDIDATE!!!!!!");
+        router_contact->next_bundle_candidate = NULL;
+        // there were no possible candidates, however the router_route_bundle method sets the correct references in case a new bundle is available
     }
 }
 
@@ -234,10 +237,10 @@ static void send_bundles() {
     }
 }
 
-
 enum ud3tn_result router_init(const struct bundle_agent_interface *bundle_agent_interface) {
     memset(&router_config, 0, sizeof(struct router_config));
     router_config.bundle_agent_interface = bundle_agent_interface;
+    router_config.next_bundle_update = 0;
 
     htab_init(&router_config.router_contact_htab, CONFIG_BT_MAX_CONN, router_config.router_contact_htab_elem);
 
@@ -316,28 +319,29 @@ bool route_epidemic_bundle(struct bundle *bundle) {
 
 bool route_info_bundle(struct bundle *bundle) {
 
-    char * destination = routing_agent_create_eid_from_info_bundle_eid(bundle->destination);
+    char * destination = strdup(bundle->destination);
+    struct routed_bundle *rb = malloc(sizeof(struct routed_bundle));
 
     bool success = false;
-    if (destination) {
 
-        struct routed_bundle *rb = malloc(sizeof(struct routed_bundle));
+    if (destination != NULL && rb != NULL) {
 
         rb->id = bundle->id;
         rb->prio = bundle_get_routing_priority(bundle);
         rb->size = bundle_get_serialized_size(bundle);
         rb->exp_time = bundle_get_expiration_time_s(bundle);
-        rb->destination = strdup(bundle->destination);
+        rb->destination = destination;
         rb->contacts = NULL;
 
-        if (rb && rb->destination && contact_manager_try_to_send_bundle(destination, rb, 1000) == UD3TN_OK) {
+        if (contact_manager_try_to_send_bundle(rb, 1000) == UD3TN_OK) {
+            // rb will be freed by this router later
             success = true;
-        } else {
-            free(rb->destination);
-            free(rb);
         }
+    }
 
+    if (!success) {
         free(destination);
+        free(rb);
     }
 
     return success;
@@ -430,7 +434,6 @@ void router_signal_bundle_transmission(struct routed_bundle *routed_bundle, bool
         } else {
             LOGF("Router: Received bundle transmissionf for unknown contact %s", eid);
         }
-
         hal_semaphore_release(router_config.router_contact_htab_sem);
         // TODO: send signal if the transmission is done, i.e. routed_bundle->dest == bundle->dest
     }
@@ -453,15 +456,12 @@ void router_update() {
     }
     LOG("==== Router: Summary of contacts end");*/
 
-    //send_bundles();
+    send_bundles();
     hal_semaphore_release(router_config.router_contact_htab_sem);
 }
 
-
 void router_handle_contact_event(void *context, enum contact_manager_event event, const struct contact *contact) {
-
     (void)context; // currently unused
-    
 
     // for now we only send bundles to active contacts, however we need the corresponding eid
 
@@ -473,7 +473,6 @@ void router_handle_contact_event(void *context, enum contact_manager_event event
     if (IS_EID_NONE(eid)) {
         return;
     }
-
 
     // if contact is active but we do not yet know this contact -> add and initialize transmissions
     hal_semaphore_take_blocking(router_config.router_contact_htab_sem);
@@ -509,7 +508,9 @@ void router_handle_contact_event(void *context, enum contact_manager_event event
                     router_config.num_router_contacts++;
                     LOGF("Router: Added router contact %s", eid);
 
+                    LOGF("Router: Offering summary vector to new contact with eid %s", eid);
                     send_offer_sv(rc); // we directly offer our "bundles"
+                    LOG("AFTER send_offer_sv");
                 } else {
                     free(rc);
                     LOG("Router: Error creating htab entry!");
@@ -596,11 +597,11 @@ void router_update_request_sv(const char* eid, struct summary_vector *request_sv
 
 
 struct summary_vector *router_create_known_sv() {
-    hal_semaphore_take_blocking(router_config.router_contact_htab_sem);
 
     struct summary_vector *known_sv = summary_vector_create();
 
     if (known_sv) {
+        hal_semaphore_take_blocking(router_config.router_contact_htab_sem);
         struct bundle_info_list_entry *current = router_config.bundle_info_list.head;
 
         while (current != NULL) {
@@ -610,9 +611,8 @@ struct summary_vector *router_create_known_sv() {
             }
             current = current->next;
         }
+        hal_semaphore_release(router_config.router_contact_htab_sem);
     }
-
-    hal_semaphore_release(router_config.router_contact_htab_sem);
 
     return known_sv;
 }

@@ -7,6 +7,7 @@
 #include "routing/epidemic/contact_manager.h"
 #include "routing/epidemic/summary_vector.h"
 
+
 enum ud3tn_result routing_agent_init(const struct bundle_agent_interface *bundle_agent_interface);
 
 /**

@@ -120,19 +120,17 @@ void router_task(void *rt_parameters)
     parameters = (struct router_task_parameters *)rt_parameters;
 
     for (;;) {
-        if (hal_queue_receive(
-                parameters->router_signaling_queue, &signal,
-                100) == UD3TN_OK
-                ) {
+
+        // TODO: introduce 100 as config variable?
+        if (hal_queue_receive(parameters->router_signaling_queue, &signal, 100) == UD3TN_OK) {
             process_signal(signal,
                            parameters->bundle_processor_signaling_queue,
                            parameters->router_signaling_queue
-                   );
-        } else {
-            // TODO: Which order?
-            routing_agent_update();
-            router_update();
+            );
         }
+
+        routing_agent_update();
+        router_update();
     }
 }
 
@@ -173,6 +171,7 @@ static bool process_signal(
     struct contact *contact;
     struct router_command *command;
     struct node *node;
+
 
     switch (signal.type) {
         case ROUTER_SIGNAL_PROCESS_COMMAND:

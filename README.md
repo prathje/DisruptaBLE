@@ -102,6 +102,7 @@ west build -b nrf52840dk_nrf52840 --pristine auto  /app/platforms/zephyr/
 west build -b native_posix --pristine auto  /app/platforms/zephyr/
 west build -b nrf52_bsim --pristine auto  /app/platforms/zephyr/
 /app/bsim/test.sh
+/app/bsim/test_3.sh
 ./build/zephyr/zephyr.exe
 ```
 

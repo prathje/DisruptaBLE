@@ -91,8 +91,6 @@ static inline char *create_endpoint(const char *eid, const char* sink_identifier
 }
 
 
-
-
 char * routing_agent_create_eid_from_info_bundle_eid(const char* source_or_destination_eid) {
 
     char * dup = strdup(source_or_destination_eid);
