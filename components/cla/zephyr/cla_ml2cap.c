@@ -448,7 +448,7 @@ static enum ud3tn_result cla_ml2cap_start_link(
 
     ml2cap_link->management_task = hal_task_create(
             ml2cap_link_management_task,
-            "ml2cap_mgmt_t",
+            "ml2cap_link_mgmt_t",
             CONTACT_MANAGEMENT_TASK_PRIORITY,   //TODO
             ml2cap_link,
             CONTACT_MANAGEMENT_TASK_STACK_SIZE, //TODO
