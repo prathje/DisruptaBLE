@@ -353,7 +353,7 @@ bool route_info_bundle(struct bundle *bundle) {
 void router_route_bundle(struct bundle *bundle) {
     hal_semaphore_take_blocking(router_config.router_contact_htab_sem);
 
-    LOGF("Router: Routing info bundle %d to %s", bundle->id, bundle->destination);
+    LOGF("Router: Routing bundle %d to %s", bundle->id, bundle->destination);
 
     bool success = false;
     if(routing_agent_is_info_bundle(bundle->destination)) {

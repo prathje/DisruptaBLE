@@ -401,7 +401,7 @@ void generate_fake_bundles() {
     static uint32_t num_generated = 0;
     uint64_t cur = hal_time_get_timestamp_s();
 
-    uint32_t planned = cur / CONFIG_FAKE_BUNDLE_INTERVAL;
+    uint32_t planned = (cur / CONFIG_FAKE_BUNDLE_INTERVAL)+1;
 
     while(num_generated < planned) {
 
@@ -421,7 +421,7 @@ void generate_fake_bundles() {
 
          struct bundle *bundle = bundle7_create_local(
             payload, payload_length, routing_agent_config.bundle_agent_interface->local_eid, FAKE_DESTINATION,
-            hal_time_get_timestamp_s(),
+            MAX(1, hal_time_get_timestamp_s()), // we force at least a ts of 1 as zero is the "unknown" ts
             CONFIG_FAKE_BUNDLE_LIFETIME,
             0);
         if (bundle == NULL) {
