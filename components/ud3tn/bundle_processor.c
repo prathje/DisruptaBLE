@@ -322,6 +322,7 @@ static enum ud3tn_result bundle_forward(struct bundle *bundle, uint16_t timeout)
 	/* 4.3.4. Hop Count (BPv7-bis) */
 	/* TODO: Is this the correct point to perform the hop-count check? */
 	if (!hop_count_validation(bundle)) {
+	    LOGF("BundleProcessor: Bundle #%d: Hop limit exceeded!", bundle->id);
 		bundle_delete(bundle, BUNDLE_SR_REASON_HOP_LIMIT_EXCEEDED);
 		return UD3TN_FAIL;
 	}
@@ -329,9 +330,11 @@ static enum ud3tn_result bundle_forward(struct bundle *bundle, uint16_t timeout)
 	/* 5.4-1 */
 	bundle_add_rc(bundle, BUNDLE_RET_CONSTRAINT_FORWARD_PENDING);
 	bundle_rem_rc(bundle, BUNDLE_RET_CONSTRAINT_DISPATCH_PENDING, 0);
+
 	/* 5.4-2 */
 	if (send_bundle(bundle->id, timeout) != UD3TN_OK) {
 		/* Could not store bundle in queue -> delete it. */
+        LOGF("BundleProcessor: Bundle #%d: Could not store bundle in queue!", bundle->id);
 		bundle_delete(bundle, BUNDLE_SR_REASON_DEPLETED_STORAGE);
 		return UD3TN_FAIL;
 	}
@@ -432,6 +435,7 @@ static void bundle_receive(struct bundle *bundle)
 	if (bundle->creation_timestamp_ms != 0 &&
 			bundle_get_expiration_time_s(bundle) <
 			hal_time_get_timestamp_s()) {
+	    LOGF("BundleProcessor: Bundle #%d was expired on arrival", bundle->id);
 		bundle_delete(bundle, BUNDLE_SR_REASON_LIFETIME_EXPIRED);
 		return;
 	}
@@ -509,7 +513,7 @@ static void bundle_deliver_local(struct bundle *bundle)
 
 	/* Check and record knowledge of bundle */
 	if (bundle_record_add_and_check_known(bundle)) {
-		LOGF("Bundle #%d was already delivered, dropping it",
+		LOGF("BundleProcessor: Bundle #%d was already delivered, dropping it",
 		     bundle->id);
 		// NOTE: We cannot have custody as the CM checks for duplicates
 		bundle_discard(bundle);
@@ -841,7 +845,7 @@ static void bundle_dangling(struct bundle *bundle)
 		bundle_delete(bundle, BUNDLE_SR_REASON_TRANSMISSION_CANCELED);
 	/* Send it to the router task again after evaluating policy. */
 	} else if (send_bundle(bundle->id, FAILED_FORWARD_TIMEOUT) != UD3TN_OK) {
-		LOGF("Failed forwarding bundle #%d to router task, dropping.",
+		LOGF("BundleProcessor: Failed forwarding bundle #%d to router task, dropping.",
 		     bundle->id);
 		bundle_delete(bundle, BUNDLE_SR_REASON_DEPLETED_STORAGE);
 	}
@@ -873,7 +877,7 @@ static void send_status_report(
 		bundle_add_rc(b, BUNDLE_RET_CONSTRAINT_DISPATCH_PENDING);
 		bundle_storage_add(b);
 		if (bundle_forward(b, STATUS_REPORT_TIMEOUT) != UD3TN_OK)
-			LOGF("Failed sending status report for bundle #%d.",
+			LOGF("BundleProcessor: Failed sending status report for bundle #%d.",
 			     bundle->id);
 	}
 }
@@ -900,7 +904,7 @@ static void send_custody_signal(struct bundle *bundle,
 		bundle_storage_add(signals->data);
 		if (bundle_forward(signals->data, CUSTODY_SIGNAL_TIMEOUT)
 		    != UD3TN_OK)
-			LOGF("Failed sending custody signal for bundle #%d.",
+			LOGF("BundleProcessor: Failed sending custody signal for bundle #%d.",
 			     bundle->id);
 
 		/* Free current list entry (but not the bundle itself) */
