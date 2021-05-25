@@ -11,11 +11,11 @@ rm ${BSIM_OUT_PATH}/bin/bs_nrf52_bsim_dtn_source
 rm ${BSIM_OUT_PATH}/bin/bs_nrf52_bsim_dtn_proxy
 
 # Compile source
-west build -b nrf52_bsim /app/platforms/zephyr/ --pristine auto --build-dir /app/build/zephyr/build_source -- -DOVERLAY_CONFIG=/app/platforms/zephyr/source.conf
+west build -b nrf52_bsim /app/platforms/zephyr/ --pristine auto --build-dir /app/build/zephyr/build_source -- -DOVERLAY_CONFIG=source.conf
 cp /app/build/zephyr/build_source/zephyr/zephyr.exe ${BSIM_OUT_PATH}/bin/bs_nrf52_bsim_dtn_source
 
 # Compile proxy
-west build -b nrf52_bsim /app/platforms/zephyr/ --pristine auto --build-dir /app/build/zephyr/build_proxy -- -DOVERLAY_CONFIG=/app/platforms/zephyr/proxy.conf
+west build -b nrf52_bsim /app/platforms/zephyr/ --pristine auto --build-dir /app/build/zephyr/build_proxy -- -DOVERLAY_CONFIG=proxy.conf
 cp /app/build/zephyr/build_proxy/zephyr/zephyr.exe ${BSIM_OUT_PATH}/bin/bs_nrf52_bsim_dtn_proxy
 
 
@@ -27,7 +27,14 @@ cd ${BSIM_OUT_PATH}/bin
 
 # We run the simulation in the end so we can easily cancel it :)
 
-./bs_nrf52_bsim_dtn_source -s=dtn_sim -d=0 &
-./bs_nrf52_bsim_dtn_proxy -s=dtn_sim -d=1 &
+SIM_NUM_PROXY_DEVICES=$1
+SIM_NUM_DEVICES=$(($SIM_NUM_PROXY_DEVICES+1))
 
-./bs_2G4_phy_v1 -s=dtn_sim -D=2 -sim_length=10806400000e0 -defmodem=BLE_simple -channel=Indoorv1 -argschannel -preset=Huge3 -speed=1.1 -at=50
+./bs_nrf52_bsim_dtn_source -s=dtn_sim -d=0 &
+
+for (( i=1; i <= $SIM_NUM_PROXY_DEVICES; ++i ))
+do
+  ./bs_nrf52_bsim_dtn_proxy -s=dtn_sim -d=$i &
+done
+
+./bs_2G4_phy_v1 -s=dtn_sim -D=$(($SIM_NUM_DEVICES+0)) -sim_length=10806400000e0 -defmodem=BLE_simple -channel=Indoorv1 -argschannel -preset=Huge3 -speed=1.1 -at=50

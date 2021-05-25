@@ -27,10 +27,14 @@ cd ${BSIM_OUT_PATH}/bin
 
 # We run the simulation in the end so we can easily cancel it :)
 
+SIM_NUM_PROXY_DEVICES=$1
+SIM_NUM_DEVICES=$(($SIM_NUM_PROXY_DEVICES+1))
+
 gdb -q -batch -ex run -ex backtrace --args ./bs_nrf52_bsim_dtn_source -s=dtn_sim -d=0 &
-#./bs_nrf52_bsim_dtn_source -s=dtn_sim -d=0 &
 
-#./bs_nrf52_bsim_dtn_proxy -s=dtn_sim -d=1 &
-gdb -q -batch -ex run -ex backtrace --args ./bs_nrf52_bsim_dtn_proxy -s=dtn_sim -d=1 &
+for (( i=1; i <= $SIM_NUM_PROXY_DEVICES; ++i ))
+do
+  gdb -q -batch -ex run -ex backtrace --args ./bs_nrf52_bsim_dtn_proxy -s=dtn_sim -d=$i &
+done
 
-./bs_2G4_phy_v1 -s=dtn_sim -D=2 -sim_length=10806400000e0 -defmodem=BLE_simple -channel=Indoorv1 -argschannel -preset=Huge3 -speed=1.1 -at=50
+./bs_2G4_phy_v1 -s=dtn_sim -D=$(($SIM_NUM_DEVICES+0)) -sim_length=10806400000e0 -defmodem=BLE_simple -channel=Indoorv1 -argschannel -preset=Huge3 -speed=1.1 -at=50
