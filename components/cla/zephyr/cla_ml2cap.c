@@ -578,9 +578,9 @@ static void mtcp_management_task(void *param) {
     }
     LOG("ML2CAP: Registered L2CAP Server");
 
+    // TODO: This Thread is not needed!
     while (true) {
-        // TODO: Start advertisements and scan again in case of e.g. errors?
-        k_sleep(K_SECONDS(1));
+        k_sleep(K_FOREVER);
     }
 
     terminate:
