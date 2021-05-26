@@ -50,7 +50,15 @@ void mpu_init(void)
 
 void hal_platform_init(int argc, char *argv[])
 {
-    k_thread_system_pool_assign(k_current_get());
+
+#if CONFIG_SYSTEM_HEAP_SIZE > 0
+    void *heap_region = malloc(CONFIG_SYSTEM_HEAP_SIZE);
+
+    static struct k_heap system_heap;
+    k_heap_init(&system_heap, heap_region, CONFIG_SYSTEM_HEAP_SIZE);
+
+    k_current_get()->resource_pool = &system_heap;
+#endif
 }
 
 __attribute__((noreturn))

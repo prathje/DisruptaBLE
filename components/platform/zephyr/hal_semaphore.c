@@ -12,7 +12,7 @@
 
 struct k_sem *hal_semaphore_init_binary(void)
 {
-    struct k_sem *sem = k_malloc(sizeof(struct k_sem));
+    struct k_sem *sem = malloc(sizeof(struct k_sem));
 
     if(sem == NULL) {
         return NULL;
@@ -40,7 +40,7 @@ void hal_semaphore_poll(struct k_sem *sem)
 
 void hal_semaphore_delete(struct k_sem *sem)
 {
-    k_free(sem);
+    free(sem);
 }
 
 enum ud3tn_result hal_semaphore_try_take(struct k_sem *sem, int timeout_ms)

@@ -13,7 +13,7 @@
  */
 struct k_msgq *hal_queue_create(int queue_length, int item_size) {
 
-    struct k_msgq * queue = k_malloc(sizeof(struct k_msgq));
+    struct k_msgq * queue = malloc(sizeof(struct k_msgq));
     if (queue == NULL) {
         return NULL;
     }
@@ -22,7 +22,7 @@ struct k_msgq *hal_queue_create(int queue_length, int item_size) {
 
     if (ret) {
         // not successfull!
-        k_free(queue);
+        free(queue);
         return NULL;
     }
 
@@ -36,7 +36,7 @@ struct k_msgq *hal_queue_create(int queue_length, int item_size) {
  */
 void hal_queue_delete(struct k_msgq *queue) {
     k_msgq_cleanup(queue);
-    k_free(queue);
+    free(queue);
 }
 
 /**

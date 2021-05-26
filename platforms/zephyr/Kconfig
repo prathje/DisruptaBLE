@@ -33,3 +33,7 @@ config FAKE_BUNDLE_SIZE_MAX
 config FAKE_BUNDLE_LIFETIME
     int "The interval to generate fake bundles (in seconds)."
 	default 5
+
+config SYSTEM_HEAP_SIZE
+    int "The internal Zephyr Heap size for k_heap_ functionality. Used for Stacks"
+	default 16384

@@ -59,7 +59,7 @@ char *hal_time_get_log_time_string(void)
 
     if (time_string == NULL) {
         time_string_semph = hal_semaphore_init_binary();
-        time_string = k_malloc(64);
+        time_string = malloc(64);
         time_string[63] = '\0';
     } else {
         hal_semaphore_take_blocking(time_string_semph);

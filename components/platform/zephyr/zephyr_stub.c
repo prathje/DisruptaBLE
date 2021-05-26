@@ -5,7 +5,7 @@
 
 char *strdup(const char *s)
 {
-    char *dest = k_malloc(strlen(s)+1);
+    char *dest = malloc(strlen(s)+1);
 
     if (dest) {
         strcpy(dest, s);

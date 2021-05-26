@@ -12,6 +12,9 @@
 #include <zephyr.h>
 #include "platform/hal_io.h"
 
+#include <kernel.h>
+
+#include <stdlib.h>
 
 struct zephyr_task *hal_task_create(void (*task_function)(void *), const char *task_name,
 		    int task_priority, void *task_parameters,
@@ -20,7 +23,7 @@ struct zephyr_task *hal_task_create(void (*task_function)(void *), const char *t
 	/* ensure that an actual function is provided for thread creation */
 	ASSERT(task_function != NULL);
 
-    struct zephyr_task *task = k_malloc(sizeof(struct zephyr_task));
+    struct zephyr_task *task = malloc(sizeof(struct zephyr_task));
 
     if (task == NULL) {
         return NULL;
@@ -29,11 +32,11 @@ struct zephyr_task *hal_task_create(void (*task_function)(void *), const char *t
     uint32_t stack_size = task_stack_size + CONFIG_TEST_EXTRA_STACKSIZE;
 
     // TODO: This is currently based on https://github.com/zephyrproject-rtos/zephyr/issues/26999, use stack allocation api when available
-    task->stack = k_aligned_alloc(Z_KERNEL_STACK_OBJ_ALIGN, Z_KERNEL_STACK_SIZE_ADJUST(stack_size));
+    task->stack = k_heap_aligned_alloc(k_current_get()->resource_pool, Z_KERNEL_STACK_OBJ_ALIGN, Z_KERNEL_STACK_SIZE_ADJUST(stack_size), K_FOREVER);
 
     if (!task->stack) {
         // Failed to allocate enough memory for the stack!
-        k_free(task);
+        free(task);
         return NULL;
     }
 
@@ -52,13 +55,13 @@ struct zephyr_task *hal_task_create(void (*task_function)(void *), const char *t
 
     if (task->tid == NULL) {
         k_free(task->stack);
-        k_free(task);
+        free(task);
         return NULL;
     }
 
-    // We will use the default system pool for now (in user mode we would want to create separate heap regions!)
-    k_thread_system_pool_assign(task->tid);
-    // TODO: How to name them?
+    task->thread.resource_pool = k_current_get()->resource_pool;
+
+    // TODO: How to name them? -> Use custom data
     // TODO: How to tag them?
 
 	return task;
@@ -84,5 +87,5 @@ void hal_task_delete(struct zephyr_task *task)
 {
     k_thread_abort(task->tid); // TODO: Do we need to ensure that the thread is not running anymore?
     k_free(task->stack);
-    k_free(task);
+    free(task);
 }
