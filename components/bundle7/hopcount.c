@@ -1,5 +1,6 @@
 #include "bundle7/hopcount.h"
 
+#include <math.h>
 #include "cbor.h"
 
 bool bundle7_hop_count_parse(struct bundle_hop_count *hop_count,

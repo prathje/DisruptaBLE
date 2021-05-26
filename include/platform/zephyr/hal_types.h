@@ -2,6 +2,8 @@
 #define HAL_TYPES_H_INCLUDED
 
 #include <kernel.h>
+#include "zephyr_stub.h"
+
 
 struct zephyr_task {
     struct k_thread thread;

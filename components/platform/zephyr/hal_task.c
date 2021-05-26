@@ -14,7 +14,7 @@
 
 #include <kernel.h>
 
-#include <stdlib.h>
+#include "platform/hal_heap.h"
 
 struct zephyr_task *hal_task_create(void (*task_function)(void *), const char *task_name,
 		    int task_priority, void *task_parameters,
@@ -32,7 +32,7 @@ struct zephyr_task *hal_task_create(void (*task_function)(void *), const char *t
     uint32_t stack_size = task_stack_size + CONFIG_TEST_EXTRA_STACKSIZE;
 
     // TODO: This is currently based on https://github.com/zephyrproject-rtos/zephyr/issues/26999, use stack allocation api when available
-    task->stack = k_heap_aligned_alloc(k_current_get()->resource_pool, Z_KERNEL_STACK_OBJ_ALIGN, Z_KERNEL_STACK_SIZE_ADJUST(stack_size), K_FOREVER);
+    task->stack = aligned_alloc(Z_KERNEL_STACK_OBJ_ALIGN, Z_KERNEL_STACK_SIZE_ADJUST(stack_size));
 
     if (!task->stack) {
         // Failed to allocate enough memory for the stack!
@@ -54,14 +54,14 @@ struct zephyr_task *hal_task_create(void (*task_function)(void *), const char *t
     );
 
     if (task->tid == NULL) {
-        k_free(task->stack);
+        free(task->stack);
         free(task);
         return NULL;
     }
 
     task->thread.resource_pool = k_current_get()->resource_pool;
 
-    // TODO: How to name them? -> Use custom data
+    // TODO: How to name them? -> Use custom data or k_thread_name_set ?;
     // TODO: How to tag them?
 
 	return task;
@@ -86,6 +86,6 @@ void hal_task_delay(int delay)
 void hal_task_delete(struct zephyr_task *task)
 {
     k_thread_abort(task->tid); // TODO: Do we need to ensure that the thread is not running anymore?
-    k_free(task->stack);
+    free(task->stack);
     free(task);
 }

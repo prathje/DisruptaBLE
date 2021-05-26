@@ -4,6 +4,12 @@
 
 #include <kernel.h>
 #include <stdlib.h>
+
+#include "platform/hal_heap.h"
+
+#define HQ_ALIGNMENT 4
+#define HQ_ALIGN(x) (((x) + (HQ_ALIGNMENT)-1) & ~((HQ_ALIGNMENT)-1))
+
 /**
  * @brief hal_queue_create Creates a new channel for inter-task communication
  * @param queueLength The maximum number of items than can be stored inside
@@ -12,19 +18,17 @@
  * @return A queue identifier
  */
 struct k_msgq *hal_queue_create(int queue_length, int item_size) {
+    size_t aligned_item_size = HQ_ALIGN(item_size);
+    // we also allocate enough memory for the items -> so we only have to free one pointer
+    struct k_msgq * queue = malloc(HQ_ALIGN(sizeof(struct k_msgq))+aligned_item_size*queue_length);
 
-    struct k_msgq * queue = malloc(sizeof(struct k_msgq));
     if (queue == NULL) {
         return NULL;
     }
 
-    int ret = k_msgq_alloc_init(queue, item_size, queue_length);
+    void *buf = ((uint8_t *)queue)+HQ_ALIGN(sizeof(struct k_msgq));
 
-    if (ret) {
-        // not successfull!
-        free(queue);
-        return NULL;
-    }
+    k_msgq_init(queue, buf, aligned_item_size, queue_length);
 
     return queue;
 }

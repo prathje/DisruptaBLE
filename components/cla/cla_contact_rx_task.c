@@ -15,7 +15,6 @@
 #include "ud3tn/config.h"
 #include "ud3tn/task_tags.h"
 
-#include <signal.h>
 #include <errno.h>
 
 

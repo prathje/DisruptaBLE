@@ -1,7 +1,8 @@
 #include <kernel.h>
 #include <string.h>
-
-#ifdef PLATFORM_ZEPHYR_TODO
+#include <stdio.h>
+#include <random/rand32.h>
+#include <stdlib.h>
 
 char *strdup(const char *s)
 {
@@ -38,6 +39,8 @@ unsigned long long int strtoull (const char* str, char** endptr, int base) {
     return strtoul(str, endptr, base);
 }
 
-
-
-#endif
+// TODO: This disables support for IPN schemes!
+int sscanf(const char *s, const char *format, ...)
+{
+    return 0;
+}

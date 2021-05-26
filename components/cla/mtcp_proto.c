@@ -5,6 +5,7 @@
 #include "ud3tn/common.h"
 #include "ud3tn/parser.h"
 
+#include <math.h>
 #include "cbor.h"
 
 #include <stddef.h>

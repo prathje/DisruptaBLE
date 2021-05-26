@@ -3,6 +3,7 @@
 
 #include "ud3tn/bundle.h"
 
+#include <math.h>
 #include "cbor.h"
 
 #include <assert.h>

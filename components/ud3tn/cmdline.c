@@ -12,7 +12,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef PLATFORM_ZEPHYR
+#include <platform/hal_types.h>
+#else
 #include <unistd.h>
+#endif
 
 #define QUOTE(s) #s
 #define STR(s) QUOTE(s)
@@ -60,6 +65,8 @@ const struct ud3tn_cmdline_options *parse_cmdline(int argc, char *argv[])
 	result->eid = NULL;
 	result->cla_options = NULL;
 	int option_index = 0;
+
+#ifdef PLATFORM_ZEYPHR
 
 	if (!argv || argc <= 1)
 		goto finish;
@@ -149,8 +156,8 @@ const struct ud3tn_cmdline_options *parse_cmdline(int argc, char *argv[])
 
 		option_index++;
 	}
-
 finish:
+#endif
 	// use Unix domain socket by default
 	if (!result->aap_socket &&
 	    !result->aap_node &&

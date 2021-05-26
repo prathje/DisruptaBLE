@@ -3,9 +3,12 @@
 
 #if defined(PLATFORM_STM32)
 #include "cla/stm32/cla_usbotg.h"
+#include <unistd.h>
 #elif defined(PLATFORM_ZEPHYR)
 #include "cla/zephyr/cla_ml2cap.h"
+#include <sys/types.h>
 #else // PLATFOR_POSIX
+#include <unistd.h>
 #include "cla/posix/cla_mtcp.h"
 #include "cla/posix/cla_smtcp.h"
 #include "cla/posix/cla_tcpclv3.h"
@@ -22,7 +25,6 @@
 #include "ud3tn/result.h"
 #include "routing/router_task.h"
 
-#include <unistd.h>
 
 #include <stddef.h>
 #include <stdio.h>

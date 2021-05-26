@@ -7,6 +7,7 @@
 
 #include "ud3tn/common.h"
 
+#include <math.h>
 #include "cbor.h"
 
 #include <stdbool.h>

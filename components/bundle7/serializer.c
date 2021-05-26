@@ -1,6 +1,7 @@
 #include "bundle7/eid.h"
 #include "bundle7/serializer.h"
 
+#include <math.h>
 #include "cbor.h"
 #include "compilersupport_p.h" // Private TinyCBOR header, used for endianess
 

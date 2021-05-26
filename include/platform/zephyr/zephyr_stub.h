@@ -5,11 +5,10 @@
  * layer interface for various hardware-specific functionality
  *
  */
-
-#ifdef PLATFORM_ZEPHYR_TODO
 #ifndef ZEPHYR_STUB_H_INCLUDED
 #define ZEPHYR_STUB_H_INCLUDED
 
+#include <math.h>
 
 #ifndef ENONET
 #define ENONET 80
@@ -36,4 +35,3 @@ extern int rand(void);
 extern unsigned long long int strtoull (const char* str, char** endptr, int base);
 
 #endif /* ZEPHYR_STUB_H_INCLUDED */
-#endif /* PLATFORM_ZEPHYR */
