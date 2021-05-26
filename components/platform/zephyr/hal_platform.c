@@ -15,13 +15,13 @@
 #include "platform/hal_task.h"
 
 #include <inttypes.h>
-#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include <kernel.h>
+
 // TODO: Use <sys/reboot.h>
 #include <power/reboot.h>
 
@@ -50,13 +50,13 @@ void mpu_init(void)
 
 void hal_platform_init(int argc, char *argv[])
 {
-    LOG("Nothing to initialize at the moment...");
+    k_thread_system_pool_assign(k_current_get());
 }
 
 __attribute__((noreturn))
 void hal_platform_restart(void)
 {
-	// TODO: Try to close open ports (e.g. TCP)
+	// TODO: Try to close open ports (e.g. TCP, L2CAP)
 	LOG("Restarting!");
 
 	sys_reboot(SYS_REBOOT_WARM);
