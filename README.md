@@ -116,6 +116,18 @@ To run with gdb support:
 /app/bsim/test_gdb.sh
 ```
 
+Build source and proxy for flashing:
+
+```bash
+west build -b nrf52840dk_nrf52840 /app/platforms/zephyr/ --pristine auto --build-dir /app/build/zephyr/build_source -- -DOVERLAY_CONFIG=source.conf
+west build -b nrf52840dk_nrf52840 /app/platforms/zephyr/ --pristine auto --build-dir /app/build/zephyr/build_proxy -- -DOVERLAY_CONFIG=proxy.conf
+```
+
+To flash the stuff:
+```bash
+nrfjprog -f nrf52 --program build/zephyr/build_source/zephyr/zephyr.hex --sectorerase --reset
+nrfjprog -f nrf52 --program build/zephyr/build_proxy/zephyr/zephyr.hex --sectorerase --reset
+```
 
 
 
