@@ -773,7 +773,9 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
         hal_semaphore_take_blocking(&ml2cap_send_packet_data_pool_sem);
 
         // K_NO_WAIT is used per specification of NET_BUF_POOL_HEAP_DEFINE
-        struct net_buf *buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, BT_L2CAP_BUF_SIZE(mtu), K_NO_WAIT);
+
+        size_t buf_size = MAX(BT_L2CAP_BUF_SIZE(mtu), mtu+BT_L2CAP_SDU_CHAN_SEND_RESERVE);
+        struct net_buf *buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, buf_size, K_NO_WAIT);
 
 
         // buf->len + sdu_hdr_len > ch->tx.mps?!
