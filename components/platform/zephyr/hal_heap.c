@@ -27,6 +27,8 @@ void *aligned_alloc(size_t alignment, size_t size) {
 
     __ASSERT_NO_MSG(lock_ret == 0);
 
+    // we make sure that at least one byte is allocated
+    size = MAX(1, size);
     void *ret = sys_heap_aligned_alloc(&z_malloc_heap, alignment, size);
     if (ret == NULL && size != 0) {
         errno = ENOMEM;
