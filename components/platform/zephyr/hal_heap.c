@@ -51,6 +51,9 @@ void *realloc(void *ptr, size_t requested_size)
     if (((uintptr_t)ptr) == UINTPTR_MAX) {
         // this is a zero length entry -> no content, just allocate a new one
         return malloc(requested_size);
+    } else if (requested_size == 0) {
+        free(ptr);
+        return malloc(0);
     }
 
     int lock_ret;
