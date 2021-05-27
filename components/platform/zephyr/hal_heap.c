@@ -21,14 +21,17 @@ Z_GENERIC_SECTION(POOL_SECTION) static char z_malloc_heap_mem[HEAP_BYTES];
 
 
 void *aligned_alloc(size_t alignment, size_t size) {
+    // if size is empty, we return a dummy pointer
+    if (size == 0) {
+        return (void*)UINTPTR_MAX;
+    }
+
     int lock_ret;
 
     lock_ret = sys_mutex_lock(&z_malloc_heap_mutex, K_FOREVER);
 
     __ASSERT_NO_MSG(lock_ret == 0);
 
-    // we make sure that at least one byte is allocated
-    size = MAX(1, size);
     void *ret = sys_heap_aligned_alloc(&z_malloc_heap, alignment, size);
     if (ret == NULL && size != 0) {
         errno = ENOMEM;
@@ -45,6 +48,11 @@ void *malloc(size_t size)
 
 void *realloc(void *ptr, size_t requested_size)
 {
+    if (((uintptr_t)ptr) == UINTPTR_MAX) {
+        // this is a zero length entry -> no content, just allocate a new one
+        return malloc(requested_size);
+    }
+
     int lock_ret;
 
     lock_ret = sys_mutex_lock(&z_malloc_heap_mutex, K_FOREVER);
@@ -65,6 +73,11 @@ void *realloc(void *ptr, size_t requested_size)
 
 void free(void *ptr)
 {
+    if (((uintptr_t)ptr) == UINTPTR_MAX) {
+        // this is a zero length entry -> no need to free something
+        return;
+    }
+
     int lock_ret;
 
     lock_ret = sys_mutex_lock(&z_malloc_heap_mutex, K_FOREVER);
