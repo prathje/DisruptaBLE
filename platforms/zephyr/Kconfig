@@ -35,5 +35,6 @@ config FAKE_BUNDLE_LIFETIME
 	default 5
 
 config HEAP_SIZE
-    int "The available Heap size for k_heap_ functionality"
+    int "The available Heap size for malloc functionality. Disabled for native applications."
+    depends on !NATIVE_APPLICATION
 	default 16384
