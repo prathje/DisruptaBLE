@@ -245,7 +245,6 @@ static void ml2cap_link_management_task(void *p) {
     hal_semaphore_release(ml2cap_link->init_sem);
     hal_semaphore_take_blocking(ml2cap_link->init_sem);
 
-
     if (ml2cap_link->is_client) {
         LOGF("ML2CAP: Initiating channel connection to \"%s\"", ml2cap_link->cla_addr);
         // we are the client and try to connect to the channel server
@@ -272,9 +271,9 @@ static void ml2cap_link_management_task(void *p) {
     }
 
     if (ml2cap_link->bt_connected) {
-        if (ml2cap_link->chan_connected) {
-            bt_l2cap_chan_disconnect(&ml2cap_link->chan.chan);
-        }
+        //if (ml2cap_link->chan_connected) {
+            //bt_l2cap_chan_disconnect(&ml2cap_link->chan.chan);
+        //}
         bt_conn_disconnect(ml2cap_link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
     }
 
