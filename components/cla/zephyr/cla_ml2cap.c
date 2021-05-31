@@ -17,9 +17,7 @@
 #include "ud3tn/task_tags.h"
 #include "ud3tn/node.h"
 
-
 #include "routing/router_task.h"
-
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,6 +36,7 @@
 
 // TODO: Move this to KConfig
 #define CONFIG_ML2CAP_PSM 0xc0
+#define CONFIG_ML2CAP_CONN_QUEUE_SIZE 4
 
 struct ml2cap_config {
     struct cla_config base;
@@ -50,12 +49,12 @@ struct ml2cap_config {
     struct bt_l2cap_server l2cap_server;
 
     Task_t management_task;
+    QueueIdentifier_t management_new_connection_queue;
 };
 
 // TODO: this is a singleton to support zephyr's callbacks without user data - should be refactored once possible
 // it is initialized during the launch task
 static struct ml2cap_config *s_ml2cap_config;
-
 
 struct ml2cap_link {
     struct cla_link base;
@@ -371,12 +370,13 @@ static enum ud3tn_result cla_ml2cap_start_link(
     struct ml2cap_link *ml2cap_link =
             malloc(sizeof(struct ml2cap_link));
 
+    ml2cap_link->conn = conn; // conn is already referenced
+
     if (!ml2cap_link) {
         LOG("ML2CAP: Failed to allocate memory!");
         return UD3TN_FAIL;
     }
 
-    ml2cap_link->conn = bt_conn_ref(conn);
 
     if (!ml2cap_link->conn) {
         free(ml2cap_link);
@@ -485,14 +485,16 @@ static enum ud3tn_result cla_ml2cap_start_link(
     return UD3TN_FAIL;
 }
 
-
 static void connected(struct bt_conn *conn, uint8_t err) {
+    struct ml2cap_config *ml2cap_config = s_ml2cap_config;
+
     if (err) {
         LOGF("BLE Connection failed (err 0x%02x)\n", err);
     } else {
         LOG("BLE Connected\n");
         // we now try to start the relevant link (which will itself try to connect to the L2CAP Server)
-        cla_ml2cap_start_link(s_ml2cap_config, conn);
+        bt_conn_ref(conn);
+        hal_queue_push_to_back(ml2cap_config->management_new_connection_queue, &conn);
     }
 }
 
@@ -513,7 +515,6 @@ static void disconnected(struct bt_conn *conn, uint8_t reason) {
     }
     hal_semaphore_release(ml2cap_config->link_htab_sem);
 }
-
 
 int l2cap_accept(struct bt_conn *conn, struct bt_l2cap_chan **chan) {
 
@@ -544,7 +545,6 @@ static void mtcp_management_task(void *param) {
         LOGF("Bluetooth init failed (err %d)", err);
         goto terminate;
     }
-
 
     static struct bt_conn_cb conn_callbacks = {
             .connected = connected,
@@ -579,7 +579,13 @@ static void mtcp_management_task(void *param) {
 
     // TODO: This Thread is not needed!
     while (true) {
-        k_sleep(K_FOREVER);
+        struct bt_conn *new_conn = NULL;
+        if (hal_queue_receive(ml2cap_config->management_new_connection_queue, &new_conn, -1) == UD3TN_OK) {
+            if (cla_ml2cap_start_link(ml2cap_config, new_conn) != UD3TN_OK) {
+                bt_conn_disconnect(new_conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+                bt_conn_unref(new_conn);
+            }
+        }
     }
 
     terminate:
@@ -856,7 +862,6 @@ static struct cla_tx_queue ml2cap_get_tx_queue(
     return (struct cla_tx_queue) {NULL, NULL};
 }
 
-
 const struct cla_vtable ml2cap_vtable = {
         .cla_name_get = ml2cap_name_get,
         .cla_launch = ml2cap_launch,
@@ -885,6 +890,11 @@ static enum ud3tn_result ml2cap_init(
     if (cla_config_init(&config->base, bundle_agent_interface) != UD3TN_OK)
         return UD3TN_FAIL;
 
+    config->management_new_connection_queue = hal_queue_create(CONFIG_ML2CAP_CONN_QUEUE_SIZE, sizeof(struct bt_conn*));
+
+    if (!config->management_new_connection_queue) {
+        return UD3TN_FAIL;
+    }
 
     /* set base_config vtable */
     config->base.vtable = &ml2cap_vtable;
