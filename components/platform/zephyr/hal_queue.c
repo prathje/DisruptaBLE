@@ -20,7 +20,7 @@
 struct k_msgq *hal_queue_create(int queue_length, int item_size) {
     size_t aligned_item_size = HQ_ALIGN(item_size);
     // we also allocate enough memory for the items -> so we only have to free one pointer
-    struct k_msgq * queue = malloc(HQ_ALIGN(sizeof(struct k_msgq))+aligned_item_size*queue_length);
+    struct k_msgq * queue = aligned_alloc(HQ_ALIGNMENT, HQ_ALIGN(sizeof(struct k_msgq))+aligned_item_size*queue_length);
 
     if (queue == NULL) {
         return NULL;
