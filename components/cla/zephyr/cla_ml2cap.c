@@ -217,7 +217,11 @@ static struct ml2cap_link *get_link_from_connection(struct ml2cap_config *ml2cap
     free((void*)mac_addr);
     free((void*)cla_addr);
 
-    return link;
+    if (link != NULL && link->conn == conn) {
+        return link; // this is the one we wanted!
+    } else {
+        return NULL; // oh this seems to be another connection! -> return NULL so it will be disconnected
+    }
 }
 
 static void chan_connected_cb(struct bt_l2cap_chan *chan) {
@@ -514,13 +518,18 @@ static void handle_channel_up(struct ml2cap_config *ml2cap_config, struct bt_con
     struct ml2cap_link *ml2cap_link = get_link_from_connection(ml2cap_config, conn);
     hal_semaphore_release(ml2cap_config->link_htab_sem);
 
-    // ml2cap_link->chan.chan is already initialized
-
-    if (cla_link_init(&ml2cap_link->base, &ml2cap_config->base) == UD3TN_OK) {
-        ml2cap_link->chan_connected = true; // this means that we are initialized and connected!
-        signal_router_conn_up(ml2cap_link);
+    if (ml2cap_link) {
+        // ml2cap_link->chan.chan is already initialized
+        if (cla_link_init(&ml2cap_link->base, &ml2cap_config->base) == UD3TN_OK) {
+            ml2cap_link->chan_connected = true; // this means that we are initialized and connected!
+            signal_router_conn_up(ml2cap_link);
+        } else {
+            LOGF("ML2CAP: Error initializing CLA link for \"%s\"", ml2cap_link->cla_addr);
+            bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+        }
     } else {
-        LOG("ML2CAP: Error initializing CLA link!");
+        // the other side tried to issue a channel connection but we do not seem to know this node
+        LOG("ML2CAP: Could not find connection");
         bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
     }
 }
