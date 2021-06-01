@@ -34,4 +34,6 @@ extern int rand(void);
 // TODO: This currently only supports long ints...
 extern unsigned long long int strtoull (const char* str, char** endptr, int base);
 
+extern int sscanf(const char *s, const char *format, ...);
+
 #endif /* ZEPHYR_STUB_H_INCLUDED */
