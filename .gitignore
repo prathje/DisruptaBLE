@@ -32,7 +32,6 @@ __pycache__
 # JetBrains IDEs
 .idea/
 # CMake + CMake-based IDEs
-/platforms/zephyr/CMakeLists.txt
 /cmake-build-*
 # Atom Text Editor
 .atomignore
