@@ -752,7 +752,7 @@ static void ml2cap_send_packet_data_pool_buf_destroy(struct net_buf *buf) {
 
 // TODO: we might need to define a fixed memory region and i.e. limit the maximum packet size
 NET_BUF_POOL_FIXED_DEFINE(ml2cap_send_packet_data_pool, CONFIG_BT_MAX_CONN,
-  CONFIG_BT_L2CAP_TX_MTU+BT_L2CAP_SDU_CHAN_SEND_RESERVE,
+  CONFIG_BT_L2CAP_TX_MTU+BT_L2CAP_CHAN_SEND_RESERVE,
     ml2cap_send_packet_data_pool_buf_destroy
 );
 
@@ -779,7 +779,7 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
 
         // K_NO_WAIT is used per specification of NET_BUF_POOL_HEAP_DEFINE
 
-        size_t buf_size = mtu+BT_L2CAP_SDU_CHAN_SEND_RESERVE;
+        size_t buf_size = BT_L2CAP_CHAN_SEND_RESERVE+mtu;
         struct net_buf *buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, buf_size, K_NO_WAIT);
 
 
@@ -791,7 +791,7 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
             return;
         }
 
-        net_buf_reserve(buf, BT_L2CAP_SDU_CHAN_SEND_RESERVE);
+        net_buf_reserve(buf, BT_L2CAP_CHAN_SEND_RESERVE);
         net_buf_add_mem(buf, ((char *)data) + sent, frag_size);
 
         int ret = bt_l2cap_chan_send(&ml2cap_link->chan.chan, buf);

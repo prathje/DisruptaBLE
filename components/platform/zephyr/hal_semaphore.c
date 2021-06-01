@@ -9,6 +9,7 @@
 #include "platform/hal_semaphore.h"
 
 #include <kernel.h>
+#include <stdlib.h>
 
 struct k_sem *hal_semaphore_init_binary(void)
 {
