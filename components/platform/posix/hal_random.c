@@ -6,8 +6,6 @@
  *
  */
 
-#define _POSIX_C_SOURCE 200809L
-
 #include "platform/hal_random.h"
 
 #include "util/bits.h"

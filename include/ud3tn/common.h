@@ -1,13 +1,6 @@
 #ifndef UD3TN_COMMON_H_INCLUDED
 #define UD3TN_COMMON_H_INCLUDED
 
-/* POSIX functions provided in libc/Newlib headers */
-
-// For strdup
-#ifndef _POSIX_C_SOURCE
-#define _POSIX_C_SOURCE 200809L
-#endif // _POSIX_C_SOURCE
-
 #include <string.h>
 
 

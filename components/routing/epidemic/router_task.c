@@ -167,8 +167,6 @@ static bool process_signal(
     bool success = true;
     bundleid_t b_id;
     struct bundle *b;
-    struct routed_bundle *rb;
-    struct contact *contact;
     struct router_command *command;
 
 
