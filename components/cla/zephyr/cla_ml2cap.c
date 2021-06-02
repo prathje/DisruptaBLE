@@ -40,14 +40,12 @@
 #define CONFIG_ML2CAP_CONN_INFO_QUEUE_SIZE (2*CONFIG_BT_MAX_CONN+2)
 
 enum ml2cap_connection_info_event_type {
-    ML2CAP_CONNECTION_INFO_EVENT_TYPE_CONNECTION_UP,
-    ML2CAP_CONNECTION_INFO_EVENT_TYPE_CONNECTION_DOWN,
-    ML2CAP_CONNECTION_INFO_EVENT_TYPE_CHANNEL_UP,
-    ML2CAP_CONNECTION_INFO_EVENT_TYPE_CHANNEL_DOWN
+    ML2CAP_CONNECTION_INFO_EVENT_TYPE_NOOP, // tries to initialize the channel
 };
 
 struct ml2cap_connection_info_event {
     struct bt_conn *conn;
+    struct bt_l2cap_le_chan *chan;
     enum ml2cap_connection_info_event_type type;
 };
 
@@ -75,7 +73,7 @@ struct ml2cap_link {
     // The underlying bluetooth LE connection
     struct bt_conn *conn;
 
-    struct bt_l2cap_le_chan chan;
+    struct bt_l2cap_le_chan chan; // NULL if not connected
 
     // Note that we use the MTCP data format!
     struct parser mtcp_parser;
@@ -91,7 +89,6 @@ struct ml2cap_link {
     /* <Other ble device address in hex> */
     char *mac_addr;
 
-    bool is_client;
     bool chan_connected;
 };
 
@@ -171,31 +168,42 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
                            &rt_signal);
 
 
+    bt_addr_le_t other_addr;
+    bt_addr_le_from_mac_addr(ble_node_info->mac_addr, &other_addr);
 
-    bt_addr_le_t addr;
-    bt_addr_le_from_mac_addr(ble_node_info->mac_addr, &addr);
+    // we first check if we have a connection to this peer
+    struct bt_conn *conn = bt_conn_lookup_addr_le(BT_ID_DEFAULT, &other_addr);
 
-
-    // TODO: It is a little bit excessive to directly connect to everyone in reach :)
-    struct bt_conn *conn = bt_conn_lookup_addr_le(BT_ID_DEFAULT, &addr);
-
-    if (conn == NULL) {
-        // We now try to connect as soon as we received that advertisement
-        nb_ble_stop(); // we need to disable the advertisements for that, Note that this cb is called by the NB_BLE TASK
-        int err = bt_conn_le_create(&addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM_DEFAULT, &conn);
-
-        if (err) {
-            if (err != -EINVAL) {
-                // we get EINVAL in case the connection already exists...
-                LOGF("ML2CAP: Failed to create connection (err %d)\n", err);
-            }
-        }
+    if (conn != NULL) {
+        // we already have connection -> abort
+        bt_conn_unref(conn);
+        return;
     }
 
-    if (conn) {
-        // conn was either set by bt_conn_lookup_addr_le or bt_conn_le_create
-        // we directly unref the connection here
-        bt_conn_unref(conn);
+    // we do not have a connection yet -> we try to initialize it, IF we are the one with the bigger mac address!
+    bt_addr_le_t addrs[CONFIG_BT_ID_MAX];
+    size_t count = 0;
+    bt_id_get(addrs, &count);
+
+    if(bt_addr_le_cmp(&addrs[BT_ID_DEFAULT], &other_addr) <= 0) {
+        return; // our addr is smaller :( -> await connection from the other node
+    }
+
+    // but in this case, our addr is actually "bigger" -> initialize connection
+
+    // We now try to connect as soon as we received that advertisement
+    nb_ble_stop(); // we need to disable the advertisements for that, Note that this cb is called by the NB_BLE TASK
+    int err = bt_conn_le_create(&other_addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM_DEFAULT, &conn);
+
+    if (conn != NULL) {
+        bt_conn_unref(conn); // we directly unref here as we will use the callback to handle the connection
+    }
+
+    if (err) {
+        if (err != -EINVAL) {
+            // we get EINVAL in case the connection already exists...
+            LOGF("ML2CAP: Failed to create connection (err %d)\n", err);
+        }
     }
 }
 
@@ -204,9 +212,9 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
  * @param ml2cap_config
  * @param cla_addr
  * @return */
-static struct ml2cap_link *get_link_from_connection(struct ml2cap_config *ml2cap_config, struct bt_conn *conn) {
+static struct ml2cap_link *get_link_from_le_addr(struct ml2cap_config *ml2cap_config, const bt_addr_le_t* le_addr) {
 
-    const char *mac_addr = bt_addr_le_to_mac_addr(bt_conn_get_dst(conn));
+    const char *mac_addr = bt_addr_le_to_mac_addr(le_addr);
     const char *cla_addr = cla_get_cla_addr(ml2cap_name_get(), mac_addr);
 
     struct ml2cap_link *link = htab_get(
@@ -217,9 +225,16 @@ static struct ml2cap_link *get_link_from_connection(struct ml2cap_config *ml2cap
     free((void*)mac_addr);
     free((void*)cla_addr);
 
+   return link;
+}
+
+static struct ml2cap_link *get_link_from_connection(struct ml2cap_config *ml2cap_config, struct bt_conn *conn) {
+    struct ml2cap_link *link = get_link_from_le_addr(ml2cap_config, bt_conn_get_dst(conn));
+
     if (link != NULL && link->conn == conn) {
         return link; // this is the one we wanted!
     } else {
+        // TODO: This case should not happen anymore!
         return NULL; // oh this seems to be another connection! -> return NULL so it will be disconnected
     }
 }
@@ -227,27 +242,29 @@ static struct ml2cap_link *get_link_from_connection(struct ml2cap_config *ml2cap
 static void chan_connected_cb(struct bt_l2cap_chan *chan) {
     struct ml2cap_config *ml2cap_config = s_ml2cap_config;
 
-    LOG("Channel connected!");
-    struct ml2cap_connection_info_event ev = {
-        .conn = bt_conn_ref(chan->conn),
-        .type = ML2CAP_CONNECTION_INFO_EVENT_TYPE_CHANNEL_UP
-    };
-    hal_queue_push_to_back(ml2cap_config->management_connection_info_queue, &ev);
+    hal_semaphore_take_blocking(ml2cap_config->link_htab_sem);
+    struct ml2cap_link *ml2cap_link = get_link_from_connection(ml2cap_config, chan->conn);
+    hal_semaphore_release(ml2cap_config->link_htab_sem);
+
+    if (ml2cap_link) {
+        // TODO: This initialization might be better handled by a separate thread (i.e. not in the ble stack/cb)
+        if (cla_link_init(&ml2cap_link->base, &ml2cap_config->base) == UD3TN_OK) {
+            ml2cap_link->chan_connected = true; // this means that we are initialized and connected!
+            signal_router_conn_up(ml2cap_link);
+        } else {
+            LOGF("ML2CAP: Error initializing CLA link for \"%s\"", ml2cap_link->cla_addr);
+            bt_conn_disconnect(chan->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+        }
+    } else {
+        // the other side tried to issue a channel connection but we do not seem to know this node
+        LOG("ML2CAP: Could not find connection");
+        bt_conn_disconnect(chan->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+    }
 }
 
 static void chan_disconnected_cb(struct bt_l2cap_chan *chan) {
-    struct ml2cap_config *ml2cap_config = s_ml2cap_config;
-
-    LOG("Channel disconnected!");
-
-    struct ml2cap_connection_info_event ev = {
-        .conn = bt_conn_ref(chan->conn),
-        .type = ML2CAP_CONNECTION_INFO_EVENT_TYPE_CHANNEL_DOWN
-    };
-
-    hal_queue_push_to_back(ml2cap_config->management_connection_info_queue, &ev);
+    bt_conn_disconnect(chan->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN); // we also simply disconnect for now
 }
-
 /**
  *
  */
@@ -293,24 +310,8 @@ static struct ml2cap_link *ml2cap_link_create(
         goto fail_after_alloc;
     }
 
-    // we get the info if we are client or server
-    struct bt_conn_info info;
-    if (bt_conn_get_info(ml2cap_link->conn, &info)) {
-        LOG("ML2CAP: Failed to get connection info!");
-        goto fail_after_ref;
-    }
-
-    ml2cap_link->is_client = info.role == BT_CONN_ROLE_MASTER;
-
     ml2cap_link->config = ml2cap_config;
 
-    static struct bt_l2cap_chan_ops chan_ops = {
-            .connected = chan_connected_cb,
-            .disconnected = chan_disconnected_cb,
-            .recv = chan_recv_cb
-    };
-
-    ml2cap_link->chan.chan.ops = &chan_ops;
 
     ml2cap_link->mac_addr = bt_addr_le_to_mac_addr(bt_conn_get_dst(conn));
     if (!ml2cap_link->mac_addr) {
@@ -338,10 +339,17 @@ static struct ml2cap_link *ml2cap_link_create(
     
     mtcp_parser_reset(&ml2cap_link->mtcp_parser);
 
+    static struct bt_l2cap_chan_ops chan_ops = {
+            .connected = chan_connected_cb,
+            .disconnected = chan_disconnected_cb,
+            .recv = chan_recv_cb
+    };
+    ml2cap_link->chan.chan.ops = &chan_ops;
+
     return ml2cap_link;
     
-    fail_after_rx_queue:
-    hal_queue_delete(ml2cap_link->rx_queue);
+    //fail_after_rx_queue:
+    //hal_queue_delete(ml2cap_link->rx_queue);
 
     fail_after_cla_addr:
     free(ml2cap_link->cla_addr);
@@ -367,109 +375,64 @@ static void ml2cap_link_destroy(struct ml2cap_link *ml2cap_link) {
 }
 
 static void connected(struct bt_conn *conn, uint8_t err) {
-
-    struct ml2cap_config *ml2cap_config = s_ml2cap_config;
-
     if (err) {
         LOGF("BLE Connection failed (err 0x%02x)\n", err);
     } else {
         LOG("BLE Connected\n");
 
-        struct ml2cap_config *ml2cap_config = s_ml2cap_config; 
+        struct ml2cap_config *const ml2cap_config = s_ml2cap_config;
 
-        struct ml2cap_connection_info_event ev = {
-            .conn = bt_conn_ref(conn),
-            .type = ML2CAP_CONNECTION_INFO_EVENT_TYPE_CONNECTION_UP
-        };
+        struct ml2cap_link *ml2cap_link = ml2cap_link_create(ml2cap_config, conn);
 
-        ;
-        hal_queue_push_to_back(ml2cap_config->management_connection_info_queue, &ev);
+        if (ml2cap_link != NULL) {
+
+            hal_semaphore_take_blocking(ml2cap_config->link_htab_sem);
+            struct htab_entrylist *htab_entry = htab_add(
+                    &ml2cap_config->link_htab,
+                    ml2cap_link->cla_addr,
+                    ml2cap_link
+            );
+
+            // we can release straight away as we only need to synchronize with other threads that read htab
+            hal_semaphore_release(ml2cap_config->link_htab_sem);
+
+            if (htab_entry != NULL) {
+                // we get the info if we are client or server
+                struct bt_conn_info info;
+                if (!bt_conn_get_info(ml2cap_link->conn, &info)) {
+                    if (info.role == BT_CONN_ROLE_MASTER) {
+                        int err = bt_l2cap_chan_connect(ml2cap_link->conn, &ml2cap_link->chan.chan, CONFIG_ML2CAP_PSM);
+                        if (err) {
+                            // we disconnect, this will eventually also clear this link
+                            LOGF("ML2CAP: Could not try to connect to channel for \"%s\"", ml2cap_link->cla_addr);
+                            bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+                        } else {
+                            LOGF("ML2CAP: Added entry for \"%s\"", ml2cap_link->cla_addr);
+                        }
+                    } else {
+                        // NOOP, we simply await a connection...
+                    }
+                } else {
+                    // disconnect handler will free ml2cap_link}
+                    LOG("ML2CAP: Failed to get connection info!");
+                    bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+                }
+            } else {
+                // oops
+                LOGF("ML2CAP: htab entry already exists for \"%s\"!", ml2cap_link->cla_addr);
+                ml2cap_link_destroy(ml2cap_link); // we need to destroy this link immediately (as it is not in the htab!)
+                bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+            }
+        } else {
+            LOGF("ML2CAP: Could not create link entry for \"%s\"", ml2cap_link->cla_addr);
+            bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+        }
     }
 }
 
 static void disconnected(struct bt_conn *conn, uint8_t reason) {
+    struct ml2cap_config *const ml2cap_config = s_ml2cap_config;
     LOGF("BLE Disconnected (reason 0x%02x)\n", reason);
-
-    struct ml2cap_config *ml2cap_config = s_ml2cap_config; 
-
-    struct ml2cap_connection_info_event ev = {
-        .conn = bt_conn_ref(conn),
-        .type = ML2CAP_CONNECTION_INFO_EVENT_TYPE_CONNECTION_DOWN
-    };
-
-    hal_queue_push_to_back(ml2cap_config->management_connection_info_queue, &ev);
-}
-
-int l2cap_accept(struct bt_conn *conn, struct bt_l2cap_chan **chan) {
-
-    struct ml2cap_config *ml2cap_config = s_ml2cap_config;
-
-    hal_semaphore_take_blocking(ml2cap_config->link_htab_sem);
-    struct ml2cap_link *link = get_link_from_connection(s_ml2cap_config, conn);
-
-    int ret = 0;
-    if (link) {
-        *chan = &link->chan.chan;
-        // we mark the link as not connected, so we essentially
-        // TODO: handle_channel_up? link->chan_connected = true;
-        LOG("ML2CAP: l2cap_accept! TODO: Does this trigger the correct event?");
-    } else {
-        LOG("ML2CAP: l2cap_accept could not find related link entry!");
-        ret = -EACCES;
-    }
-    hal_semaphore_release(ml2cap_config->link_htab_sem);
-    return ret;
-}
-
-
-
-/**
- * This function handles a new connection. We try to connect directly if we are the client.
- * 
- * 
- * */
-static void handle_connection_up(struct ml2cap_config *ml2cap_config, struct bt_conn *conn) {
-
-    struct ml2cap_link *ml2cap_link = ml2cap_link_create(ml2cap_config, conn);
-
-    if (ml2cap_link != NULL) {
-
-        hal_semaphore_take_blocking(ml2cap_config->link_htab_sem);
-        struct htab_entrylist *htab_entry = htab_add(
-                &ml2cap_config->link_htab,
-                ml2cap_link->cla_addr,
-                ml2cap_link
-        );
-        // we can release straight away as we only need to synchronize with other threads that read htab
-        hal_semaphore_release(ml2cap_config->link_htab_sem);
-
-        if (htab_entry != NULL) {
-            if (ml2cap_link->is_client) {
-                int err = bt_l2cap_chan_connect(ml2cap_link->conn, &ml2cap_link->chan.chan, CONFIG_ML2CAP_PSM);
-                if (err) {
-                    LOGF("ML2CAP: Could not try to connect to channel for \"%s\"", ml2cap_link->cla_addr);
-                    // we disconnect, this will eventually also clear this link
-                    bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN); 
-                } else {
-                     LOGF("ML2CAP: Added entry for \"%s\"", ml2cap_link->cla_addr);
-                }
-            }
-        } else {
-            // oops 
-            LOGF("ML2CAP: htab entry already exists for \"%s\"!", ml2cap_link->cla_addr);
-            ml2cap_link_destroy(ml2cap_link); // we need to destroy this link immediately (as it is not in the htab!)
-            bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-        }
-    } else {
-        LOGF("ML2CAP: Could not create link entry for \"%s\"", ml2cap_link->cla_addr);
-        bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-    }
-}
-
-static void handle_connection_down(struct ml2cap_config *ml2cap_config, struct bt_conn *conn) {
-
-    LOG("handle_connection_down START");
-
 
     hal_semaphore_take_blocking(ml2cap_config->link_htab_sem);
     struct ml2cap_link *ml2cap_link = get_link_from_connection(ml2cap_config, conn);
@@ -477,65 +440,59 @@ static void handle_connection_down(struct ml2cap_config *ml2cap_config, struct b
     if (ml2cap_link != NULL) {
         // we can delete this as the tx and rx tasks do not need to lookup the link!
         htab_remove(
-            &ml2cap_config->link_htab,
-            ml2cap_link->cla_addr
+                &ml2cap_config->link_htab,
+                ml2cap_link->cla_addr
         );
     }
 
     hal_semaphore_release(ml2cap_config->link_htab_sem);
 
     // now we clean everything up!
-
     if (ml2cap_link) {
+        // TODO: Move deconstruction to a separate thread
         if (ml2cap_link->chan_connected) {
             // the connection is up and running -> rx and tx tasks have been initialized!
             // so we first first disable them!
             cla_generic_disconnect_handler(&ml2cap_link->base);
 
             ml2cap_link->chan_connected = false; // this will bring down the rx task
-           
+
             // we also notify the router
             signal_router_conn_down(ml2cap_link);
 
             // and wait for clean-up
             // TODO: This could take a while and might block connection handling? (we remove, notify and release therefore before this call)
-            
-
             LOG("handle_connection_down A");
             cla_link_wait_cleanup(&ml2cap_link->base);
             LOG("handle_connection_down B");
         }
 
-         // only thing left -> free link ressources again
+        // only thing left -> free link resources again
         ml2cap_link_destroy(ml2cap_link);
     }
-    LOG("handle_connection_down END");
+    LOG("handle_channel_down END");
 }
 
-// TODO: We should also check what channel this is ;)
-static void handle_channel_up(struct ml2cap_config *ml2cap_config, struct bt_conn *conn) {
+/**
+ * Because this accept method requires space for a channel,
+ *
+ * dynamic allocation is also not possible since the disconnect and release cb can not be used to consistently free again..
+ */
+int l2cap_accept(struct bt_conn *conn, struct bt_l2cap_chan **chan) {
+    struct ml2cap_config *const ml2cap_config = s_ml2cap_config;
     hal_semaphore_take_blocking(ml2cap_config->link_htab_sem);
     struct ml2cap_link *ml2cap_link = get_link_from_connection(ml2cap_config, conn);
     hal_semaphore_release(ml2cap_config->link_htab_sem);
 
-    if (ml2cap_link) {
-        // ml2cap_link->chan.chan is already initialized
-        if (cla_link_init(&ml2cap_link->base, &ml2cap_config->base) == UD3TN_OK) {
-            ml2cap_link->chan_connected = true; // this means that we are initialized and connected!
-            signal_router_conn_up(ml2cap_link);
-        } else {
-            LOGF("ML2CAP: Error initializing CLA link for \"%s\"", ml2cap_link->cla_addr);
-            bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-        }
+    // we expect the ml2cap_link to be overall valid as this is also called from within the bt stack
+    if (ml2cap_link != NULL) {
+        // we can delete this as the tx and rx tasks do not need to lookup the link!
+        *chan = &ml2cap_link->chan.chan;
+        return 0;
     } else {
-        // the other side tried to issue a channel connection but we do not seem to know this node
-        LOG("ML2CAP: Could not find connection");
-        bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+        LOG("ML2CAP: l2cap_accept could not find link for channel!");
+        return -EACCES;
     }
-}
-
-static void handle_channel_down(struct ml2cap_config *ml2cap_config, struct bt_conn *conn) {
-    bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN); // nothing else todo!
 }
 
 static void mtcp_management_task(void *param) {
@@ -584,22 +541,7 @@ static void mtcp_management_task(void *param) {
 
         struct ml2cap_connection_info_event ev; 
         if (hal_queue_receive(ml2cap_config->management_connection_info_queue, &ev, -1) == UD3TN_OK) {
-            
-            if (ev.type == ML2CAP_CONNECTION_INFO_EVENT_TYPE_CONNECTION_UP) {
-                LOG("handle event conn up");
-                handle_connection_up(ml2cap_config, ev.conn);
-            } else if (ev.type == ML2CAP_CONNECTION_INFO_EVENT_TYPE_CHANNEL_UP) {
-                LOG("handle event chan up");
-                handle_channel_up(ml2cap_config, ev.conn);
-            } else if (ev.type == ML2CAP_CONNECTION_INFO_EVENT_TYPE_CHANNEL_DOWN) {
-                LOG("handle event chan down");
-                handle_channel_down(ml2cap_config, ev.conn);
-            } else if (ev.type == ML2CAP_CONNECTION_INFO_EVENT_TYPE_CONNECTION_DOWN) {
-                LOG("handle event conn down");
-                handle_connection_down(ml2cap_config, ev.conn);
-            } else {
-                LOG("ML2CAP: Unknown event");
-            }
+            LOG("ML2CAP: NOOP");
             // we now only need to unref the connection
             bt_conn_unref(ev.conn);
         } else {
@@ -790,7 +732,6 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
     struct ml2cap_link *const ml2cap_link = (struct ml2cap_link *) link;
     struct ml2cap_config *const ml2cap_config = (struct ml2cap_config *) link->config;
     (void) ml2cap_config;
-
 
     // overall length could be more than the supported MTU -> we need to
     uint32_t mtu = ml2cap_link->chan.tx.mtu;
