@@ -24,6 +24,8 @@
 
 static struct ud3tn_cmdline_options global_cmd_opts;
 
+
+#ifndef PLATFORM_ZEPHYR
 /**
  * Helper function for parsing a 64-bit unsigned integer from a given C-string.
  */
@@ -37,13 +39,13 @@ static void shorten_long_cli_options(const int argc, char *argv[]);
 static void print_usage_text(void);
 
 static void print_help_text(void);
+#endif
 
 const struct ud3tn_cmdline_options *parse_cmdline(int argc, char *argv[])
 {
 	// For now, we use a global variable. (Because why not?)
 	// Though, this may be refactored easily.
 	struct ud3tn_cmdline_options *result = &global_cmd_opts;
-	int opt;
 
 	// If we override sth., first deallocate
 	if (result->eid)
@@ -64,10 +66,10 @@ const struct ud3tn_cmdline_options *parse_cmdline(int argc, char *argv[])
 	// The strings are set afterwards if not provided as an option
 	result->eid = NULL;
 	result->cla_options = NULL;
-	int option_index = 0;
 
-#ifdef PLATFORM_ZEYPHR
-
+#ifndef PLATFORM_ZEPHYR
+    int opt;
+    int option_index = 0;
 	if (!argv || argc <= 1)
 		goto finish;
 
@@ -158,6 +160,7 @@ const struct ud3tn_cmdline_options *parse_cmdline(int argc, char *argv[])
 	}
 finish:
 #endif
+
 	// use Unix domain socket by default
 	if (!result->aap_socket &&
 	    !result->aap_node &&
@@ -200,6 +203,7 @@ finish:
 	return result;
 }
 
+#ifndef PLATFORM_ZEPHYR
 enum ud3tn_result parse_uint64(const char *str, uint64_t *result)
 {
 	char *end;
@@ -290,3 +294,4 @@ static void print_help_text(void)
 
 	hal_io_message_printf(help_text, ROUTER_GLOBAL_MBS);
 }
+#endif
