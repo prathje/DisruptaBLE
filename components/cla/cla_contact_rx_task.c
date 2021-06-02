@@ -186,8 +186,8 @@ static uint8_t *bulk_read(struct cla_link *link)
 				filled
 			);
 
-		size_t to_read = rx_data->cur_parser->next_bytes - filled;
-		uint8_t *pos = rx_data->cur_parser->next_buffer + filled;
+		size_t to_read = (uint8_t *)(rx_data->cur_parser->next_bytes) - filled;
+		uint8_t *pos = (uint8_t *)(rx_data->cur_parser->next_buffer) + filled;
 		size_t read;
 
 		while (to_read) {
