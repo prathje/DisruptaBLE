@@ -117,8 +117,8 @@ To run with gdb support:
 ```
 To build inside but flash outside the container:
 ```bash
-west build -b nrf52840dk_nrf52840 /app/platforms/zephyr/ --pristine auto --build-dir /app/build/zephyr/build_source -- -DOVERLAY_CONFIG=source.conf
-west build -b nrf52840dk_nrf52840 /app/platforms/zephyr/ --pristine auto --build-dir /app/build/zephyr/build_proxy -- -DOVERLAY_CONFIG=proxy.conf
+west build -b nrf52840dk_nrf52840 /app/zephyr/ --pristine auto --build-dir /app/build/zephyr/build_source -- -DOVERLAY_CONFIG=source.conf
+west build -b nrf52840dk_nrf52840 /app/zephyr/ --pristine auto --build-dir /app/build/zephyr/build_proxy -- -DOVERLAY_CONFIG=proxy.conf
 ```
 
 To flash the stuff:
@@ -130,7 +130,7 @@ nrfjprog -f nrf52 --program build/zephyr/build_proxy/zephyr/zephyr.hex --sectore
 
 Build, flash and debug proxy using west directly:
 ```bash
-west build -b nrf52840dk_nrf52840 platforms/zephyr/ --pristine auto --build-dir build_proxy -- -DOVERLAY_CONFIG=proxy.conf
+west build -b nrf52840dk_nrf52840 zephyr/ --pristine auto --build-dir build_proxy -- -DOVERLAY_CONFIG=proxy.conf
 west flash --build-dir build_proxy
 west debug --build-dir build_proxy
 ```
