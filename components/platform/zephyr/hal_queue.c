@@ -5,8 +5,6 @@
 #include <kernel.h>
 #include <stdlib.h>
 
-#include "platform/hal_heap.h"
-
 #define HQ_ALIGNMENT 4
 #define HQ_ALIGN(x) (((x) + (HQ_ALIGNMENT)-1) & ~((HQ_ALIGNMENT)-1))
 
@@ -18,9 +16,9 @@
  * @return A queue identifier
  */
 struct k_msgq *hal_queue_create(int queue_length, int item_size) {
-    size_t aligned_item_size = HQ_ALIGN(item_size);
     // we also allocate enough memory for the items -> so we only have to free one pointer
-    struct k_msgq * queue = aligned_alloc(HQ_ALIGNMENT, HQ_ALIGN(sizeof(struct k_msgq))+aligned_item_size*queue_length);
+    // TODO: how to correctly handle alignment?! this is currently not really correct as the items might not be aligned...
+    struct k_msgq * queue = malloc(HQ_ALIGN(sizeof(struct k_msgq))+item_size*queue_length);
 
     if (queue == NULL) {
         return NULL;
@@ -28,7 +26,7 @@ struct k_msgq *hal_queue_create(int queue_length, int item_size) {
 
     void *buf = ((uint8_t *)queue)+HQ_ALIGN(sizeof(struct k_msgq));
 
-    k_msgq_init(queue, buf, aligned_item_size, queue_length);
+    k_msgq_init(queue, buf, item_size, queue_length);
 
     return queue;
 }
