@@ -709,21 +709,10 @@ static enum ud3tn_result ml2cap_end_scheduled_contact(
     return UD3TN_OK;
 }
 
-// TODO: This net buf pool should be worked into ml2cap_send_packet_data when dynamic allocation is allowed
-// This currently assumes that we only have one call to ml2cap_send_packet_data active at a time (see tx_task)
-// TODO: We might want to use more than CONFIG_BT_MAX_CONN buffers, (who knows?)
-K_SEM_DEFINE(ml2cap_send_packet_data_pool_sem, CONFIG_BT_MAX_CONN, CONFIG_BT_MAX_CONN);
-
-// This destroy callback ensures that we do not allocate too many buffers
-static void ml2cap_send_packet_data_pool_buf_destroy(struct net_buf *buf) {
-    net_buf_destroy(buf);
-    k_sem_give(&ml2cap_send_packet_data_pool_sem);
-}
-
 // TODO: we might need to define a fixed memory region and i.e. limit the maximum packet size
 NET_BUF_POOL_FIXED_DEFINE(ml2cap_send_packet_data_pool, CONFIG_BT_MAX_CONN,
   CONFIG_BT_L2CAP_TX_MTU+BT_L2CAP_CHAN_SEND_RESERVE,
-    ml2cap_send_packet_data_pool_buf_destroy
+    NULL
 );
 
 
@@ -742,22 +731,12 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
         //LOGF("l2cap_transmit_bytes sent %d", sent);
         uint32_t frag_size = MIN(mtu, length - sent);
 
-        // TODO: Not ideal to use the hal method here but define using zephyr specific macro!
-        // This semaphore also ensures that we limit the maximum amout of stalled data (waiting to be sent by zephyr)
-        hal_semaphore_take_blocking(&ml2cap_send_packet_data_pool_sem);
-
-        // K_NO_WAIT is used per specification of NET_BUF_POOL_HEAP_DEFINE
-
         size_t buf_size = BT_L2CAP_CHAN_SEND_RESERVE+mtu;
-        struct net_buf *buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, buf_size, K_NO_WAIT);
+        struct net_buf *buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, buf_size, K_FOREVER);
 
-
-        // buf->len + sdu_hdr_len > ch->tx.mps?!
         if (!buf) {
-            LOG("ml2cap: net_buf_alloc_len failed");
-            k_sem_give(&ml2cap_send_packet_data_pool_sem);
+            LOGF("ml2cap: net_buf_alloc_len failed with size %d", buf_size);
             bt_conn_disconnect(ml2cap_link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-            link->config->vtable->cla_disconnect_handler(link);
             return;
         }
 
