@@ -29,5 +29,5 @@ FILE(GLOB ext_include ../external/tinycbor/src ../external/util/include)
 target_sources(app PRIVATE ${app_components} ${ext_src} ${ext_src_tinycbor} ${app_routing_epidemic})
 
 target_include_directories(app PRIVATE ${app_include} ${ext_include})
-target_compile_definitions(app PUBLIC PLATFORM_ZEPHYR WITHOUT_OPEN_MEMSTREAM CBOR_NO_FLOATING_POINT _POSIX_C_SOURCE=200809L DEFAULT_EID=CONFIG_EID)
+target_compile_definitions(app PUBLIC PLATFORM_ZEPHYR WITHOUT_OPEN_MEMSTREAM CBOR_NO_FLOATING_POINT DEFAULT_EID=CONFIG_EID)
 

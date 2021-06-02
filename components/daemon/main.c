@@ -1,5 +1,6 @@
 #include "ud3tn/cmdline.h"
 #include "ud3tn/init.h"
+#include "ud3tn/common.h"
 
 
 int u3dtn_main(int argc, char *argv[]) {

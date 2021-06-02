@@ -54,15 +54,12 @@ while (list != NULL) { \
 
 #define HAS_FLAG(value, flag) ((value & flag) != 0)
 
-#ifdef ARRAY_LENGTH
-#undef ARRAY_LENGTH
-#endif
+
 #define ARRAY_LENGTH(x) (sizeof(x) / sizeof((x)[0]))
 
-#ifdef ARRAY_SIZE
-#undef ARRAY_SIZE
-#endif
+#ifndef PLATFORM_ZEPHYR
 #define ARRAY_SIZE ARRAY_LENGTH
+#endif
 
 #if defined(__GNUC__) && (__GNUC__ >= 7) && !defined(__clang__)
 #define fallthrough __attribute__ ((fallthrough))
