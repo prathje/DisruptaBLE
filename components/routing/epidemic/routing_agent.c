@@ -421,7 +421,7 @@ void generate_fake_bundles() {
 
          struct bundle *bundle = bundle7_create_local(
             payload, payload_length, routing_agent_config.bundle_agent_interface->local_eid, FAKE_DESTINATION,
-            MAX(1, hal_time_get_timestamp_s()), // we force at least a ts of 1 as zero is the "unknown" ts
+            Z_MAX(1, hal_time_get_timestamp_s()), // we force at least a ts of 1 as zero is the "unknown" ts
             CONFIG_FAKE_BUNDLE_LIFETIME,
             0);
         if (bundle == NULL) {

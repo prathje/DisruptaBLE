@@ -26,24 +26,54 @@ while (list != NULL) { \
 	list_element_free(list); \
 } }
 
-#ifdef MIN
-#undef MIN
+
+// Zephyr already includes the following macros but just defines them...
+#ifdef PLATFORM_ZEPHYR
+#include <sys/util.h>
+#include <toolchain.h>
 #endif
 
-#ifdef MAX
-#undef MAX
+#ifndef MIN
+#define MIN(a,b) (((a)<(b))?(a):(b))
 #endif
 
-#define MIN(a, b) ({ \
+#ifndef MAX
+#define MAX(a,b) (((a)>(b))?(a):(b))
+#endif
+
+#ifndef Z_MIN
+#define Z_MIN(a, b) ({ \
 	__typeof__(a) _a = (a); \
 	__typeof__(b) _b = (b); \
 	_b < _a ? _b : _a; \
 })
-#define MAX(a, b) ({ \
+#endif
+
+
+#ifndef Z_MAX
+#define Z_MAX(a, b) ({ \
 	__typeof__(a) _a = (a); \
 	__typeof__(b) _b = (b); \
 	_b > _a ? _b : _a; \
 })
+#endif
+
+#ifndef CLAMP
+#define CLAMP(val, low, high) (((val) <= (low)) ? (low) : MIN(val, high))
+#endif
+
+#ifndef Z_CLAMP
+#define Z_CLAMP(val, low, high) ({                                             \
+		/* random suffix to avoid naming conflict */                   \
+		__typeof__(val) _value_val_ = (val);                           \
+		__typeof__(low) _value_low_ = (low);                           \
+		__typeof__(high) _value_high_ = (high);                        \
+		(_value_val_ < _value_low_)  ? _value_low_ :                   \
+		(_value_val_ > _value_high_) ? _value_high_ :                  \
+					       _value_val_;                    \
+	})
+#endif
+
 
 #define HAS_FLAG(value, flag) ((value & flag) != 0)
 

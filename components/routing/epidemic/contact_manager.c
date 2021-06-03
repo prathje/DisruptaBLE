@@ -94,7 +94,7 @@ static int8_t remove_expired_contacts(
 	// update all active contacts to be active as of this current_timestamp
     for (i = cm_config.current_contact_count - 1; i >= 0; i--) {
         if (cm_config.current_contacts[i].contact->active) {
-            cm_config.current_contacts[i].contact->to = MAX(current_timestamp, cm_config.current_contacts[i].contact->to);
+            cm_config.current_contacts[i].contact->to = Z_MAX(current_timestamp, cm_config.current_contacts[i].contact->to);
         }
     }
 
@@ -343,7 +343,7 @@ static void handle_discovered_neighbor(struct node * node) {
         }
     } else {
         // update the to value if the contact already existed
-        contact_info->contact->to = MAX(contact_info->contact->to, current_timestamp);
+        contact_info->contact->to = Z_MAX(contact_info->contact->to, current_timestamp);
 
         // We also swap the node in order to have more up-to-date information about e.g. services or cla addrress
         free_node(contact_info->contact->node);

@@ -729,7 +729,7 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
 
     while (sent < length && ml2cap_link->chan_connected) {
         //LOGF("l2cap_transmit_bytes sent %d", sent);
-        uint32_t frag_size = MIN(mtu, length - sent);
+        uint32_t frag_size = Z_MIN(mtu, length - sent);
 
         size_t buf_size = BT_L2CAP_CHAN_SEND_RESERVE+mtu;
         struct net_buf *buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, buf_size, K_FOREVER);

@@ -297,7 +297,7 @@ static void contact_manager_task(void *cm_parameters)
 		signal = CM_SIGNAL_UNKNOWN;
 		cur_time = hal_time_get_timestamp_ms();
 
-		next_time = MIN(UINT64_MAX, next_contact_time * 1000);
+		next_time = Z_MIN(UINT64_MAX, next_contact_time * 1000);
 		if (next_time > (cur_time + CONTACT_CHECKING_MAX_PERIOD))
 			delay = CONTACT_CHECKING_MAX_PERIOD;
 		else if (next_time <= cur_time)

@@ -148,8 +148,8 @@ static inline struct max_fragment_size_result {
 		);
 		if (!cla_config)
 			continue;
-		const size_t c_mbs = MIN(
-			MIN(
+		const size_t c_mbs = Z_MIN(
+			Z_MIN(
 				(size_t)c_capacity,
 				cla_config->vtable->cla_mbs_get(cla_config)
 			),
@@ -461,7 +461,7 @@ struct router_result router_try_reuse(
 				route.probability = 0;
 				return route;
 			}
-			min_cap = MIN(min_cap,
+			min_cap = Z_MIN(min_cap,
 				ROUTER_CONTACT_CAPACITY(fr->contacts[c], 0)
 				- size);
 

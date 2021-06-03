@@ -493,7 +493,7 @@ int32_t contact_get_cur_remaining_capacity(
 	if (cap_left > INT32_MAX)
 		cap_left = INT32_MAX;
 	cap_result = cap_left;
-	return MIN(cap_result, CONTACT_CAPACITY(contact, prio));
+	return Z_MIN(cap_result, CONTACT_CAPACITY(contact, prio));
 }
 
 int add_contact_to_ordered_list(

@@ -632,7 +632,7 @@ static void try_reassemble(struct reassembly_list **slot)
 		const size_t offset_in_bundle = (
 			pos_in_bundle - b->fragment_offset
 		);
-		const size_t bytes_copied = MIN(
+		const size_t bytes_copied = Z_MIN(
 			b->payload_block->length - offset_in_bundle,
 			adu_length - pos_in_bundle
 		);

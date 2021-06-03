@@ -109,7 +109,7 @@ static size_t aap_parse_eid(
 	struct aap_parser *const parser,
 	const uint8_t *const buffer, const size_t length)
 {
-	const size_t consumed = MIN(length, parser->remaining);
+	const size_t consumed = Z_MIN(length, parser->remaining);
 
 	memcpy(&parser->message.eid[parser->consumed], buffer, consumed);
 	parser->consumed += consumed;
@@ -175,7 +175,7 @@ static size_t aap_parse_payload(
 	struct aap_parser *const parser,
 	const uint8_t *const buffer, const size_t length)
 {
-	const size_t consumed = MIN(length, parser->remaining);
+	const size_t consumed = Z_MIN(length, parser->remaining);
 
 	memcpy(&parser->message.payload[parser->consumed], buffer, consumed);
 	parser->consumed += consumed;
