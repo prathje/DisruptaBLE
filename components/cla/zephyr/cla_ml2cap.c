@@ -710,8 +710,13 @@ static enum ud3tn_result ml2cap_end_scheduled_contact(
 }
 
 // TODO: we might need to define a fixed memory region and i.e. limit the maximum packet size
-NET_BUF_POOL_VAR_DEFINE(ml2cap_send_packet_data_pool, CONFIG_BT_MAX_CONN,
-  CONFIG_BT_L2CAP_TX_MTU+BT_L2CAP_CHAN_SEND_RESERVE,
+
+#ifndef CONFIG_ML2CAP_PARALLEL_BUFFERS
+#define CONFIG_ML2CAP_PARALLEL_BUFFERS CONFIG_BT_MAX_CONN
+#endif
+
+NET_BUF_POOL_VAR_DEFINE(ml2cap_send_packet_data_pool, CONFIG_ML2CAP_PARALLEL_BUFFERS,
+(BT_L2CAP_CHAN_SEND_RESERVE+CONFIG_BT_L2CAP_TX_MTU)*CONFIG_ML2CAP_PARALLEL_BUFFERS,
     NULL
 );
 
