@@ -284,11 +284,18 @@ static int chan_recv_cb(struct bt_l2cap_chan *chan, struct net_buf *buf) {
             hal_queue_push_to_back(link->rx_queue, (void *) &b);
         }
     }
-    // TODO: Can we release this already before?
+    // TODO: Can we release this already before? -> there should only be one rx thread in the bt stack!
     // TODO: We might want to introduce more specific semaphores?
     hal_semaphore_release(ml2cap_config->link_htab_sem);
     return 0;
 }
+
+
+
+#ifndef CONFIG_ML2CAP_PARALLEL_BUFFERS
+#define CONFIG_ML2CAP_PARALLEL_BUFFERS 1
+#endif
+
 
 static struct ml2cap_link *ml2cap_link_create(
     struct ml2cap_config *const ml2cap_config,
@@ -296,6 +303,8 @@ static struct ml2cap_link *ml2cap_link_create(
 ) {
     struct ml2cap_link *ml2cap_link =
             malloc(sizeof(struct ml2cap_link));
+
+
 
     if (!ml2cap_link) {
         LOG("ML2CAP: Failed to allocate memory!");
@@ -342,8 +351,13 @@ static struct ml2cap_link *ml2cap_link_create(
     static struct bt_l2cap_chan_ops chan_ops = {
             .connected = chan_connected_cb,
             .disconnected = chan_disconnected_cb,
-            .recv = chan_recv_cb
+            .recv = chan_recv_cb,
+            .alloc_buf = NULL // TODO: Do we need to provide this callback?
     };
+    // reset chan contents
+
+    memset(&ml2cap_link->chan, 0, sizeof(ml2cap_link->chan));
+
     ml2cap_link->chan.chan.ops = &chan_ops;
 
     return ml2cap_link;
@@ -711,12 +725,11 @@ static enum ud3tn_result ml2cap_end_scheduled_contact(
 
 // TODO: we might need to define a fixed memory region and i.e. limit the maximum packet size
 
-#ifndef CONFIG_ML2CAP_PARALLEL_BUFFERS
-#define CONFIG_ML2CAP_PARALLEL_BUFFERS CONFIG_BT_MAX_CONN
-#endif
 
-NET_BUF_POOL_VAR_DEFINE(ml2cap_send_packet_data_pool, CONFIG_ML2CAP_PARALLEL_BUFFERS,
-(BT_L2CAP_CHAN_SEND_RESERVE+CONFIG_BT_L2CAP_TX_MTU)*CONFIG_ML2CAP_PARALLEL_BUFFERS,
+
+NET_BUF_POOL_DEFINE(ml2cap_send_packet_data_pool, CONFIG_ML2CAP_PARALLEL_BUFFERS,
+    BT_L2CAP_CHAN_SEND_RESERVE+CONFIG_BT_L2CAP_TX_MTU,
+    0,
     NULL
 );
 
@@ -732,16 +745,25 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
 
     uint32_t sent = 0;
 
-    while (sent < length && ml2cap_link->chan_connected) {
+    while (sent < length) {
         //LOGF("l2cap_transmit_bytes sent %d", sent);
         uint32_t frag_size = Z_MIN(mtu, length - sent);
 
         size_t buf_size = BT_L2CAP_CHAN_SEND_RESERVE+mtu;
-        struct net_buf *buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, buf_size, K_FOREVER);
+        struct net_buf *buf = NULL;
 
-        if (!buf) {
-            LOGF("ml2cap: net_buf_alloc_len failed with size %d", buf_size);
-            bt_conn_disconnect(ml2cap_link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+        while(buf == NULL && ml2cap_link->chan_connected) {
+            // TODO: Use another value than COMM_RX_TIMEOUT
+            buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, buf_size, K_MSEC(COMM_RX_TIMEOUT));
+            LOG("A");
+        }
+
+        LOG("B");
+        if (!ml2cap_link->chan_connected) {
+            LOG("C");
+            if (buf != NULL) {
+                net_buf_unref(buf);
+            }
             return;
         }
 
