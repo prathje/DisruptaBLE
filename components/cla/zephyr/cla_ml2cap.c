@@ -35,7 +35,7 @@
 #include "routing/router_task.h"
 
 // TODO: Move this to KConfig
-#define CONFIG_ML2CAP_PSM 0xc0
+#define CONFIG_ML2CAP_PSM 0x6c
 // we use a long queue to prevent deadlocks while tearing down connections TODO: we could also spawn a new thread for that
 #define CONFIG_ML2CAP_CONN_INFO_QUEUE_SIZE (2*CONFIG_BT_MAX_CONN+2)
 
