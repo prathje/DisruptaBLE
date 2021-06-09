@@ -748,15 +748,16 @@ static enum ud3tn_result ml2cap_end_scheduled_contact(
 
 // TODO: we might need to define a fixed memory region and i.e. limit the maximum packet size
 
+/*
 static void ml2cap_send_packet_data_pool_buf_destroy(struct net_buf *buf) {
     net_buf_destroy(buf);
     LOGF("net_buf_destroy! %p", buf);
-}
+}*/
 
 NET_BUF_POOL_DEFINE(ml2cap_send_packet_data_pool, CONFIG_ML2CAP_PARALLEL_BUFFERS,
     BT_L2CAP_CHAN_SEND_RESERVE+CONFIG_BT_L2CAP_TX_MTU,
     0,
-    ml2cap_send_packet_data_pool_buf_destroy
+    NULL// ml2cap_send_packet_data_pool_buf_destroy
 );
 
 static void l2cap_chan_tx_resume(struct bt_l2cap_le_chan *ch)
