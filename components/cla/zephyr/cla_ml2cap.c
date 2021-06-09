@@ -276,25 +276,26 @@ static void chan_disconnected_cb(struct bt_l2cap_chan *chan) {
 
     if (ml2cap_link != NULL && ml2cap_link->chan_connected) {
 
+        ml2cap_link->chan_connected = false; // this will bring down the rx task
+
         hal_semaphore_take_blocking(ml2cap_link->send_sem); // we need to take the semaphore to prevent sending while deconstruction!
         // TODO: Move deconstruction to a separate thread
         // the connection is up and running -> rx and tx tasks have been initialized!
         // so we first first disable them!
         cla_generic_disconnect_handler(&ml2cap_link->base);
 
-        ml2cap_link->chan_connected = false; // this will bring down the rx task
-
         // we also notify the router
         signal_router_conn_down(ml2cap_link);
 
         // and wait for clean-up
         // TODO: This could take a while and might block connection handling? (we remove, notify and release therefore before this call)
-        LOGF("handle_connection_down A %s", ml2cap_link->cla_addr);
+        LOGF("handle_connection_down Start %s", ml2cap_link->cla_addr);
         cla_link_wait_cleanup(&ml2cap_link->base);
-        LOGF("handle_connection_down B %s", ml2cap_link->cla_addr);
+        LOGF("handle_connection_down End %s", ml2cap_link->cla_addr);
     }
 
     bt_conn_disconnect(chan->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN); // we also simply disconnect for now
+    // TODO: is this needed?
 }
 /**
  *
@@ -305,6 +306,7 @@ static int chan_recv_cb(struct bt_l2cap_chan *chan, struct net_buf *buf) {
     hal_semaphore_take_blocking(ml2cap_config->link_htab_sem);
 
     struct ml2cap_link *link = get_link_from_connection(ml2cap_config, chan->conn);
+    hal_semaphore_release(ml2cap_config->link_htab_sem);
 
     if (link) {
         size_t num_elements = net_buf_frags_len(buf);
@@ -315,9 +317,7 @@ static int chan_recv_cb(struct bt_l2cap_chan *chan, struct net_buf *buf) {
             hal_queue_push_to_back(link->rx_queue, (void *) &b);
         }
     }
-    // TODO: Can we release this already before? -> there should only be one rx thread in the bt stack!
-    // TODO: We might want to introduce more specific semaphores?
-    hal_semaphore_release(ml2cap_config->link_htab_sem);
+
     return 0;
 }
 
@@ -508,7 +508,6 @@ static void disconnected(struct bt_conn *conn, uint8_t reason) {
         ASSERT(!ml2cap_link->chan_connected);
         ml2cap_link_destroy(ml2cap_link);
     }
-    LOG("handle_channel_down END");
 }
 
 /**
@@ -795,13 +794,12 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
         while(buf == NULL && ml2cap_link->chan_connected) {
             // TODO: Use another value than COMM_RX_TIMEOUT?
             l2cap_chan_tx_resume(&ml2cap_link->chan);
+            // we still need to timeout as first there is a delay between the destroy callback and actul freeing the buf
+            // and second the connection might possibly be already down
             buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, buf_size, K_MSEC(COMM_RX_TIMEOUT));
-            LOGF("A %s credits: %d", ml2cap_link->cla_addr, atomic_get(&ml2cap_link->chan.tx.credits));
         }
 
-        LOGF("B %p %s", buf, ml2cap_link->cla_addr);
         if (!ml2cap_link->chan_connected) {
-            LOGF("C %s", ml2cap_link->cla_addr);
             if (buf != NULL) {
                 net_buf_unref(buf);
             }
@@ -811,15 +809,29 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
         net_buf_reserve(buf, BT_L2CAP_CHAN_SEND_RESERVE);
         net_buf_add_mem(buf, ((char *)data) + sent, frag_size);
 
-        hal_semaphore_take_blocking(ml2cap_link->send_sem);
-        int ret = bt_l2cap_chan_send(&ml2cap_link->chan.chan, buf);
-        hal_semaphore_release(ml2cap_link->send_sem);
+        while(true) {
+            if (!ml2cap_link->chan_connected) {
+                net_buf_unref(buf);
+                return;
+            }
 
-        if (ret < 0) {
-            net_buf_unref(buf); // this should also release our semaphore
-            LOG("ml2cap: ml2cap_send_packet_data failed");
-            bt_conn_disconnect(ml2cap_link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-            return;
+            if (hal_semaphore_try_take(ml2cap_link->send_sem, COMM_RX_TIMEOUT) == UD3TN_OK) {
+
+                int ret = bt_l2cap_chan_send(&ml2cap_link->chan.chan, buf);
+
+                if (ret < 0) {
+                    net_buf_unref(buf);
+                    LOG("ml2cap: ml2cap_send_packet_data failed");
+                    if (ml2cap_link->chan_connected) {
+                        bt_conn_disconnect(ml2cap_link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+                    }
+                    hal_semaphore_release(ml2cap_link->send_sem);
+                    return;
+                } else {
+                    hal_semaphore_release(ml2cap_link->send_sem);
+                    break;
+                }
+            }
         }
 
         // we sent the data successfully, it might got buffered for us, buffer will get released eventually
