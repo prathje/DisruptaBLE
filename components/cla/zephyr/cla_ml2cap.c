@@ -788,6 +788,10 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
         size_t buf_size = BT_L2CAP_CHAN_SEND_RESERVE+mtu;
         struct net_buf *buf = NULL;
 
+        while (!atomic_get(&ml2cap_link->chan.tx.credits) && ml2cap_link->chan_connected) {
+            hal_task_delay(COMM_RX_TIMEOUT); // delay as long as no credits are available
+        }
+
         while(buf == NULL && ml2cap_link->chan_connected) {
             // TODO: Use another value than COMM_RX_TIMEOUT?
             l2cap_chan_tx_resume(&ml2cap_link->chan);
