@@ -24,9 +24,9 @@ struct nb_ble_config {
 };
 
 /*
- * Launches a new task to handle BLE advertisements. The discovery will be launched immediately
+ * INITS advertisements. The discovery will be launched immediately
  */
-enum ud3tn_result nb_ble_launch(const struct nb_ble_config * const config);
+enum ud3tn_result nb_ble_init(const struct nb_ble_config * const config);
 
 /**
  * Resume the neighbor discovery (NOOP if already running).

@@ -25,6 +25,11 @@
 #define CONFIG_CONTACT_TIMEOUT_S 60
 #endif
 
+// TODO: Configure this!
+#ifndef MAX_CONCURRENT_CONTACTS
+#define MAX_CONCURRENT_CONTACTS 20
+#endif
+
 
 struct contact_info {
     struct contact *contact;

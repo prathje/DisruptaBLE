@@ -35,17 +35,23 @@
 #define CONFIG_NB_BLE_DEBUG 0
 #endif
 
+#ifndef CONFIG_NB_BLE_MIN_RSSI
+#define CONFIG_NB_BLE_MIN_RSSI -80
+#endif
+
 // TODO: Not the best to define them statically...
 static struct nb_ble_config nb_ble_config;
-static QueueIdentifier_t nb_ble_node_info_queue;
 
 
 static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
                             struct net_buf_simple *ad) {
-    if (nb_ble_node_info_queue == NULL) {
-        LOG("NB BLE: Queue not found!");
+
+    /* filter devices with too poor quality */
+    // TODO: Make this configurable!
+    if (rssi < CONFIG_NB_BLE_MIN_RSSI) {
         return;
     }
+
     char dev[BT_ADDR_LE_STR_LEN];
 
     bt_addr_le_to_str(addr, dev, sizeof(dev));
@@ -83,47 +89,15 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
                             .mac_addr = bt_addr_le_to_mac_addr(addr)
                     };
 
-                    // we simply queue this to prevent BLE thread blocking
-                    // This will copy the content from node_info into the queue
-                    if(hal_queue_try_push_to_back(nb_ble_node_info_queue, &node_info, 0) != UD3TN_OK) {
-                        LOG("NB BLE: Could not queue node info!");
-                        free((void*)node_info.eid);
-                        free((void*)node_info.mac_addr);
-                    }
+                    nb_ble_config.discover_cb(nb_ble_config.discover_cb_context, &node_info);
+
+                    free((void*)node_info.eid);
+                    free((void*)node_info.mac_addr);
                 }
             }
         }
     }
 }
-
-
-
-static void nb_ble_management_task(void *param) {
-    (void)param;
-
-    nb_ble_node_info_queue = hal_queue_create(CONFIG_NB_BLE_QUEUE_SIZE, sizeof(struct nb_ble_node_info));
-
-    if (!nb_ble_node_info_queue) {
-        LOG("NB BLE: Failed to initialize queue");
-        return;
-    }
-
-    // automatically start advertisements!
-    nb_ble_start();
-    while(true) {
-        struct nb_ble_node_info node_info;
-        if (hal_queue_receive(nb_ble_node_info_queue, &node_info, CONFIG_NB_BLE_SCAN_DELAY_MS) == UD3TN_OK) {
-            nb_ble_config.discover_cb(nb_ble_config.discover_cb_context, &node_info);
-            free((void*)node_info.eid);
-            free((void*)node_info.mac_addr);
-        } else {
-            // TODO: This is not optimal!
-            nb_ble_start(); // we always try to start the scanning afterward
-        }
-    }
-    // free(nb_ble_config.eid)
-}
-
 
 void nb_ble_start() {
     int err = 0;
@@ -196,7 +170,7 @@ void nb_ble_stop() {
 /*
  * Launches a new task to handle BLE advertisements
  */
-enum ud3tn_result nb_ble_launch(const struct nb_ble_config * const config) {
+enum ud3tn_result nb_ble_init(const struct nb_ble_config * const config) {
 
     if(config->discover_cb == NULL) {
         return UD3TN_FAIL;
@@ -210,19 +184,6 @@ enum ud3tn_result nb_ble_launch(const struct nb_ble_config * const config) {
 
     nb_ble_config.eid = strdup(config->eid);
 
-    Task_t task = hal_task_create(
-            nb_ble_management_task,
-            "nb_ble_mgmt_t",
-            CONTACT_LISTEN_TASK_PRIORITY, // TODO
-            NULL,
-            CONTACT_LISTEN_TASK_STACK_SIZE, // TODO
-            (void *) CLA_SPECIFIC_TASK_TAG
-    );
-
-    if (!task) {
-        free((void*)nb_ble_config.eid);
-        return UD3TN_FAIL;
-    }
     return UD3TN_OK;
 }
 
