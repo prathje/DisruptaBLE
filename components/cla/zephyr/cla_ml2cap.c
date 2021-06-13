@@ -37,7 +37,11 @@
 #define ML2CAP_PSM 0x6c
 #define ML2CAP_MAX_CONN CONFIG_BT_MAX_CONN
 #define ML2CAP_PARALLEL_BUFFERS 1
-#define TIMEOUT_WARNING_MS 10000
+
+// we will disconnect the connection if we did not receive something for X msec
+#define IDLE_TIMEOUT_MS 500
+
+#define TIMEOUT_WARNING_MS 6000
 
 struct ml2cap_link;
 
@@ -346,9 +350,7 @@ static void chan_disconnected_cb(struct bt_l2cap_chan *chan) {
 
             // and wait for clean-up
             // TODO: This could take a while and might block connection handling? (we remove, notify and release therefore before this call)
-            LOGF("handle_connection_down Start %s", link->cla_addr);
             cla_link_wait_cleanup(&link->base);
-            LOGF("handle_connection_down End %s", link->cla_addr);
         }
 
     } else {
@@ -637,37 +639,49 @@ static void mtcp_management_task(void *param) {
     // we loop through the events
     while (true) {
         nb_ble_start(); // we need to periodically try to activate advertisements again..
-    #if TIMEOUT_WARNING_MS > 0
         hal_semaphore_take_blocking(ml2cap_config->links_sem);
         for(int i = 0; i < ml2cap_config->num_links; ++i) {
             struct ml2cap_link *link = ml2cap_config->links[i];
 
             uint64_t now = hal_time_get_timestamp_ms();
 
+#if IDLE_TIMEOUT_MS > 0
+        uint64_t last_chan_update = MAX(link->channel_up_ts, MAX(link->rx_ts, link->tx_ts));
+        if (!link->shutting_down && link->chan_connected && last_chan_update + IDLE_TIMEOUT_MS < now) {
+            LOGF("ML2CAP: Disconnecting idle connection to \"%s\"", link->cla_addr);
+            bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+            link->shutting_down = true;
+        }
+#endif
+
+    #if TIMEOUT_WARNING_MS > 0
+            bool possibly_broken = false;
+
             if (link->connect_ts + TIMEOUT_WARNING_MS < now) {
                 // connection is old enough!
                 if (!link->channel_up_ts) {
                     LOG("ML2CAP: Timeout warning: channel is still not up!\n");
-                } else {
-                    if (link->tx_ts + TIMEOUT_WARNING_MS < now) {
-                        LOG("ML2CAP: Timeout warning: tx timeout!\n");
-                    }
-                    if (link->rx_ts + TIMEOUT_WARNING_MS < now) {
-                        LOG("ML2CAP: Timeout warning: rx timeout!\n");
-                    }
+                    possibly_broken = true;
                 }
             }
 
             if (link->channel_down_ts && link->channel_down_ts + TIMEOUT_WARNING_MS < now) {
                 LOG("ML2CAP: Timeout warning: channel_down timeout!\n");
+                possibly_broken = true;
             }
 
             if (link->disconnect_ts && link->disconnect_ts + TIMEOUT_WARNING_MS < now) {
                 LOG("ML2CAP: Timeout warning: disconnect timeout!\n");
+                possibly_broken = true;
+            }
+
+            if (possibly_broken) {
+                LOGF("ML2CAP: Disconnecting possibly broken connection to \"%s\"", link->cla_addr);
+                bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
             }
         }
+        #endif
         hal_semaphore_release(ml2cap_config->links_sem);
-    #endif
         hal_task_delay(250);
     }
 
@@ -783,7 +797,6 @@ static enum ud3tn_result ml2cap_read(struct cla_link *link,
         // it might be that we have disconnected while waiting...
         if (!ml2cap_link->chan_connected) {
             *bytes_read = 0;
-            LOG("FAILED RX!");
             return UD3TN_FAIL;
         }
     }
