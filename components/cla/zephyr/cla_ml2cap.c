@@ -119,53 +119,50 @@ static char own_addr_str[BT_ADDR_LE_STR_LEN];
 static void on_tx(struct ml2cap_link *link) {
     link->tx_ts = hal_time_get_timestamp_ms();
 
-    LOGF("ML2CAP: on_tx | %s | %s | \n",
+    /*LOGF("ML2CAP: on_tx | %s | %s | \n",
          own_addr_str,
          link->mac_addr
-     );
+     );*/
 }
 static void on_rx(struct ml2cap_link *link) {
     link->rx_ts = hal_time_get_timestamp_ms();
     int avg_kbits_per_sec = (link->bytes_received*8) / MAX(1, (link->rx_ts-link->channel_up_ts));
-    LOGF("ML2CAP: on_rx | %s | %s | %d kbps\n",
+    /*LOGF("ML2CAP: on_rx | %s | %s | %d kbps\n",
          own_addr_str,
          link->mac_addr,
-         avg_kbits_per_sec);
+         avg_kbits_per_sec);*/
 }
 static void on_connect(struct ml2cap_link *link) {
     link->connect_ts = hal_time_get_timestamp_ms();
 
-    LOGF("ML2CAP: on_connect | %s | %s | \n",
+    /*LOGF("ML2CAP: on_connect | %s | %s | \n",
          own_addr_str,
-         link->mac_addr);
+         link->mac_addr);*/
 }
 static void on_disconnect(struct ml2cap_link *link) {
     link->disconnect_ts = hal_time_get_timestamp_ms();
 
-    LOGF("ML2CAP: on_disconnect | %s | %s | \n",
+    /*LOGF("ML2CAP: on_disconnect | %s | %s | \n",
          own_addr_str,
-         link->mac_addr);
+         link->mac_addr);*/
 }
 static void on_channel_up(struct ml2cap_link *link) {
     link->channel_up_ts = hal_time_get_timestamp_ms();
 
-    LOGF("ML2CAP: on_channel_up | %s | %s | \n",
+    /*LOGF("ML2CAP: on_channel_up | %s | %s | \n",
          own_addr_str,
-         link->mac_addr);
+         link->mac_addr);*/
 }
 static void on_channel_down(struct ml2cap_link *link) {
     link->channel_down_ts = hal_time_get_timestamp_ms();
 
-    LOGF("ML2CAP: on_channel_down | %s | %s | \n",
+    /*LOGF("ML2CAP: on_channel_down | %s | %s | \n",
          own_addr_str,
-         link->mac_addr);
+         link->mac_addr);*/
 }
 
 void add_active_link(struct ml2cap_link *link) {
     ASSERT(ml2cap_config->num_links < ML2CAP_MAX_CONN);
-
-    on_connect(link); // TODO: This is not the right place for that...
-
     ml2cap_config->links[ml2cap_config->num_links] = link;
     ml2cap_config->num_links++;
 }
