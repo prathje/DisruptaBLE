@@ -177,7 +177,6 @@ enum ud3tn_result send_sv(const char* sink, const char *destination_eid, struct 
             BUNDLE_SR_REASON_NO_INFO
     );
 
-
     return UD3TN_OK;
 }
 
@@ -197,6 +196,8 @@ static void on_offer_msg(struct bundle_adu data, void *param) {
 
     if (offer_sv) {
 
+        LOG_EV("receive_offer_sv", "\"source_eid\": \"%s\", \"length\": %d", source, offer_sv->length);
+
         //summary_vector_print("INCOMING OFFER SV ", offer_sv);
         // TODO: This is probably the least efficient variant possible... ;)
         struct summary_vector *known_sv = create_known_sv(source);
@@ -208,6 +209,7 @@ static void on_offer_msg(struct bundle_adu data, void *param) {
             if (request_sv) {
                 //LOG("REQUEST SV");
                 //summary_vector_print(request_sv);
+                LOG_EV("send_request_sv", "\"to_eid\": \"%s\", \"sv_length\": %d", source, request_sv->length);
                 send_sv(ROUTING_AGENT_SINK_REQUEST, source,  request_sv);
                 summary_vector_destroy(request_sv);
             } else {
@@ -237,6 +239,8 @@ static void on_request_msg(struct bundle_adu data, void *param) {
     struct summary_vector *request_sv = summary_vector_create_from_memory(data.payload, data.length);
 
     if (source && request_sv) {
+
+        LOG_EV("receive_request_sv", "\"from_eid\": \"%s\", \"length\": %d", source, request_sv->length);
 
         //summary_vector_print("INCOMING REQUEST SV ", request_sv);
 
@@ -327,6 +331,8 @@ enum ud3tn_result routing_agent_init(const struct bundle_agent_interface *bundle
 
 void routing_agent_send_offer_sv(const char *eid, struct summary_vector *offer_sv) {
     //hal_semaphore_take_blocking(routing_agent_config.routing_agent_contact_htab_sem);
+    LOG_EV("send_offer_sv", "\"to_eid\": \"%s\", \"sv_length\": %d", eid, offer_sv->length);
+
     if (send_sv(ROUTING_AGENT_SINK_OFFER, eid,  offer_sv) != UD3TN_OK) {
         LOGF("Routing Agent: Could not send offer SV to %s", eid);
     }
@@ -419,6 +425,9 @@ void generate_fake_bundles() {
 
         memset(payload, 0, payload_length);
 
+
+
+
          struct bundle *bundle = bundle7_create_local(
             payload, payload_length, routing_agent_config.bundle_agent_interface->local_eid, FAKE_DESTINATION,
             Z_MAX(1, hal_time_get_timestamp_s()), // we force at least a ts of 1 as zero is the "unknown" ts
@@ -431,14 +440,20 @@ void generate_fake_bundles() {
 
         bundleid_t bundle_id = bundle_storage_add(bundle);
 
-        if (bundle_id != BUNDLE_INVALID_ID)
+        if (bundle_id != BUNDLE_INVALID_ID) {
+              LOG_EV("generate_fake_bundle", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d",
+               bundle->id,
+               bundle->source,
+               bundle->destination,
+               bundle->creation_timestamp_ms
+           );
             bundle_processor_inform(
                     routing_agent_config.bundle_agent_interface->bundle_signaling_queue,
                     bundle_id,
                     BP_SIGNAL_BUNDLE_LOCAL_DISPATCH,
                     BUNDLE_SR_REASON_NO_INFO
             );
-        else {
+        } else {
             bundle_free(bundle);
              LOG("RoutingAgent: Could not store fake bundle!");
             return;

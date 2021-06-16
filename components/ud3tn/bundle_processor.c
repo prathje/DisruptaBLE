@@ -291,6 +291,13 @@ static inline void handle_signal(const struct bundle_processor_signal signal)
 /* 5.3 */
 static void bundle_dispatch(struct bundle *bundle)
 {
+    LOG_EV("bundle_dispatch", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d",
+           bundle->id,
+           bundle->source,
+           bundle->destination,
+           bundle->creation_timestamp_ms
+    );
+
 	/* 5.3-1 */
 	if (bundle_endpoint_is_local(bundle)) {
 		bundle_deliver_local(bundle);
@@ -415,12 +422,24 @@ static void bundle_forwarding_failed(
 /* 5.5 */
 static void bundle_expired(struct bundle *bundle)
 {
+    LOG_EV("bundle_expired", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d",
+           bundle->id,
+           bundle->source,
+           bundle->destination,
+           bundle->creation_timestamp_ms
+    );
 	bundle_delete(bundle, BUNDLE_SR_REASON_LIFETIME_EXPIRED);
 }
 
 /* 5.6 */
 static void bundle_receive(struct bundle *bundle)
 {
+    LOG_EV("bundle_receive", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d",
+           bundle->id,
+           bundle->source,
+           bundle->destination,
+           bundle->creation_timestamp_ms
+       );
 	struct bundle_block_list **e;
 	enum bundle_handling_result res;
 

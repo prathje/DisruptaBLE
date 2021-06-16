@@ -30,6 +30,14 @@
 #define LOGA(message, actionid, itemid) \
 	LOGF("%s (a = %d, i = %d)", message, actionid, itemid)
 
+#define LOG_EV(event, data_format_, ...) \
+	hal_io_message_printf( \
+		"EVENT %s {" data_format_ "}\n", \
+		event, \
+		__VA_ARGS__ \
+	)
+#define LOG_EV_NO_DATA(event) (LOG_EV(event, "%s", " "))
+
 /**
  * @brief hal_io_init Initialization of underlying OS/HW for I/O
  * @return Whether the operation was successful

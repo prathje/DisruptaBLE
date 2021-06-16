@@ -89,6 +89,8 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
                             .mac_addr = bt_addr_le_to_mac_addr(addr)
                     };
 
+                    LOG_EV("adv_received", "\"other_mac_addr\": \"%s\", \"rssi\": %d, \"other_eid\": \"%s\"", node_info.mac_addr, rssi, eid);
+
                     nb_ble_config.discover_cb(nb_ble_config.discover_cb_context, &node_info);
 
                     free((void*)node_info.eid);
@@ -122,6 +124,10 @@ void nb_ble_start() {
 
     free(data);
 
+    if (!err) {
+        LOG_EV_NO_DATA("adv_started");
+    }
+
 #if CONFIG_NB_BLE_DEBUG
     if (err) {
         LOGF("NB BLE: advertising failed to start (err %d)\n", err);
@@ -139,6 +145,10 @@ void nb_ble_start() {
 
     err = bt_le_scan_start(&scan_param, device_found_cb);
 
+    if (!err) {
+        LOG_EV_NO_DATA("scan_started");
+    }
+
 #if CONFIG_NB_BLE_DEBUG
     if (err) {
         LOGF("NB BLE: Scanning failed to start (err %d)\n", err);
@@ -152,6 +162,10 @@ void nb_ble_stop() {
 
     int err = bt_le_adv_stop();
 
+    if (!err) {
+        LOG_EV_NO_DATA("adv_stopped");
+    }
+
 #if CONFIG_NB_BLE_DEBUG
     if (err) {
         LOGF("NB BLE: advertising failed to stop (err %d)\n", err);
@@ -159,6 +173,11 @@ void nb_ble_stop() {
 #endif
 
     err = bt_le_scan_stop();
+
+    if (!err) {
+        LOG_EV_NO_DATA("scan_stopped");
+    }
+
 #if CONFIG_NB_BLE_DEBUG
     if (err) {
         LOGF("NB BLE: Scanning failed to stop (err %d)\n", err);

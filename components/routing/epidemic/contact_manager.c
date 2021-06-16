@@ -267,6 +267,7 @@ static enum ud3tn_result try_to_send_bundle(struct routed_bundle *routed_bundle,
     }
 
     LOGF("ContactManager: Sending bundles for contact with \"%s\"", node->eid);
+    LOG_EV("send_bundle", "\"to_eid\": \"%s\", \"to_cla_addr\": \"%s\", \"bundle_id\": %d", node->eid, node->cla_addr, routed_bundle->id);
 
     struct cla_contact_tx_task_command command = {
             .type = TX_COMMAND_BUNDLES,
@@ -385,6 +386,7 @@ static void handle_conn_up(const char *cla_address) {
 
     if (!info->contact->active) {
         info->contact->active = true;
+        LOG_EV("contact_active", "\"eid\": \"%s\", \"cla_addr\": \"%s\"", info->contact->node->eid, info->contact->node->cla_addr);
         on_event(CONTACT_EVENT_ACTIVE, info->contact);
     }
 }
@@ -408,6 +410,7 @@ static void handle_conn_down(const char *cla_address) {
 
     if (info->contact->active) {
         info->contact->active = false;
+        LOG_EV("contact_inactive", "\"eid\": \"%s\", \"cla_addr\": \"%s\"", info->contact->node->eid, info->contact->node->cla_addr);
         on_event(CONTACT_EVENT_INACTIVE, info->contact);
     }
 }

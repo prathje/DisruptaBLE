@@ -39,6 +39,7 @@ static void bundle_send(struct bundle *bundle, void *param)
 		LOGF("CLA: Received new bundle #%d from \"%s\" to \"%s\" via CLA %s",
 		     new_id, bundle->source, bundle->destination,
 		     config->vtable->cla_name_get());
+
 		bundle_processor_inform(
 			config->bundle_agent_interface->bundle_signaling_queue,
 			new_id,

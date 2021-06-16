@@ -279,6 +279,7 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
         LOGF("ML2CAP: Failed to create connection (err %d)\n", err);
         nb_ble_start(); // directly try to start neighbor discovery
     } else {
+        LOG_EV("conn_init", "\"other_mac_addr\": \"%s\", \"other_cla_addr\": \"%s\", \"other_eid\": \"%s\", \"connection\": \"%p\"", ble_node_info->mac_addr, node->cla_addr, node->eid, conn);
         bt_conn_unref(conn); // we directly unref here as we will use the callback to handle the connection
     }
 }
@@ -291,7 +292,9 @@ static void chan_connected_cb(struct bt_l2cap_chan *chan) {
     if (link != NULL) {
         // TODO: is this the correct place for channel_up?
         link->chan_connected = true;
+
         on_channel_up(link);
+        LOG_EV("channel_up", "\"other_mac_addr\": \"%s\", \"connection\": \"%p\"", link->mac_addr, link->conn);
 
         if (cla_link_init(&link->base, &ml2cap_config->base) == UD3TN_OK) {
 
@@ -322,6 +325,7 @@ static void chan_disconnected_cb(struct bt_l2cap_chan *chan) {
 
         // is the right place for that?
         on_channel_down(link);
+        LOG_EV("channel_down", "\"other_mac_addr\": \"%s\", \"connection\": \"%p\"", link->mac_addr, link->conn);
         link->chan_connected = false;
 
         if (was_connected) {
@@ -366,6 +370,8 @@ static int chan_recv_cb(struct bt_l2cap_chan *chan, struct net_buf *buf) {
         //printk("Received %d bytes\n", num_bytes_received);
         on_rx(link);
 
+        LOG_EV("rx", "\"from_mac_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\", \"num_bytes\": %d", link->mac_addr, chan->conn, link, num_bytes_received);
+
         size_t num_elements = net_buf_frags_len(buf);
         for (int i = 0; i < num_elements; i++) {
             // TODO: This message queue abuse is quite inefficient!
@@ -400,11 +406,13 @@ int chan_accept(struct bt_conn *conn, struct bt_l2cap_chan **chan) {
 static void connected(struct bt_conn *conn, uint8_t err)
 {
     struct ml2cap_link *link = NULL;
+    const char *reason = "unknown";
 
     // we can check the num_active links as this function is the only one that adds links
     if (!err) {
         if (ml2cap_config->num_links == ML2CAP_MAX_CONN) {
             printk("No more free links!\n");
+            reason = "no_free_links";
             goto fail;
         }
 
@@ -417,11 +425,13 @@ static void connected(struct bt_conn *conn, uint8_t err)
                     int err = bt_l2cap_chan_connect(link->conn, &link->le_chan.chan, ML2CAP_PSM);
                     if (err) {
                         // we disconnect, this will eventually also clear this link
-                        printk("Could not connect to channel!\n");
+                        LOG("Could not connect to channel!\n");
+                        reason = "channel_connection_failed";
                         goto fail;
                     } else {
                         hal_semaphore_take_blocking(ml2cap_config->links_sem);
                         add_active_link(link);
+                        LOG_EV("connection_success", "\"other_mac_addr\": \"%s\", \"other_cla_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\", \"role\": \"client\"", link->mac_addr, link->cla_addr, conn, link);
                         on_connect(link);
                         hal_semaphore_release(ml2cap_config->links_sem);
                     }
@@ -429,21 +439,26 @@ static void connected(struct bt_conn *conn, uint8_t err)
                     // NOOP, we simply await a connection...
                     hal_semaphore_take_blocking(ml2cap_config->links_sem);
                     add_active_link(link);
+                    LOG_EV("connection_success", "\"other_mac_addr\": \"%s\", \"other_cla_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\", \"role\": \"peripheral\"", link->mac_addr, link->cla_addr, conn, link);
                     on_connect(link);
                     hal_semaphore_release(ml2cap_config->links_sem);
                 }
             } else {
                 // disconnect handler will free link
                 printk("Failed to get connection info!\n");
+                reason = "connection_info_failed";
                 goto fail;
             }
         } else {
             // seems like we don't have enough memory to connect :(
             printk("Could not allocate link to connect\n");
+            reason = "link_allocation_failed";
             goto fail;
         }
     } else {
         printk("BLE Connection failed (err 0x%02x)\n", err);
+        reason = "failure";
+        goto fail;
     }
 
     return;
@@ -456,6 +471,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
         free(link);
     }
     bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+    LOG_EV("connection_failure", "\"connection\": \"%p\", \"reason\": \"%s\"", conn, reason);
 }
 
 static void disconnected(struct bt_conn *conn, uint8_t reason) {
@@ -466,6 +482,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason) {
     if (link != NULL) {
         remove_active_link(link);
         on_disconnect(link);
+        LOG_EV("disconnect", "\"other_mac_addr\": \"%s\", \"connection\": \"%p\", \"link\":\"%p\"", link->mac_addr, conn, link);
         ASSERT(!link->chan_connected);
         ml2cap_link_destroy(link);
     } else {
@@ -623,6 +640,12 @@ static void mtcp_management_task(void *param) {
     bt_id_get(&own_addr, &count);
     bt_addr_le_to_str(&own_addr, own_addr_str, sizeof(own_addr_str));
 
+    char *own_mac_addr = bt_addr_le_to_mac_addr(own_addr_str);
+    LOG_EV("ml2cap_init", "\"own_mac_addr\": \"%s\", \"own_eid\": \"%s\"", own_addr_str, ml2cap_config->base.bundle_agent_interface->local_eid);
+    if (own_mac_addr) {
+        free(own_mac_addr);
+    }
+
     ml2cap_config->l2cap_server.psm = ML2CAP_PSM;
     ml2cap_config->l2cap_server.accept = l2cap_accept;
 
@@ -646,6 +669,9 @@ static void mtcp_management_task(void *param) {
         uint64_t last_chan_update = MAX(link->channel_up_ts, MAX(link->rx_ts, link->tx_ts));
         if (!link->shutting_down && link->chan_connected && last_chan_update + IDLE_TIMEOUT_MS < now) {
             LOGF("ML2CAP: Disconnecting idle connection to \"%s\"", link->cla_addr);
+
+            LOG_EV("idle_disconnect", "\"other_mac_adr\": \"%s\", \"other_cla_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\"", link->mac_addr, link->cla_addr, link->conn, link);
+
             bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
             link->shutting_down = true;
         }
@@ -866,6 +892,8 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
     size_t buf_size = BT_L2CAP_CHAN_SEND_RESERVE+mtu;
 
     uint32_t sent = 0;
+
+    LOG_EV("l2cap_transmit_bytes", "\"to_mac_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\", \"num_bytes\": %d", ml2cap_link->mac_addr, ml2cap_link->conn, ml2cap_link, length);
 
     while (sent < length) {
         //LOGF("l2cap_transmit_bytes sent %d", sent);

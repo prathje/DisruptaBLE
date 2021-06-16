@@ -63,6 +63,7 @@ static void send_offer_sv(struct router_contact *rc) {
     struct summary_vector *offer_sv = create_offer_sv(rc);
 
     if (offer_sv) {
+        LOG_EV("send_offer_sv", "\"to_eid\": \"%s\", \"to_cla_addr\": \"%s\", \"sv_length\": %d", rc->contact->node->eid, rc->contact->node->cla_addr, offer_sv->length);
         routing_agent_send_offer_sv(rc->contact->node->eid, offer_sv);
         summary_vector_destroy(offer_sv);
     } else {

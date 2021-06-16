@@ -59,6 +59,9 @@ static void cla_contact_tx_task(void *param)
 					b->id,
 					link->config->vtable->cla_name_get()
 				);
+
+                LOG_EV("transmit_bundle", "\"link\": \"%s\", \"local_bundle_id\": %d",link, b->id);
+
 				link->config->vtable->cla_begin_packet(
 					link,
 					bundle_get_serialized_size(b)
