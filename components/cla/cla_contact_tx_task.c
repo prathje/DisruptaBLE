@@ -60,7 +60,7 @@ static void cla_contact_tx_task(void *param)
 					link->config->vtable->cla_name_get()
 				);
 
-                LOG_EV("transmit_bundle", "\"link\": \"%s\", \"local_bundle_id\": %d",link, b->id);
+                LOG_EV("transmit_bundle", "\"link\": \"%p\", \"local_bundle_id\": %d",link, b->id);
 
 				link->config->vtable->cla_begin_packet(
 					link,

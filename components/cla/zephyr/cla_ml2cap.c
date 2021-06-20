@@ -279,7 +279,9 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
         LOGF("ML2CAP: Failed to create connection (err %d)\n", err);
         nb_ble_start(); // directly try to start neighbor discovery
     } else {
-        LOG_EV("conn_init", "\"other_mac_addr\": \"%s\", \"other_cla_addr\": \"%s\", \"other_eid\": \"%s\", \"connection\": \"%p\"", ble_node_info->mac_addr, node->cla_addr, node->eid, conn);
+        char *cla_address = cla_get_cla_addr(ml2cap_name_get(), ble_node_info->mac_addr);
+        LOG_EV("conn_init", "\"other_mac_addr\": \"%s\", \"other_cla_addr\": \"%s\", \"other_eid\": \"%s\", \"connection\": \"%p\"", ble_node_info->mac_addr, cla_address, ble_node_info->mac_addr, conn);
+        free(cla_address);
         bt_conn_unref(conn); // we directly unref here as we will use the callback to handle the connection
     }
 }
@@ -640,7 +642,7 @@ static void mtcp_management_task(void *param) {
     bt_id_get(&own_addr, &count);
     bt_addr_le_to_str(&own_addr, own_addr_str, sizeof(own_addr_str));
 
-    char *own_mac_addr = bt_addr_le_to_mac_addr(own_addr_str);
+    char *own_mac_addr = bt_addr_le_to_mac_addr(&own_addr);
     LOG_EV("ml2cap_init", "\"own_mac_addr\": \"%s\", \"own_eid\": \"%s\"", own_addr_str, ml2cap_config->base.bundle_agent_interface->local_eid);
     if (own_mac_addr) {
         free(own_mac_addr);
