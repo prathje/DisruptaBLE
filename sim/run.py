@@ -41,6 +41,7 @@ def spawn_node_process(exec_name, id):
                                cwd=config['BSIM_OUT_PATH']+"/bin",
                                text=True,
                                stdout=subprocess.PIPE,
+                               bufsize=1,
                                stderr=sys.stderr,
     encoding="ISO-8859-1")
 
@@ -52,14 +53,14 @@ event_re = re.compile(r"d\_(\d\d):\s\@(\d\d:\d\d:\d\d\.\d+)\s\sEVENT\s([^\s]+)\s
 def output_to_event_iter(o):
     global max_us
     for line in o:
-        #print(line)
+        #print(line.rstrip())
         re_match = event_re.match(line.rstrip())
         if re_match:
             device, ts, event_type, data_str = re_match.groups()
             try:
                 data = json.loads(data_str)
             except:
-                print(line)
+                print(line.rstrip())
                 return
             us = int(ts.replace(":", "").replace(".", ""))
 
@@ -121,6 +122,7 @@ if __name__ == "__main__":
                                    cwd=config['BSIM_OUT_PATH']+"/bin",
        encoding="ISO-8859-1",
         stdout=sys.stdout,
+       bufsize=1,
         stderr=sys.stderr
     )
 

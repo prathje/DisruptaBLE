@@ -54,6 +54,7 @@ struct ml2cap_config {
 
     struct bt_l2cap_server l2cap_server;
     Task_t management_task;
+    bt_addr_le_t own_addr;
 };
 
 // it is initialized during the launch task
@@ -258,13 +259,7 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
     }
 
     // we do not have a connection yet -> we try to initialize it, IF we are the one with the bigger mac address!
-    bt_addr_le_t addrs[CONFIG_BT_ID_MAX];
-    size_t count = 1;
-    bt_id_get(addrs, &count);
-
-    ASSERT(count > 0);
-
-    if(bt_addr_le_cmp(&addrs[BT_ID_DEFAULT], &other_addr) <= 0) {
+    if(bt_addr_le_cmp(&ml2cap_config->own_addr, &other_addr) <= 0) {
         return; // our addr is smaller :( -> await connection from the other node
     }
 
@@ -280,7 +275,7 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
         nb_ble_start(); // directly try to start neighbor discovery
     } else {
         char *cla_address = cla_get_cla_addr(ml2cap_name_get(), ble_node_info->mac_addr);
-        LOG_EV("conn_init", "\"other_mac_addr\": \"%s\", \"other_cla_addr\": \"%s\", \"other_eid\": \"%s\", \"connection\": \"%p\"", ble_node_info->mac_addr, cla_address, ble_node_info->mac_addr, conn);
+        LOG_EV("conn_init", "\"other_mac_addr\": \"%s\", \"other_cla_addr\": \"%s\", \"other_eid\": \"%s\", \"connection\": \"%p\", \"own_eid\": \"%s\"", ble_node_info->mac_addr, cla_address, ble_node_info->eid, conn, ml2cap_config->base.bundle_agent_interface->local_eid);
         free(cla_address);
         bt_conn_unref(conn); // we directly unref here as we will use the callback to handle the connection
     }
@@ -518,8 +513,14 @@ static struct ml2cap_link *ml2cap_link_create(
         goto fail_after_alloc;
     }
 
+    struct bt_conn_info info;
+    if (!bt_conn_get_info(ml2cap_link->conn, &info)) {
+        ml2cap_link->mac_addr = bt_addr_le_to_mac_addr(info.le.dst);
+    } else {
+        LOG("ML2CAP: Failed to get connection info!");
+        goto fail_after_ref;
+    }
 
-    ml2cap_link->mac_addr = bt_addr_le_to_mac_addr(bt_conn_get_dst(conn));
     if (!ml2cap_link->mac_addr) {
         LOG("ML2CAP: Failed to get mac_addr!");
         goto fail_after_ref;
@@ -609,6 +610,7 @@ int l2cap_accept(struct bt_conn *conn, struct bt_l2cap_chan **chan) {
 static void mtcp_management_task(void *param) {
 
     // we setup the L2CAP server to handle incoming connections
+
     int err = bt_enable(NULL);
     if (err) {
         LOGF("Bluetooth init failed (err %d)", err);
@@ -636,14 +638,14 @@ static void mtcp_management_task(void *param) {
         goto terminate;
     }
 
-    // initialize local address
-    bt_addr_le_t own_addr;
-    size_t count = 1;
-    bt_id_get(&own_addr, &count);
-    bt_addr_le_to_str(&own_addr, own_addr_str, sizeof(own_addr_str));
 
-    char *own_mac_addr = bt_addr_le_to_mac_addr(&own_addr);
-    LOG_EV("ml2cap_init", "\"own_mac_addr\": \"%s\", \"own_eid\": \"%s\"", own_addr_str, ml2cap_config->base.bundle_agent_interface->local_eid);
+    // initialize local address
+    size_t count = 1;
+    bt_id_get(&ml2cap_config->own_addr, &count);
+    bt_addr_le_to_str(&ml2cap_config->own_addr, own_addr_str, sizeof(own_addr_str));
+
+    char *own_mac_addr = bt_addr_le_to_mac_addr(&ml2cap_config->own_addr);
+    LOG_EV("ml2cap_init", "\"own_mac_addr\": \"%s\", \"own_eid\": \"%s\"", own_mac_addr, ml2cap_config->base.bundle_agent_interface->local_eid);
     if (own_mac_addr) {
         free(own_mac_addr);
     }
@@ -672,7 +674,7 @@ static void mtcp_management_task(void *param) {
         if (!link->shutting_down && link->chan_connected && last_chan_update + IDLE_TIMEOUT_MS < now) {
             LOGF("ML2CAP: Disconnecting idle connection to \"%s\"", link->cla_addr);
 
-            LOG_EV("idle_disconnect", "\"other_mac_adr\": \"%s\", \"other_cla_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\"", link->mac_addr, link->cla_addr, link->conn, link);
+            LOG_EV("idle_disconnect", "\"other_mac_addr\": \"%s\", \"other_cla_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\"", link->mac_addr, link->cla_addr, link->conn, link);
 
             bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
             link->shutting_down = true;
@@ -964,7 +966,6 @@ void ml2cap_send_packet_data(struct cla_link *link, const void *data, const size
 static struct cla_tx_queue ml2cap_get_tx_queue(
         struct cla_config *config, const char *eid, const char *cla_addr) {
     (void) eid;
-
 
     hal_semaphore_take_blocking(ml2cap_config->links_sem);
     struct ml2cap_link *link = find_link_by_cla_address(cla_addr);
