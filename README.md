@@ -139,7 +139,7 @@ west debug --build-dir build_proxy
 
 Running Simulations:
 ```
-pip3 install python-dotenv tinydb
+pip3 install python-dotenv pydal
 cd /app/sim/
 python3 run.py
 ```

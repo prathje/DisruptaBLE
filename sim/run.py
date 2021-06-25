@@ -2,15 +2,15 @@ import dotenv
 import os
 import subprocess
 import sys
-import tinydb
 import re
 import threading
 import json
 import time
 import random
+from pydal import DAL, Field
+from datetime import datetime
 
-from tinydb.storages import JSONStorage
-from tinydb.middlewares import CachingMiddleware
+import tables
 
 config = {
     **dotenv.dotenv_values(".env"),  # load shared development variables
@@ -53,7 +53,7 @@ event_re = re.compile(r"d\_(\d\d):\s\@(\d\d:\d\d:\d\d\.\d+)\s\sEVENT\s([^\s]+)\s
 def output_to_event_iter(o):
     global max_us
     for line in o:
-        #print(line.rstrip())
+        print(line.rstrip())
         re_match = event_re.match(line.rstrip())
         if re_match:
             device, ts, event_type, data_str = re_match.groups()
@@ -62,16 +62,36 @@ def output_to_event_iter(o):
             except:
                 print(line.rstrip())
                 return
-            us = int(ts.replace(":", "").replace(".", ""))
+
+            # time format: "00:00:00.010328"
+            h = int(ts[0:2])
+            m = int(ts[3:5])
+            s = int(ts[6:8])
+            us = int(ts[9:])
+
+            overall_us = us + 1000000 * (s+60*m+3600*h)
 
             yield {
-                "device_id": int(device),
-                "us": us,
+                "device": int(device),
+                "us": overall_us,
                 "type": event_type,
-                "data": data
+                "data_json": data_str
             }
 
 if __name__ == "__main__":
+
+    now = datetime.now()
+
+    run_name = 'test'
+
+    logdir = config['SIM_LOG_DIR']
+    os.makedirs(logdir, exist_ok=True)
+
+    # Get access to the database (create if necessary!)
+    db = DAL("sqlite://sqlite.db", folder=logdir)
+
+    tables.init_tables(db)
+
     if config['SIM_RANDOM_SEED'] != "":
         rseed = int(config['SIM_RANDOM_SEED'])
     else:
@@ -79,14 +99,26 @@ if __name__ == "__main__":
 
     random.seed(rseed)
 
-    run_name = 'test'
+
+    run = db['run'].insert(**{
+        "name": run_name,
+        "group": None,
+        "start_ts": now,
+        "end_ts": None,
+        "status": "starting",
+        "seed": rseed,
+        "simulation_time": int(float(config['SIM_LENGTH'])),
+        "progress": 0,
+        "num_proxy_devices": int(config['SIM_PROXY_NUM_NODES'])
+    })
+
+    db.commit() # directly insert the run
+
     # Create the parent run directory
     #os.makedirs(config['SIM_RUN_DIRECTORY'], exist_ok=True)
     rdir = os.path.join("/tmp/sim", run_name)
-    logdir = os.path.join(config['SIM_LOG_DIR'], run_name)
 
     os.makedirs(rdir, exist_ok=True)
-    os.makedirs(logdir, exist_ok=True)
 
     compile_and_move(rdir, "source", "source.conf")
     compile_and_move(rdir, "proxy", "proxy.conf")
@@ -126,7 +158,9 @@ if __name__ == "__main__":
         stderr=sys.stderr
     )
 
-    db = tinydb.TinyDB(os.path.join(logdir, 'db.json'), storage=CachingMiddleware(JSONStorage))
+    db(db.run.id == run).update(
+        status='started'
+    )
 
     db_lock = threading.Lock()
 
@@ -141,8 +175,10 @@ if __name__ == "__main__":
                 max_us = e['us']
                 print(max_us/1000000)
 
+            e['run'] = run
             db_lock.acquire()
-            db.insert(e)
+            db['event'].insert(**e)
+            db.commit()
             db_lock.release()
 
     log_threads = []
@@ -158,15 +194,40 @@ if __name__ == "__main__":
             if p.poll() is None:
                 done = False
 
+    commit_thread_running = True
+
+    def commit_thread():
+        while commit_thread_running:
+            db_lock.acquire()
+            db(db.run.id == run).update(
+                progress=max_us
+            )
+            db.commit()
+            db_lock.release()
+            time.sleep(1)  # sleep 1 second
+
+
+    commit_thread = threading.Thread(target= commit_thread, args=(), daemon=True)
+    commit_thread.start()
     
     for t in log_threads:
         t.join()
 
-    db.close()
+    commit_thread_running = False
+    commit_thread.join()
 
+    success = True
     for p in [phy_process]+node_processes:
         if p.returncode != 0:
+            success = False
             print("Got weird response code: "+ str(p.returncode))
+
+    db(db.run.id == run).update(
+        status='finished' if success else 'error',
+        end_ts=datetime.now()
+    )
+
+    db.commit()
     print("DONE!")
     # TODO: Register Simulation in a database?
     # TODO: Spawn dist_write process!
