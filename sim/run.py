@@ -53,7 +53,7 @@ event_re = re.compile(r"d\_(\d\d):\s\@(\d\d:\d\d:\d\d\.\d+)\s\sEVENT\s([^\s]+)\s
 def output_to_event_iter(o):
     global max_us
     for line in o:
-        print(line.rstrip())
+        #print(line.rstrip())
         re_match = event_re.match(line.rstrip())
         if re_match:
             device, ts, event_type, data_str = re_match.groups()
@@ -161,6 +161,7 @@ if __name__ == "__main__":
     db(db.run.id == run).update(
         status='started'
     )
+    db.commit()
 
     db_lock = threading.Lock()
 
