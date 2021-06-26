@@ -64,8 +64,51 @@ def init_eval_tables(db):
         redefine=False
     )
 
+    db.define_table(
+        'bundle',
+        Field('run', 'reference run', notnull=True),
+        Field('source', 'reference device', notnull=True),
+        Field('destination_eid'),
+        Field('source_eid'),
+        Field('destination', 'reference device', notnull=False),
+        Field('creation_timestamp_ms', type='integer'),
+        Field('payload_length', type='integer'),
+        Field('is_sv', type='boolean'),
+        Field('lifetime_ms', type='integer'),
+        Field('hop_count', type='integer'),
+        redefine=False
+    )
+
+    db.define_table(
+        'stored_bundle',
+        Field('run', 'reference run', notnull=True),
+        Field('device', 'reference device', notnull=True),
+        Field('bundle', 'reference bundle', notnull=True),
+        Field('created_us', type='bigint', notnull=True),
+        Field('local_id', type='integer', notnull=True),
+        Field('deleted_us', type='bigint', notnull=False),
+        Field('remaining_hops', type='integer', notnull=False),
+        redefine=False
+    )
+
+    db.define_table(
+        'bundle_transmission',
+        Field('run', 'reference run', notnull=True),
+        Field('conn_info', 'reference conn_info', notnull=True),
+        Field('source_stored_bundle', 'reference stored_bundle', notnull=True),
+        Field('received_stored_bundle', 'reference stored_bundle', notnull=False),
+        Field('start_us',  type='bigint'),
+        Field('end_us',  type='bigint'),
+        redefine=False
+    )
+
+    # TODO: Extra handling of summary vectors?
+
 def reset_eval_tables(db):
     eval_tables = [
+        'bundle_transmission',
+        'stored_bundle',
+        'bundle',
         'conn_info',
         'device'    #last since every other reference this one
     ]

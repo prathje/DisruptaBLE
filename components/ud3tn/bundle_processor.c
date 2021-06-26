@@ -434,12 +434,6 @@ static void bundle_expired(struct bundle *bundle)
 /* 5.6 */
 static void bundle_receive(struct bundle *bundle)
 {
-    LOG_EV("bundle_receive", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d",
-           bundle->id,
-           bundle->source,
-           bundle->destination,
-           bundle->creation_timestamp_ms
-       );
 	struct bundle_block_list **e;
 	enum bundle_handling_result res;
 
@@ -826,6 +820,12 @@ static void bundle_delete(
 /* 5.15 (BPv7-bis) */
 static void bundle_discard(struct bundle *bundle)
 {
+    LOG_EV("bundle_delete", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d",
+           bundle->id,
+           bundle->source,
+           bundle->destination,
+           bundle->creation_timestamp_ms
+    );
 	bundle_storage_delete(bundle->id);
 	bundle_drop(bundle);
 }

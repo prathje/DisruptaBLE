@@ -40,6 +40,13 @@ static void bundle_send(struct bundle *bundle, void *param)
 		     new_id, bundle->source, bundle->destination,
 		     config->vtable->cla_name_get());
 
+        LOG_EV("bundle_receive", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d",
+               bundle->id,
+               bundle->source,
+               bundle->destination,
+               bundle->creation_timestamp_ms
+        );
+
 		bundle_processor_inform(
 			config->bundle_agent_interface->bundle_signaling_queue,
 			new_id,

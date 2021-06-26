@@ -897,7 +897,7 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
 
     uint32_t sent = 0;
 
-    LOG_EV("l2cap_transmit_bytes", "\"to_mac_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\", \"num_bytes\": %d", ml2cap_link->mac_addr, ml2cap_link->conn, ml2cap_link, length);
+    LOG_EV("tx", "\"to_mac_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\", \"num_bytes\": %d", ml2cap_link->mac_addr, ml2cap_link->conn, ml2cap_link, length);
 
     while (sent < length) {
         //LOGF("l2cap_transmit_bytes sent %d", sent);

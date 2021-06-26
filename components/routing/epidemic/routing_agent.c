@@ -169,6 +169,16 @@ enum ud3tn_result send_sv(const char* sink, const char *destination_eid, struct 
         return UD3TN_FAIL;
     }
 
+    LOG_EV("sv_bundle", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d, \"payload_length\": %d, \"lifetime_ms\": %d, \"hop_count\": %d",
+           bundle->id,
+           bundle->source,
+           bundle->destination,
+           bundle->creation_timestamp_ms,
+           payload_size,
+           CONFIG_ROUTING_AGENT_BUNDLE_LIFETIME_S,
+           0
+    );
+
     // from now on, the bundle and its resources (e.g. the payload are handled by the bundle processor)
     bundle_processor_inform(
             routing_agent_config.bundle_agent_interface->bundle_signaling_queue,
@@ -441,11 +451,14 @@ void generate_fake_bundles() {
         bundleid_t bundle_id = bundle_storage_add(bundle);
 
         if (bundle_id != BUNDLE_INVALID_ID) {
-              LOG_EV("generate_fake_bundle", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d",
+              LOG_EV("generate_fake_bundle", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d, \"payload_length\": %d, \"lifetime_ms\": %d, \"hop_count\": %d",
                bundle->id,
                bundle->source,
                bundle->destination,
-               bundle->creation_timestamp_ms
+               bundle->creation_timestamp_ms,
+               payload_length,
+               CONFIG_FAKE_BUNDLE_LIFETIME,
+               0
            );
             bundle_processor_inform(
                     routing_agent_config.bundle_agent_interface->bundle_signaling_queue,
