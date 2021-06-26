@@ -44,7 +44,7 @@ def init_eval_tables(db):
         Field('peripheral', 'reference device', notnull=True),
         Field('client_rx_bytes', type='integer'),
         Field('client_tx_bytes', type='integer'),
-        Field('client_channel_init_us', type='bigint'),
+        Field('client_conn_init_us', type='bigint'),
         Field('client_channel_up_us', type='bigint'),
         Field('client_channel_down_us', type='bigint'),
         Field('client_connection_success_us', type='bigint'),

@@ -145,7 +145,7 @@ def handle_connections(db, run):
             "client_tx_bytes": 0,
             "peripheral_rx_bytes": 0,
             "peripheral_tx_bytes": 0,
-            "client_channel_init_us": e.us
+            "client_conn_init_us": e.us
         })
 
     db.commit()
@@ -156,9 +156,9 @@ def handle_connections(db, run):
         assert device_b
 
         conn_ev = db(
-                (db.conn_info.run == run) & (db.conn_info.client_channel_init_us <= up_to_us)
+                (db.conn_info.run == run) & (db.conn_info.client_conn_init_us <= up_to_us)
                 & (((db.conn_info.client == device_a) & (db.conn_info.peripheral == device_b)) | ((db.conn_info.client == device_b) & (db.conn_info.peripheral == device_a)))
-            ).select(db.conn_info.ALL, orderby=~db.conn_info.client_channel_init_us, limitby=(0,1))[0]
+            ).select(db.conn_info.ALL, orderby=~db.conn_info.client_conn_init_us, limitby=(0,1))[0]
 
         return (device_a.id == conn_ev.client.id, conn_ev)
 
@@ -170,7 +170,7 @@ def handle_connections(db, run):
     for et in event_types:
         for e in iter_events_with_devices(db, run, et):
             (is_client, conn_ev) = find_conn_event(e.device, e['data']['other_mac_addr'], e['us'])
-            assert conn_ev.client_channel_init_us < e['us']
+            assert conn_ev.client_conn_init_us < e['us']
 
             us_property = "{}_{}_us".format('client' if is_client else 'peripheral', et)
             assert conn_ev[us_property] is None
@@ -193,7 +193,7 @@ def handle_connections(db, run):
         for e in iter_events_with_devices(db, run, et):
             other_mac_addr_prop = 'from_mac_addr' if et == 'rx' else 'to_mac_addr'
             (is_client, conn_ev) = find_conn_event(e.device, e['data'][other_mac_addr_prop], e['us'])
-            assert conn_ev.client_channel_init_us < e['us']
+            assert conn_ev.client_conn_init_us < e['us']
 
             property = "{}_{}_bytes".format('client' if is_client else 'peripheral', et)
 
@@ -210,7 +210,7 @@ def handle_connections(db, run):
     print("Asserting connection info...")
     for conn_ev in db(db.conn_info.run == run).iterselect():
         # some timing assertions
-        assert conn_ev.client_connection_success_us is None or conn_ev.client_connection_success_us >= conn_ev.client_channel_init_us
+        assert conn_ev.client_connection_success_us is None or conn_ev.client_connection_success_us >= conn_ev.client_conn_init_us
 
         assert conn_ev.client_disconnect_us is None or conn_ev.client_disconnect_us >= conn_ev.client_connection_success_us
         assert conn_ev.client_channel_up_us is None or conn_ev.client_channel_up_us >= conn_ev.client_connection_success_us
@@ -245,7 +245,7 @@ def handle_connections(db, run):
 
     pprint(db.executesql('''
         SELECT
-        AVG(client_connection_success_us-client_channel_init_us) / 1000000,
+        AVG(client_connection_success_us-client_conn_init_us) / 1000000,
         AVG(client_channel_up_us-client_connection_success_us)/ 1000000,
         AVG(client_channel_down_us-client_channel_up_us)/ 1000000,
         AVG(client_disconnect_us-client_connection_success_us)/ 1000000,
