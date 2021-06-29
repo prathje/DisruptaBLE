@@ -37,7 +37,7 @@ def compile_and_move(rdir, exec_name, overlay_config):
 def spawn_node_process(exec_name, id):
     exec_path = os.path.join(config['BSIM_OUT_PATH'], "bin", exec_name)
 
-    print(exec_path + " " + '-s={} -d={}'.format(config['SIM_NAME'], id))
+    #print(exec_path + " " + '-s={} -d={}'.format(config['SIM_NAME'], id))
     process = subprocess.Popen([exec_path, '-s=' + config['SIM_NAME'], '-d=' + str(id)],
                                cwd=config['BSIM_OUT_PATH']+"/bin",
                                text=True,
@@ -55,6 +55,7 @@ def output_to_event_iter(o):
     global max_us
     for line in o:
         re_match = event_re.match(line.rstrip())
+        #print(line.rstrip())
         if re_match:
             device, ts, event_type, data_str = re_match.groups()
             try:
@@ -169,7 +170,7 @@ if __name__ == "__main__":
     max_us = -1
 
 
-    event_queue_size = 200
+    event_queue_size = 250
 
     event_queue = queue.Queue(maxsize=event_queue_size)
 
@@ -191,18 +192,14 @@ if __name__ == "__main__":
         t.start()
         log_threads.append(t)
 
-    done = False
-    while not done:
-        done = True
-        for p in [phy_process]+node_processes:
-            if p.poll() is None:
-                done = False
-        time.sleep(5.0)  # sleep 5 secs
 
     commit_thread_running = True
 
     def commit_thread():
         while commit_thread_running:
+
+            #print("event_queue.qsize()")
+            #print(event_queue.qsize())
 
             db(db.run.id == run).update(
                 progress=max_us
@@ -223,13 +220,21 @@ if __name__ == "__main__":
             if len(events) > 0:
                 db['event'].bulk_insert(events)
 
-            if event_queue.qsize() <= event_queue_size/10:
+            if event_queue.qsize() == 0:
                 # seems like there are not really many events for us to process atm
-                time.sleep(5.0)  # sleep 5 secs
+                time.sleep(0.5)  # sleep 5 secs
             db.commit()
 
     commit_thread = threading.Thread(target= commit_thread, args=(), daemon=True)
     commit_thread.start()
+
+    done = False
+    while not done:
+        done = True
+        for p in [phy_process]+node_processes:
+            if p.poll() is None:
+                done = False
+        time.sleep(5.0)  # sleep 5 secs
 
     for t in log_threads:
         t.join()
