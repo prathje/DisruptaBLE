@@ -9,6 +9,7 @@ import time
 import random
 from pydal import DAL, Field
 from datetime import datetime
+import queue
 
 import tables
 
@@ -53,7 +54,6 @@ event_re = re.compile(r"d\_(\d\d):\s\@(\d\d:\d\d:\d\d\.\d+)\s\sEVENT\s([^\s]+)\s
 def output_to_event_iter(o):
     global max_us
     for line in o:
-        #print(line.rstrip())
         re_match = event_re.match(line.rstrip())
         if re_match:
             device, ts, event_type, data_str = re_match.groups()
@@ -61,6 +61,7 @@ def output_to_event_iter(o):
                 data = json.loads(data_str)
             except:
                 print(line.rstrip())
+                yield None
                 return
 
             # time format: "00:00:00.010328"
@@ -70,6 +71,8 @@ def output_to_event_iter(o):
             us = int(ts[9:])
 
             overall_us = us + 1000000 * (s+60*m+3600*h)
+
+            #print(overall_us, line.rstrip())
 
             yield {
                 "device": int(device),
@@ -163,9 +166,12 @@ if __name__ == "__main__":
     )
     db.commit()
 
-    db_lock = threading.Lock()
-
     max_us = -1
+
+
+    event_queue_size = 200
+
+    event_queue = queue.Queue(maxsize=event_queue_size)
 
     def process_events(p):
         global max_us
@@ -177,10 +183,7 @@ if __name__ == "__main__":
                 print(max_us/1000000)
 
             e['run'] = run
-            db_lock.acquire()
-            db['event'].insert(**e)
-            db.commit()
-            db_lock.release()
+            event_queue.put(e)
 
     log_threads = []
     for p in node_processes:
@@ -194,25 +197,44 @@ if __name__ == "__main__":
         for p in [phy_process]+node_processes:
             if p.poll() is None:
                 done = False
+        time.sleep(5.0)  # sleep 5 secs
 
     commit_thread_running = True
 
     def commit_thread():
         while commit_thread_running:
-            db_lock.acquire()
+
             db(db.run.id == run).update(
                 progress=max_us
             )
-            db.commit()
-            db_lock.release()
-            time.sleep(1)  # sleep 1 second
 
+            batch_size = event_queue_size # the maximum amount of inserts per commit
+            events = []
+
+            try:
+                while batch_size > 0:
+                    ev = event_queue.get_nowait()
+                    events.append(ev)
+                    event_queue.task_done()
+                    batch_size -= 1
+            except queue.Empty:
+                pass
+
+            if len(events) > 0:
+                db['event'].bulk_insert(events)
+
+            if event_queue.qsize() <= event_queue_size/10:
+                # seems like there are not really many events for us to process atm
+                time.sleep(5.0)  # sleep 5 secs
+            db.commit()
 
     commit_thread = threading.Thread(target= commit_thread, args=(), daemon=True)
     commit_thread.start()
-    
+
     for t in log_threads:
         t.join()
+
+    event_queue.join()
 
     commit_thread_running = False
     commit_thread.join()
