@@ -366,6 +366,9 @@ def handle_bundles(db, run):
     db.commit()
     #pprint(list(db(db.device).select()))
 
+def handle_positions(db, run):
+    # TODO: import all positions using the dist_writer
+
 def eval_connections(db, runs):
     pprint(db.executesql('''
         SELECT

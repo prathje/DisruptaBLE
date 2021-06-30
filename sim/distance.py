@@ -1,5 +1,6 @@
 import math
 from utils import iter_nodes
+import threading
 import itertools
 
 # Important: We need to iterate the same way as BabbleSim for the best efficiency
@@ -68,9 +69,24 @@ def time_dist_iter_from_pos_iter(pos_iter, num_nodes, step_us):
 
     time_pos_iters = iter(itertools.tee(tp_iter, len(list(iter_nodes(num_nodes)))))
 
-    time_dist_iters = {}
+    lock = threading.Lock()
 
+    # itertools.tee is sadly not thread-safe ...
+    def thread_safe_iter(it):
+        try:
+            while True:
+                lock.acquire()
+                res = next(it)
+                lock.release()
+                yield res
+        finally:
+            print("iterator done")
+            lock.release()
+
+
+    time_dist_iters = {}
     for (a, b) in iter_nodes(num_nodes):
-        time_dist_iters[(a, b)] = time_dist_iter_from_time_pos_iter(next(time_pos_iters), a, b)
+        thread_safe_it = thread_safe_iter(next(time_pos_iters))
+        time_dist_iters[(a, b)] = time_dist_iter_from_time_pos_iter(thread_safe_it, a, b)
 
     return time_dist_iters

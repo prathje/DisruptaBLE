@@ -9,6 +9,8 @@ import itertools
 from utils import format_dist, iter_nodes
 import fcntl
 import progressbar
+import threading
+from pymobility.mobility import random_waypoint
 
 
 F_SETPIPE_SZ = 1031  # Linux 2.6.35+
@@ -44,132 +46,215 @@ def handle_distances(nr_nodes, distances):
         # We now start the simulation
 
 
+def rwp_iterators(num_proxy_nodes, model_options):
+
+    (dim_width, dim_height) = model_options['dimensions'] if 'dimensions' in model_options else (1000.0, 1000.0)
+    seconds_per_step = model_options['seconds_per_step'] if 'seconds_per_step' in model_options else 1.0
+
+
+    # TODO Add those to arguments
+    vel_min = model_options['vel_min'] if 'vel_min' in model_options else 0.1
+    vel_max = model_options['vel_max'] if 'vel_max' in model_options else 1.0
+
+    max_waiting_time = model_options['max_waiting_time'] if 'max_waiting_time' in model_options else 0.0 # we run without waiting time for now!
+
+    assert seconds_per_step > 0.0
+    assert dim_width > 0
+    assert vel_min <= vel_max
+    assert dim_height > 0
+    assert max_waiting_time >= 0
+
+    steps_per_second = 1.0 / seconds_per_step
+
+    us_per_step = int(seconds_per_step * 1000000.0)
+
+    # We scale everything to match the number of steps per second
+    # b (units / second) * (second / step) = b (units / step)
+    # a seconds * (steps / second) = a steps
+    proxy_pos_iter = random_waypoint(num_proxy_nodes, dimensions=(dim_width, dim_height),
+                                     velocity=(vel_min * seconds_per_step, vel_max * seconds_per_step),
+                                     wt_max=max_waiting_time * steps_per_second)
+    def add_static_source_node(it):
+        for pos_list in it:
+            yield [(dim_width/2, dim_height/2)] + list(pos_list)
+
+    pos_iter = add_static_source_node(proxy_pos_iter)
+
+    # Now we can output data for the individual pipes
+    # Loop over every pair, write as much as possible (e.g. buffer full) then move to the next element
+    time_dist_iterators = distance.time_dist_iter_from_pos_iter(pos_iter, num_proxy_nodes+1, us_per_step)
+
+    return time_dist_iterators
+
+
+def model_to_iterators(num_proxy_nodes, model, model_options, rseed):
+    numpy.random.seed(rseed)
+    if model =='rwp':
+        return rwp_iterators(num_proxy_nodes, model_options)
+    else:
+        print("Could not find model {}".format(model))
+        exit(1)
+
+
+
+def distance_writer_thread(tmp_dir, num_nodes, iterators):
+
+    dist_file_path = os.path.join(tmp_dir, "distances.matrix")
+
+    # create the main distance file to describe the named pipes, this will block (not as all the other pipes!)
+    dist_fd = os.open(dist_file_path, os.O_WRONLY)
+
+    os.write(dist_fd, bytes("#<Txnbr> <Rxnbr> : {<distance>|\"<distance_file_name>\"}\n", 'ascii'))
+
+    files = {}
+
+    # The BabbleSim indoor channel order matches exactly our iter_nodes order
+    # as such we first open
+
+    for (a, b) in progressbar.progressbar(list(iter_nodes(num_nodes))):
+
+        filepath = os.path.join(tmp_dir, get_dist_file_name(a, b))
+
+        # create fifo
+        os.mkfifo(filepath)
+
+        # write to distance file
+        row = "{} {} \"{}\"\n".format(str(a), str(b), os.path.join(tmp_dir, get_dist_file_name(a, b)))
+        os.write(dist_fd, bytes(row, 'ascii'))
+
+        file = None
+        # File not open -> we try to open it before usage
+        while file is None :
+            try:
+                file = os.open(filepath, os.O_WRONLY | os.O_NONBLOCK)
+
+                #print("opened " + str((a,b)))
+
+                if PIPE_NEW_BUF_SIZE is not None:  # TODO: Check the real performance impact
+                    fcntl.fcntl(file, F_SETPIPE_SZ, PIPE_NEW_BUF_SIZE)
+            except OSError as ex:
+                if ex.errno == errno.ENXIO:
+                    time.sleep(0.1)
+                    #print("Sleeping open for "+ str((a,b)))
+                    pass  # try later
+        files[(a, b)] = file
+
+        first_entries = itertools.islice(iterators[(a, b)], 2)    # 2
+
+        for (t_us, d) in first_entries:
+            row = "{} {}\n".format(t_us, format_dist(d))
+            success = False
+            while not success:
+                try:
+                    os.write(file, bytes(row, 'ascii'))
+                    success = True  # we continue with the next value if written
+                except BlockingIOError as ex:
+                    if ex.errno == errno.EAGAIN:
+                        time.sleep(0.1)
+                        #print("Sleeping write for " + str((a, b)))
+                        pass  # try later
+
+    # we finished writing the dist file
+    os.close(dist_fd)
+
+    all_pairs = list(iter_nodes(num_nodes))
+    num_writer_threads = max(1, min(10, num_nodes))
+
+    def partial_writer_thread(partial_pairs, partial_files, partial_iterators):
+        # we cache all lines that still require sending
+        line_cache = {}
+        for (a, b) in partial_pairs:
+            line_cache[(a,b)] = None
+
+        while True:
+            # get the next entry for every pair (if not already cached!)
+            for (a,b) in partial_pairs:
+                if line_cache[(a,b)] is None:
+                    line_cache[(a,b)] = next(partial_iterators[(a, b)], None) # this might still be None afterward!
+
+            entry_found = False # check if we have at least one more entry to write!
+            one_successful_write = False # check if we have at least one more entry to write!
+
+            for (a,b) in partial_pairs:
+                if line_cache[(a,b)] is None:
+                    continue
+
+                entry_found = True
+                # we now try to write this line
+                (t_us, d) = line_cache[(a,b)]
+                row = "{} {}\n".format(t_us, format_dist(d))
+                try:
+                    os.write(partial_files[(a, b)], bytes(row, 'ascii'))
+                    line_cache[(a,b)] = None # Reset in case of success!
+                    one_successful_write = True
+                except BlockingIOError as ex:
+                    pass    # nothing
+
+            if not one_successful_write:
+                time.sleep(1.0) # we sleep a bit if we could not write anything...
+
+            if not entry_found:
+                break   # Seems like we wrote everything \o/
+
+
+    partial_writer_threads = []
+    for i in range(num_writer_threads):
+        partial_pairs = all_pairs[i::num_writer_threads]    # we equally distribute
+
+        partial_files = {}
+        partial_iterators = {}
+
+        for (a, b) in partial_pairs:
+            partial_files[(a,b)] = files[(a,b)]
+            partial_iterators[(a,b)] = iterators[(a,b)]
+
+        t = threading.Thread(target=partial_writer_thread, args=(partial_pairs, partial_files, partial_iterators), daemon=True)
+        t.start()
+        partial_writer_threads.append(t)
+
+    for p in partial_writer_threads:
+        p.join()
+    # since everything is initalized, we just loop through the indiviudal entries one by one
+
+
+
+
+
+
+def start(directory, num_proxy, rseed, model, model_options={}):
+
+    tmp_dir = tempfile.mkdtemp(dir=directory)
+    dist_file_path = os.path.join(tmp_dir, "distances.matrix")
+
+    iterators = model_to_iterators(num_proxy, model, model_options, rseed)
+
+    # First: Create the distance matrix pipe so we can return the filepath
+    # note that this will block bsim as long as the data has not yet been written to the pipe
+    dist_file_path = os.path.join(tmp_dir, "distances.matrix")
+    os.mkfifo(dist_file_path)
+
+    # we can now start the thread that actually writes the file contents
+    t = threading.Thread(target=distance_writer_thread, args=(tmp_dir, num_proxy+1, iterators), daemon=True)
+    t.start()
+
+    return dist_file_path
+
+
+def cleanup(dist_file_path):
+      dir = os.path.dirname(dist_file_path)
+      print("TODO: Delete distance directory!")
+      print(dir)
+
+
 if __name__ == "__main__":
-    from pymobility.mobility import random_waypoint
+
 
     parser = argparse.ArgumentParser(description='Write distances')
 
     parser.add_argument('num_proxy', help='The number of proxy nodes', default=100)
     parser.add_argument('--model', help='The model to use', default='rwp')
-    parser.add_argument('--model_seconds_per_step', help='The model to use', default=1.0)
-    parser.add_argument('--model_dim_width', help='The model width dimension', default=1000.0)
-    parser.add_argument('--model_dim_height', help='The model height dimension', default=1000.0)
     parser.add_argument('--rseed', help='The random seed to use', default=0)
 
     args = parser.parse_args()
 
-    num_proxy_nodes = int(args.num_proxy)
-    seconds_per_step = float(args.model_seconds_per_step)
-    steps_per_second = 1.0 / seconds_per_step
-
-    us_per_step = int(seconds_per_step * 1000000.0)
-    dimensions = (args.model_dim_width, args.model_dim_height)
-
-    # TODO Add those to arguments
-    vel_min = 0.1  # m/s
-    vel_max = 1.0  # m/s
-    max_waiting_time = 1.0  # s
-
-    numpy.random.seed(args.rseed)
-    # We scale everything to match the number of steps per second
-    # b (units / second) * (second / step) = b (units / step)
-    # a seconds * (steps / second) = a steps
-    proxy_pos_iter = random_waypoint(num_proxy_nodes, dimensions=dimensions,
-                               velocity=(vel_min * seconds_per_step, vel_max * seconds_per_step),
-                               wt_max=max_waiting_time * steps_per_second)
-    def add_static_source_node(it):
-        for pos_list in it:
-            yield [()] + pos_list
-
-    pos_iter = add_static_source_node(proxy_pos_iter)
-
-    num_nodes = num_proxy_nodes+1
-
-    with tempfile.TemporaryDirectory() as dirpath:
-
-        # First: Create the distance matrix pipe
-
-        dist_file_path = os.path.join(dirpath, "distances.matrix")
-        os.mkfifo(dist_file_path)
-
-        # output distance file path
-        print(dist_file_path)
-
-        # create the main distance file to describe the named pipes, this will block (not as all the other pipes!)
-        dist_fd = os.open(dist_file_path, os.O_WRONLY)
-
-        os.write(dist_fd, bytes("#<Txnbr> <Rxnbr> : {<distance>|\"<distance_file_name>\"}\n", 'ascii'))
-
-
-        # Now we can output data for the individual pipes
-        # Loop over every pair, write as much as possible (e.g. buffer full) then move to the next element
-        time_dist_iterators = distance.time_dist_iter_from_pos_iter(pos_iter, num_nodes, us_per_step)
-
-        files = {}
-
-        # The BabbleSim indoor channel order matches exactly our iter_nodes order
-        # as such we first open
-
-        for (a, b) in progressbar.progressbar(list(iter_nodes(num_nodes))):
-
-            filepath = os.path.join(dirpath, get_dist_file_name(a, b))
-
-            # create fifo
-            os.mkfifo(filepath)
-
-            # write to distance file
-            row = "{} {} \"{}\"\n".format(str(a), str(b), os.path.join(dirpath, get_dist_file_name(a, b)))
-            os.write(dist_fd, bytes(row, 'ascii'))
-
-            file = None
-            # File not open -> we try to open it before usage
-            while file is None :
-                try:
-                    file = os.open(filepath, os.O_WRONLY | os.O_NONBLOCK)
-
-                    #print("opened " + str((a,b)))
-
-                    if PIPE_NEW_BUF_SIZE is not None:  # TODO: Check the real performance impact
-                        fcntl.fcntl(file, F_SETPIPE_SZ, PIPE_NEW_BUF_SIZE)
-                except OSError as ex:
-                    if ex.errno == errno.ENXIO:
-                        time.sleep(0.1)
-                        #print("Sleeping open for "+ str((a,b)))
-                        pass  # try later
-            files[(a, b)] = file
-
-            first_entries = itertools.islice(time_dist_iterators[(a, b)], 2)    # 2
-
-            for (t_us, d) in first_entries:
-                row = "{} {}\n".format(t_us, format_dist(d))
-                success = False
-                while not success:
-                    try:
-                        os.write(file, bytes(row, 'ascii'))
-                        #print("written " + str((a, b)))
-                        success = True  # we continue with the next value if written
-                    except BlockingIOError as ex:
-                        if ex.errno == errno.EAGAIN:
-                            time.sleep(0.1)
-                            #print("Sleeping write for " + str((a, b)))
-                            pass  # try later
-
-        os.close(dist_fd)
-
-        # since everything is initalized, we just loop through the indiviudal entries one by one
-        while True:
-            for (a,b) in iter_nodes(num_nodes):
-
-                (t_us, d) = next(time_dist_iterators[(a, b)])
-                row = "{} {}\n".format(t_us, format_dist(d))
-                file = files[(a, b)]
-
-                success = False
-                while not success:
-                    try:
-                        os.write(file, bytes(row, 'ascii'))
-                        success = True
-                    except BlockingIOError as ex:
-                        if ex.errno == errno.EAGAIN:
-                            print("Waiting for write " + str((a, b)) + ": " + str((t_us, d)))
-                            time.sleep(0.1)
+    print(start(int(args.num_proxy), int(args.rseed), args.model))

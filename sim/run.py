@@ -10,6 +10,7 @@ import random
 from pydal import DAL, Field
 from datetime import datetime
 import queue
+import dist_writer
 
 import tables
 
@@ -21,7 +22,6 @@ config = {
 }
 
 def compile_and_move(rdir, exec_name, overlay_config):
-
     bdir = os.path.join(rdir, "build", exec_name)
 
     west_build_command =  "west build -b nrf52_bsim {} --build-dir {} --pristine auto -- -DOVERLAY_CONFIG={}".format(config['SIM_SOURCE_DIR'], bdir, overlay_config)
@@ -141,6 +141,16 @@ if __name__ == "__main__":
         )
 
 
+    model = config['SIM_MODEL']
+    model_options = {}
+
+    if 'SIM_MODEL_OPTIONS' in config and config['SIM_MODEL_OPTIONS']:
+        model_options = json.loads(config['SIM_MODEL_OPTIONS'])
+
+    dist_dir = os.path.join(rdir, "distances")
+    os.makedirs(dist_dir, exist_ok=True)
+    dist_file_path = dist_writer.start(dist_dir, int(config['SIM_PROXY_NUM_NODES']), rseed, model, model_options)
+
     phy_exec_path = os.path.join(config['BSIM_OUT_PATH'], "bin", "bs_2G4_phy_v1")
 
     phy_process = subprocess.Popen([phy_exec_path,
@@ -153,6 +163,7 @@ if __name__ == "__main__":
                                     '-argschannel',
                                     '-preset=Huge3',
                                     '-speed=1.1',
+                                    '-dist=' + dist_file_path,
                                     '-at='+str(int(config['SIM_FIXED_ATTENUATION']))
                                     ],
                                    cwd=config['BSIM_OUT_PATH']+"/bin",
@@ -257,5 +268,8 @@ if __name__ == "__main__":
 
     db.commit()
     print("DONE!")
+
+    print("Cleaning up...")
+    dist_writer.cleanup(dist_file_path)
     # TODO: Register Simulation in a database?
     # TODO: Spawn dist_write process!
