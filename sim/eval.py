@@ -243,20 +243,6 @@ def handle_connections(db, run):
     print("Done!")
 
 
-    pprint(db.executesql('''
-        SELECT
-        AVG(client_connection_success_us-client_conn_init_us) / 1000000,
-        AVG(client_channel_up_us-client_connection_success_us)/ 1000000,
-        AVG(client_channel_down_us-client_channel_up_us)/ 1000000,
-        AVG(client_disconnect_us-client_connection_success_us)/ 1000000,
-        AVG(client_connection_success_us-peripheral_connection_success_us) / 1000000,
-        AVG(client_disconnect_us-peripheral_disconnect_us)/ 1000000,
-        AVG(client_rx_bytes / ((client_channel_down_us-client_channel_up_us)/ 1000000)),
-        AVG(peripheral_rx_bytes / ((peripheral_channel_down_us-peripheral_channel_up_us)/ 1000000))
-        FROM conn_info
-    '''))
-
-
     # How to find the correct connection event?
     # Just use the latest one would not work as another device might tried to connect to us in the meantime
     # we thus need to use the connection and mac_address    to filter the correct conn_init entry
@@ -380,6 +366,23 @@ def handle_bundles(db, run):
     db.commit()
     #pprint(list(db(db.device).select()))
 
+def eval_connections(db, runs):
+    pprint(db.executesql('''
+        SELECT
+        AVG(client_connection_success_us-client_conn_init_us) / 1000000,
+        AVG(client_channel_up_us-client_connection_success_us)/ 1000000,
+        AVG(client_channel_down_us-client_channel_up_us)/ 1000000,
+        AVG(client_disconnect_us-client_connection_success_us)/ 1000000,
+        AVG(client_connection_success_us-peripheral_connection_success_us) / 1000000,
+        AVG(client_disconnect_us-peripheral_disconnect_us)/ 1000000,
+        AVG(client_rx_bytes / ((client_channel_down_us-client_channel_up_us)/ 1000000)),
+        AVG(peripheral_rx_bytes / ((peripheral_channel_down_us-peripheral_channel_up_us)/ 1000000))
+        FROM conn_info where run IN ?
+    ''', [runs]))
+    pass
+
+def eval_transmission(db, runs):
+    pass
 
 if __name__ == "__main__":
 
@@ -409,3 +412,9 @@ if __name__ == "__main__":
     for run in runs:
         for h in handlers:
             h(db, run)
+
+    # TODO: Group them by something?!
+    runs = list(db(db.run.status == 'finished').iterselect())
+
+    eval_connections(db, runs)
+    eval_transmission(db, runs)
