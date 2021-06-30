@@ -22,6 +22,7 @@ config = {
 }
 
 def compile_and_move(rdir, exec_name, overlay_config):
+    #return TODO allow to skip compilation?
     bdir = os.path.join(rdir, "build", exec_name)
 
     west_build_command =  "west build -b nrf52_bsim {} --build-dir {} --pristine auto -- -DOVERLAY_CONFIG={}".format(config['SIM_SOURCE_DIR'], bdir, overlay_config)
@@ -35,16 +36,26 @@ def compile_and_move(rdir, exec_name, overlay_config):
     )
 
 def spawn_node_process(exec_name, id):
+
     exec_path = os.path.join(config['BSIM_OUT_PATH'], "bin", exec_name)
 
-    #print(exec_path + " " + '-s={} -d={}'.format(config['SIM_NAME'], id))
-    process = subprocess.Popen([exec_path, '-s=' + config['SIM_NAME'], '-d=' + str(id)],
-                               cwd=config['BSIM_OUT_PATH']+"/bin",
-                               text=True,
-                               stdout=subprocess.PIPE,
-                               bufsize=1,
-                               stderr=sys.stderr,
-    encoding="ISO-8859-1")
+    if 'SIM_VALGRIND_SOURCE' in config and int(config['SIM_VALGRIND_SOURCE']) and id == 0:
+        exec_cmd = "valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind-out.txt " + exec_path + ' -s=' + config['SIM_NAME'] +  ' -d=' + str(id)
+        print(exec_cmd)
+
+        process = subprocess.Popen(exec_cmd, shell=True, text=True,
+                                 stdout=subprocess.PIPE,
+                                 bufsize=1,
+                                 stderr=sys.stderr,
+                                 encoding="ISO-8859-1")
+    else:
+        process = subprocess.Popen([exec_path, '-s=' + config['SIM_NAME'], '-d=' + str(id)],
+                                   cwd=config['BSIM_OUT_PATH']+"/bin",
+                                   text=True,
+                                   stdout=subprocess.PIPE,
+                                   bufsize=1,
+                                   stderr=sys.stderr,
+        encoding="ISO-8859-1")
 
     return process
 
