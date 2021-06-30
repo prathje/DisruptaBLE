@@ -39,6 +39,8 @@ struct zephyr_task *hal_task_create(void (*task_function)(void *), const char *t
 		    int task_priority, void *task_parameters,
 		    size_t task_stack_size, void *task_tag)
 {
+
+
 	/* ensure that an actual function is provided for thread creation */
 	ASSERT(task_function != NULL);
 
@@ -58,6 +60,8 @@ struct zephyr_task *hal_task_create(void (*task_function)(void *), const char *t
         free(task);
         return NULL;
     }
+
+    memset(task->stack, 0, adjusted_stack_size); // reset the whole stack, TODO: Is this good or bad practice?
 
     task->tid = k_thread_create(
                             &task->thread,
@@ -86,13 +90,24 @@ struct zephyr_task *hal_task_create(void (*task_function)(void *), const char *t
 	return task;
 }
 
+// TODO: This assumes alignment to 4 bytes
+K_MSGQ_DEFINE(free_task_queue, sizeof(struct zephyr_task *), 4, 4);
+
 void hal_task_start_scheduler(void)
 {
 	// NO scheduler start required for Zephyr
-	// we just sleep all day
+	// we just need to free exited threads
 
 	while(true) {
-	    k_sleep(K_FOREVER); // K_FOREVER suspends the thread
+        struct zephyr_task *task;
+        if (!k_msgq_get(&free_task_queue, &task, K_FOREVER)) {
+            if (!k_thread_join(task->tid, K_FOREVER)) {
+                free(task->stack);
+                free(task);
+            } else {
+                LOGF("Could not free thread %p", task);
+            }
+        }
 	}
 }
 
@@ -104,7 +119,8 @@ void hal_task_delay(int delay)
 
 void hal_task_delete(struct zephyr_task *task)
 {
-    k_thread_abort(task->tid); // TODO: Do we need to ensure that the thread is not running anymore?
-    free(task->stack);
-    free(task);
+    while (k_msgq_put(&free_task_queue, &task, K_FOREVER) != 0) {
+        LOGF("Could not immediately queue thread for freeing %p", task);
+        continue;
+    }
 }
