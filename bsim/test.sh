@@ -37,4 +37,4 @@ do
   ./bs_nrf52_bsim_dtn_proxy -s=dtn_sim -d=$i &
 done
 
-./bs_2G4_phy_v1 -s=dtn_sim -D=$(($SIM_NUM_DEVICES+0)) -sim_length=10806400000e0 -defmodem=BLE_simple -channel=Indoorv1 -argschannel -preset=Huge3 -speed=1.1 -at=50
+./bs_2G4_phy_v1 -s=dtn_sim -D=$(($SIM_NUM_DEVICES+0)) -sim_length=60e6 -defmodem=BLE_simple -channel=Indoorv1 -argschannel -preset=Huge3 -speed=1.1 -at=50
