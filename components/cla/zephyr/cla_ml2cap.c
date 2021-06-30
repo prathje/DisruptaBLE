@@ -288,6 +288,7 @@ static void chan_connected_cb(struct bt_l2cap_chan *chan) {
     struct ml2cap_link *link = find_link_by_connection(chan->conn);
     if (link != NULL) {
         // TODO: is this the correct place for channel_up?
+        ASSERT(!link->chan_connected);
         link->chan_connected = true;
 
         on_channel_up(link);
@@ -303,6 +304,7 @@ static void chan_connected_cb(struct bt_l2cap_chan *chan) {
             const struct bundle_agent_interface *const bundle_agent_interface = ml2cap_config->base.bundle_agent_interface;
             hal_queue_push_to_back(bundle_agent_interface->router_signaling_queue, &rt_signal);
         } else {
+            link->chan_connected = false;
             LOGF("ML2CAP: Error initializing CLA link for \"%s\"", link->cla_addr);
             bt_conn_disconnect(chan->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
         }
@@ -318,17 +320,14 @@ static void chan_disconnected_cb(struct bt_l2cap_chan *chan) {
     struct ml2cap_link *link = find_link_by_connection(chan->conn);
     if (link != NULL) {
 
-        bool was_connected = link->chan_connected;
-
         // is the right place for that?
         on_channel_down(link);
         LOG_EV("channel_down", "\"other_mac_addr\": \"%s\", \"connection\": \"%p\"", link->mac_addr, link->conn);
-        link->chan_connected = false;
 
-        if (was_connected) {
+        link->shutting_down = true; // this will bring down the rx and tx task
+
+        if (link->chan_connected) {
             // TODO: Move deconstruction to a separate thread
-            link->shutting_down = true; // this will bring down the rx and tx task
-
             // the connection is up and running -> rx and tx tasks have been initialized!
             // so we first first disable them!
             cla_generic_disconnect_handler(&link->base);
@@ -349,8 +348,8 @@ static void chan_disconnected_cb(struct bt_l2cap_chan *chan) {
             // and wait for clean-up
             // TODO: This could take a while and might block connection handling? (we remove, notify and release therefore before this call)
             cla_link_wait_cleanup(&link->base);
+            link->chan_connected = false;
         }
-
     } else {
         printk("Could not find link in chan_disconnected_cb\n");
     }
@@ -388,7 +387,6 @@ int chan_accept(struct bt_conn *conn, struct bt_l2cap_chan **chan) {
     struct ml2cap_link *link = find_link_by_connection(conn);
     int ret = 0;
     if (link != NULL) {
-        link->chan_connected = false;
         *chan = &link->le_chan.chan;
     } else {
         printk("Could not find link in chan_disconnected_cb\n");
@@ -822,7 +820,7 @@ static enum ud3tn_result ml2cap_read(struct cla_link *link,
     // Receive at least one byte in blocking manner from the RX queue
     while (hal_queue_receive(rx_queue, stream, COMM_RX_TIMEOUT) != UD3TN_OK) {
         // it might be that we have disconnected while waiting...
-        if (!ml2cap_link->chan_connected) {
+        if (ml2cap_link->shutting_down) {
             *bytes_read = 0;
             return UD3TN_FAIL;
         }
@@ -970,7 +968,7 @@ static struct cla_tx_queue ml2cap_get_tx_queue(
     hal_semaphore_take_blocking(ml2cap_config->links_sem);
     struct ml2cap_link *link = find_link_by_cla_address(cla_addr);
 
-    if (link && link->chan_connected) {
+    if (link && !link->shutting_down) {
         struct cla_link *const cla_link = &link->base;
 
         hal_semaphore_take_blocking(cla_link->tx_queue_sem);
