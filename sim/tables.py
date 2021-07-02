@@ -13,6 +13,7 @@ def init_tables(db):
         Field('simulation_time', type='bigint', notnull=True),
         Field('progress', type='bigint', notnull=True),
         Field('num_proxy_devices', type='integer', notnull=True),
+        Field('configuration_json',  type='text', notnull=True),
         redefine=False
     )
 

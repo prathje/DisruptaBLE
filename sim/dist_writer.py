@@ -92,9 +92,24 @@ def model_to_iterators(num_proxy_nodes, model, model_options, rseed):
     if model =='rwp':
         return rwp_iterators(num_proxy_nodes, model_options)
     else:
-        print("Could not find model {}".format(model))
-        exit(1)
 
+        if 'distance' not in model_options:
+            print("key distance not in model_options")
+            exit(1)
+
+        d = float(model_options['distance'])
+        def fixed_iter():
+            # Hacky stuff!
+            ts = 0
+            while True:
+                yield (ts, d)
+                ts += 1
+
+        iterators = {}
+        for (a,b) in iter_nodes(num_proxy_nodes+1):
+            iterators[(a,b)] = fixed_iter()
+
+        return iterators
 
 
 def distance_writer_thread(tmp_dir, num_nodes, iterators):
@@ -135,7 +150,7 @@ def distance_writer_thread(tmp_dir, num_nodes, iterators):
             except OSError as ex:
                 if ex.errno == errno.ENXIO:
                     time.sleep(0.1)
-                    #print("Sleeping open for "+ str((a,b)))
+                    print("Sleeping open for "+ str((a,b)))
                     pass  # try later
         files[(a, b)] = file
 
@@ -189,6 +204,9 @@ def distance_writer_thread(tmp_dir, num_nodes, iterators):
                     one_successful_write = True
                 except BlockingIOError as ex:
                     pass    # nothing
+                except BrokenPipeError:
+                    print("BrokenPipeError!")
+                    break   # we close this writer thread straight away TODO: This could deadlock the execution?
 
             if not one_successful_write:
                 time.sleep(1.0) # we sleep a bit if we could not write anything...

@@ -79,9 +79,9 @@ def time_dist_iter_from_pos_iter(pos_iter, num_nodes, step_us):
                 res = next(it)
                 lock.release()
                 yield res
-        finally:
-            print("iterator done")
+        except StopIteration:
             lock.release()
+            print("iterator done")
 
 
     time_dist_iters = {}
