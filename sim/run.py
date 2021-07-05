@@ -63,7 +63,7 @@ def spawn_node_process(exec_name, id, additional_args=[]):
 
 
 event_re = re.compile(r"d\_(\d+):\s\@(\d\d:\d\d:\d\d\.\d+)\s\sEVENT\s([^\s]+)\s(.+)")
-error_re = re.compile(r"d\_(\d+):\s\@(\d\d:\d\d:\d\d\.\d+)\s\s(.*(?:not|error|fail|invalid).*)", re.IGNORECASE)
+error_re = re.compile(r"d\_(\d+):\s\@(\d\d:\d\d:\d\d\.\d+)\s\s(.*(?:not|error|fail|invalid|warning|broken).*)", re.IGNORECASE)
 
 def output_to_event_iter(o):
     global max_us
