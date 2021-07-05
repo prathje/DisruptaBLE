@@ -264,7 +264,7 @@ def handle_bundles(db, run):
                 creation_timestamp_ms=e.data['creation_timestamp_ms'],
                 payload_length=e.data['payload_length'],
                 is_sv=et == 'sv_bundle',
-                lifetime_ms=e.data['lifetime_ms'],
+                lifetime_ms=e.data['lifetime_s']*1000,
                 hop_count=e.data['hop_count']
             )
 
