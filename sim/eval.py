@@ -370,7 +370,16 @@ def handle_positions(db, run):
     pass
     # TODO: import all positions using the dist_writer
 
+def run_in(runs):
+    s = "run IN ("
+    s += ", ".join([str(r.id) for r in runs])
+    s += ")"
+    return s
+
 def eval_connections(db, runs):
+
+    print([r.id for r in runs])
+
     pprint(db.executesql('''
         SELECT
         AVG(client_connection_success_us-client_conn_init_us) / 1000000,
@@ -381,8 +390,8 @@ def eval_connections(db, runs):
         AVG(client_disconnect_us-peripheral_disconnect_us)/ 1000000,
         AVG(client_rx_bytes / ((client_channel_down_us-client_channel_up_us)/ 1000000)),
         AVG(peripheral_rx_bytes / ((peripheral_channel_down_us-peripheral_channel_up_us)/ 1000000))
-        FROM conn_info where run IN ?
-    ''', [runs]))
+        FROM conn_info where {}
+    '''.format(run_in(runs))))
     pass
 
 def eval_transmission(db, runs):
