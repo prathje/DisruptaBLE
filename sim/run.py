@@ -19,7 +19,6 @@ import tables
 config = {
     **dotenv.dotenv_values(".env"),  # load shared development variables
     **dotenv.dotenv_values(".env.local"),  # load sensitive variables
-    **dotenv.dotenv_values("run.env"),  # run specific variables TODO: Make this configurable?
     **os.environ,  # override loaded values with environment variables
 }
 
