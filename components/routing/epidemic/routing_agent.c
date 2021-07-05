@@ -169,7 +169,7 @@ enum ud3tn_result send_sv(const char* sink, const char *destination_eid, struct 
         return UD3TN_FAIL;
     }
 
-    LOG_EV("sv_bundle", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d, \"payload_length\": %d, \"lifetime_ms\": %d, \"hop_count\": %d",
+    LOG_EV("sv_bundle", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d, \"payload_length\": %d, \"lifetime_s\": %d, \"hop_count\": %d",
            bundle->id,
            bundle->source,
            bundle->destination,
@@ -341,7 +341,7 @@ enum ud3tn_result routing_agent_init(const struct bundle_agent_interface *bundle
 
 void routing_agent_send_offer_sv(const char *eid, struct summary_vector *offer_sv) {
     //hal_semaphore_take_blocking(routing_agent_config.routing_agent_contact_htab_sem);
-    LOG_EV("send_offer_sv", "\"to_eid\": \"%s\", \"sv_length\": %d", eid, offer_sv->length);
+    //LOG_EV("send_offer_sv", "\"to_eid\": \"%s\", \"sv_length\": %d", eid, offer_sv->length);
 
     if (send_sv(ROUTING_AGENT_SINK_OFFER, eid,  offer_sv) != UD3TN_OK) {
         LOGF("Routing Agent: Could not send offer SV to %s", eid);
@@ -451,7 +451,7 @@ void generate_fake_bundles() {
         bundleid_t bundle_id = bundle_storage_add(bundle);
 
         if (bundle_id != BUNDLE_INVALID_ID) {
-              LOG_EV("generate_fake_bundle", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d, \"payload_length\": %d, \"lifetime_ms\": %d, \"hop_count\": %d",
+              LOG_EV("generate_fake_bundle", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d, \"payload_length\": %d, \"lifetime_s\": %d, \"hop_count\": %d",
                bundle->id,
                bundle->source,
                bundle->destination,
