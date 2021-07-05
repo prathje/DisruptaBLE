@@ -63,6 +63,7 @@ def spawn_node_process(exec_name, id, additional_args=[]):
 
 
 event_re = re.compile(r"d\_(\d+):\s\@(\d\d:\d\d:\d\d\.\d+)\s\sEVENT\s([^\s]+)\s(.+)")
+error_re = re.compile(r"d\_(\d+):\s\@(\d\d:\d\d:\d\d\.\d+)\s\s(.*(?:not|error|fail|invalid).*)", re.IGNORECASE)
 
 def output_to_event_iter(o):
     global max_us
@@ -94,6 +95,25 @@ def output_to_event_iter(o):
                 "type": event_type,
                 "data_json": data_str
             }
+        else:
+            error_match = error_re.match(line.rstrip())
+            if error_match:
+                device, ts, error_str = error_match.groups()
+
+                # time format: "00:00:00.010328"
+                h = int(ts[0:2])
+                m = int(ts[3:5])
+                s = int(ts[6:8])
+                us = int(ts[9:])
+
+                overall_us = us + 1000000 * (s+60*m+3600*h)
+                #print(overall_us, line.rstrip())
+                yield {
+                    "device": int(device),
+                    "us": overall_us,
+                    "type": "error",
+                    "data_json": json.dumps({"msg": data_str})
+                }
 
 if __name__ == "__main__":
 
