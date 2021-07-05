@@ -215,7 +215,7 @@ def handle_connections(db, run):
         assert conn_ev.client_disconnect_us is None or conn_ev.client_disconnect_us >= conn_ev.client_connection_success_us
         assert conn_ev.client_channel_up_us is None or conn_ev.client_channel_up_us >= conn_ev.client_connection_success_us
         assert conn_ev.client_channel_down_us is None or conn_ev.client_connection_success_us <= conn_ev.client_channel_down_us
-        assert conn_ev.client_idle_disconnect_us is None or conn_ev.client_connection_success_us <= conn_ev.client_idle_disconnect_us <= conn_ev.client_disconnect_us
+        assert conn_ev.client_idle_disconnect_us is None or conn_ev.client_disconnect_us is None or conn_ev.client_connection_success_us <= conn_ev.client_idle_disconnect_us <= conn_ev.client_disconnect_us
         assert conn_ev.client_channel_up_us is None or conn_ev.client_channel_down_us is None or conn_ev.client_channel_up_us <= conn_ev.client_channel_down_us
 
         assert conn_ev.peripheral_disconnect_us is None or conn_ev.peripheral_disconnect_us >= conn_ev.peripheral_connection_success_us
@@ -306,42 +306,12 @@ def handle_bundles(db, run):
     # we then handle all bundle_transmissions
     # "send_bundle", "\"to_eid\": \"%s\", \"to_cla_addr\": \"%s\", \"bundle_id\": %d"
 
-    num_receptions = 0
+    # We loop twice through the send_bundle events: first time for general info and a second time to add receptions
     for e in iter_events_with_devices(db, run, 'send_bundle'):
         conn_info = find_conn_info_for_device(db, run, e.device, e.us)
         is_client = conn_info.client.id == e.device.id
         stored_bundle = find_stored_bundle(db, run, e.device, e.data['bundle_id'], e.us)
-        bundle = stored_bundle.bundle
-        receive_stored_max_us = conn_info.peripheral_disconnect_us if is_client else conn_info.client_disconnect_us
 
-        other_device = conn_info.peripheral if is_client else conn_info.client
-        min_rx_us = conn_info.peripheral_connection_success_us if is_client else conn_info.client_connection_success_us
-        max_rx_us = (conn_info.peripheral_disconnect_us if is_client else conn_info.client_disconnect_us) or run.simulation_time
-
-        # we now search for the stored bundle on the receiver side
-        res = list(db(
-            (db.stored_bundle.run == run) &
-            (db.stored_bundle.bundle == bundle) &
-            (db.stored_bundle.device == other_device) &
-            (db.stored_bundle.created_us >= min_rx_us) &
-            (db.stored_bundle.created_us <= max_rx_us)
-        ).select())
-
-        assert len(res) <= 1
-
-        if len(res) == 1:
-            received_stored_bundle = res[0]
-        else:
-            received_stored_bundle = None
-
-
-        if received_stored_bundle:
-            num_receptions += 1
-            end_us = received_stored_bundle.created_us
-            assert db(db.bundle_transmission.received_stored_bundle == received_stored_bundle).count() == 0
-            assert e.us <= end_us
-        else:
-            end_us = None
         # make sure that we send it to the correct device :)
         if is_client:
             assert e.data['to_eid'] == conn_info.peripheral.eid
@@ -352,16 +322,58 @@ def handle_bundles(db, run):
             run=run,
             conn_info=conn_info,
             source_stored_bundle=stored_bundle,
-            received_stored_bundle=received_stored_bundle,
+            #received_stored_bundle=None,
             start_us=e.us,
-            end_us=end_us
+            #end_us=None
         )
-
-
-
         db.commit()
 
-    assert num_receptions == num_reception_events
+    num_receptions = 0
+    for bt in db(db.bundle_transmission.run == run).iterselect(orderby=~db.bundle_transmission.start_us):
+        conn_info = db.conn_info[bt.conn_info]
+        stored_bundle = db.stored_bundle[bt.source_stored_bundle]
+        bundle = db.bundle[stored_bundle.bundle]
+        device = db.device[stored_bundle.device]
+
+        is_client = conn_info.client.id == device.id
+
+        other_device = conn_info.peripheral if is_client else conn_info.client
+
+        min_rx_us = max(bt.start_us, conn_info.peripheral_connection_success_us if is_client else conn_info.client_connection_success_us)
+        max_rx_us = (conn_info.peripheral_disconnect_us if is_client else conn_info.client_disconnect_us) or run.simulation_time
+        # 10607940
+        # 20098205
+        # we now search for the stored bundle on the receiver side
+        potential_stored_bundles = list(db(
+            (db.stored_bundle.run == run) &
+            (db.stored_bundle.bundle == bundle) &
+            (db.stored_bundle.device == other_device) &
+            (db.stored_bundle.created_us >= min_rx_us) &
+            (db.stored_bundle.created_us <= max_rx_us)
+        ).select())
+
+        received_stored_bundle = None
+
+        for sb in potential_stored_bundles:
+            # check if this stored_bundle was already assigned (as we go backwards!)
+            if db(db.bundle_transmission.received_stored_bundle == sb.id).count() == 0:
+                assert received_stored_bundle is None
+                received_stored_bundle = sb
+
+        if received_stored_bundle:
+            num_receptions += 1
+            end_us = received_stored_bundle.created_us
+            assert bt.start_us <= end_us
+        else:
+            end_us = None
+
+        db(db.bundle_transmission.id == bt.id).update(
+            received_stored_bundle=received_stored_bundle,
+            end_us=end_us
+        )
+        db.commit()
+
+    assert num_reception_events == db((db.bundle_transmission.run==run) & (db.bundle_transmission.received_stored_bundle != None)).count()
 
     db.commit()
     #pprint(list(db(db.device).select()))
@@ -395,6 +407,19 @@ def eval_connections(db, runs):
     pass
 
 def eval_transmission(db, runs):
+
+    pprint(db.executesql('''
+        SELECT
+        r.name,
+        1000000 / AVG(end_us-start_us)
+        FROM bundle_transmission bt
+        JOIN stored_bundle sb ON sb.id = bt.source_stored_bundle
+        JOIN bundle b ON sb.bundle = b.id
+        JOIN run r ON bt.run = r.id
+        WHERE b.destination_eid = "dtn://fake"
+        GROUP BY r.id
+    '''.format(run_in(runs))))
+
     pass
 
 if __name__ == "__main__":
@@ -419,10 +444,10 @@ if __name__ == "__main__":
         handle_bundles
     ]
 
-
     runs = db(db.run.status == 'finished').iterselect()
 
     for run in runs:
+        print("Handling run {}".format(run.name))
         for h in handlers:
             h(db, run)
 
