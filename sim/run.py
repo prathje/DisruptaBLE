@@ -131,7 +131,7 @@ if __name__ == "__main__":
     os.makedirs(logdir, exist_ok=True)
 
     # Get access to the database (create if necessary!)
-    db = DAL("sqlite://sqlite.db", folder=logdir)
+    db = DAL("sqlite://sqlite.db", folder=logdir, attempts=10)
 
     tables.init_tables(db)
 
@@ -230,7 +230,7 @@ if __name__ == "__main__":
 
     max_us = -1
 
-    event_queue_size = 250
+    event_queue_size = 100
 
     event_queue = queue.Queue(maxsize=event_queue_size)
 
@@ -260,11 +260,7 @@ if __name__ == "__main__":
             #print("event_queue.qsize()")
             #print(event_queue.qsize())
 
-            db(db.run.id == run).update(
-                progress=max_us
-            )
-
-            batch_size = event_queue_size # the maximum amount of inserts per commit
+            batch_size = 10 # the maximum amount of inserts per commit
             events = []
 
             try:
@@ -277,12 +273,16 @@ if __name__ == "__main__":
                 pass
 
             if len(events) > 0:
+                db(db.run.id == run).update(
+                    progress=max_us
+                )
                 db['event'].bulk_insert(events)
+                db.commit()
 
             if event_queue.qsize() == 0:
                 # seems like there are not really many events for us to process atm
                 time.sleep(0.5)  # sleep 5 secs
-            db.commit()
+
 
     commit_thread = threading.Thread(target= commit_thread, args=(), daemon=True)
     commit_thread.start()
