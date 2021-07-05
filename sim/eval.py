@@ -221,7 +221,7 @@ def handle_connections(db, run):
         assert conn_ev.peripheral_disconnect_us is None or conn_ev.peripheral_disconnect_us >= conn_ev.peripheral_connection_success_us
         assert conn_ev.peripheral_channel_up_us is None or conn_ev.peripheral_channel_up_us >= conn_ev.peripheral_connection_success_us
         assert conn_ev.peripheral_channel_down_us is None or conn_ev.peripheral_connection_success_us <= conn_ev.peripheral_channel_down_us
-        assert conn_ev.peripheral_idle_disconnect_us is None or conn_ev.peripheral_connection_success_us <= conn_ev.peripheral_idle_disconnect_us <= conn_ev.peripheral_disconnect_us
+        assert conn_ev.peripheral_idle_disconnect_us is None or conn_ev.peripheral_disconnect_us is None or conn_ev.peripheral_connection_success_us <= conn_ev.peripheral_idle_disconnect_us <= conn_ev.peripheral_disconnect_us
         assert conn_ev.peripheral_channel_up_us is None or conn_ev.peripheral_channel_down_us is None or conn_ev.peripheral_channel_up_us <= conn_ev.peripheral_channel_down_us
 
         # each side should not receive more than what was transmitted
@@ -367,6 +367,7 @@ def handle_bundles(db, run):
     #pprint(list(db(db.device).select()))
 
 def handle_positions(db, run):
+    pass
     # TODO: import all positions using the dist_writer
 
 def eval_connections(db, runs):
