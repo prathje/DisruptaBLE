@@ -433,7 +433,7 @@ void router_signal_bundle_transmission(struct routed_bundle *routed_bundle, bool
                 LOGF("Router: error current_bundle is null for bundle %d contact %s", routed_bundle->id, eid);
             }
         } else {
-            LOGF("Router: Received bundle transmissionf for unknown contact %s", eid);
+            LOGF("Router: Received bundle transmission for unknown contact %s", eid);
         }
         hal_semaphore_release(router_config.router_contact_htab_sem);
         // TODO: send signal if the transmission is done, i.e. routed_bundle->dest == bundle->dest
