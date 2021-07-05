@@ -35,7 +35,7 @@
 
 // TODO: Make them configurable
 #define ML2CAP_PSM 0x6c
-#define ML2CAP_MAX_CONN CONFIG_BT_MAX_CONN
+#define ML2CAP_MAX_CONN 1
 #define ML2CAP_PARALLEL_BUFFERS 1
 
 // we will disconnect the connection if we did not receive something for X msec
