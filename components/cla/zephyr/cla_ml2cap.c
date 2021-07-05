@@ -660,7 +660,13 @@ static void mtcp_management_task(void *param) {
 
     // we loop through the events
     while (true) {
-        nb_ble_start(); // we need to periodically try to activate advertisements again..
+
+        for(int i = 0; i < 5; i++) {
+            nb_ble_start(); // we need to periodically try to activate advertisements again..
+            // we try a few times in a row before checking links etc.
+            hal_task_delay(50);
+        }
+
         hal_semaphore_take_blocking(ml2cap_config->links_sem);
         for(int i = 0; i < ml2cap_config->num_links; ++i) {
             struct ml2cap_link *link = ml2cap_config->links[i];
@@ -707,7 +713,6 @@ static void mtcp_management_task(void *param) {
         }
         #endif
         hal_semaphore_release(ml2cap_config->links_sem);
-        hal_task_delay(250);
     }
 
     terminate:
