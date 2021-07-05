@@ -160,6 +160,7 @@ enum ud3tn_result send_sv(const char* sink, const char *destination_eid, struct 
         return UD3TN_FAIL;
     }
 
+    bundle->creation_timestamp_ms = Z_MAX(1, hal_time_get_timestamp_ms());
 
     bundleid_t bundle_id = bundle_storage_add(bundle);
 
@@ -435,18 +436,17 @@ void generate_fake_bundles() {
 
         memset(payload, 0, payload_length);
 
-
-
-
          struct bundle *bundle = bundle7_create_local(
             payload, payload_length, routing_agent_config.bundle_agent_interface->local_eid, FAKE_DESTINATION,
-            Z_MAX(1, hal_time_get_timestamp_s()), // we force at least a ts of 1 as zero is the "unknown" ts
+            0, // we force at least a ts of 1 as zero is the "unknown" ts
             CONFIG_FAKE_BUNDLE_LIFETIME,
             0);
         if (bundle == NULL) {
             LOG("RoutingAgent: Could not create fake bundle!");
             return;
         }
+
+        bundle->creation_timestamp_ms = Z_MAX(1, hal_time_get_timestamp_ms());
 
         bundleid_t bundle_id = bundle_storage_add(bundle);
 
