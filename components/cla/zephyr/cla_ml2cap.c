@@ -839,6 +839,13 @@ static enum ud3tn_result ml2cap_read(struct cla_link *link,
     // Emulate the behavior of recv() by reading further bytes with a very
     // small timeout.
     while (length--) {
+
+        if (ml2cap_link->shutting_down) {
+            *bytes_read = 0;
+            return UD3TN_FAIL;
+        }
+
+
         if (hal_queue_receive(rx_queue, stream,
                               COMM_RX_TIMEOUT) != UD3TN_OK)
             break;
@@ -901,6 +908,10 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
     uint32_t sent = 0;
 
     LOG_EV("tx", "\"to_mac_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\", \"num_bytes\": %d", ml2cap_link->mac_addr, ml2cap_link->conn, ml2cap_link, length);
+
+    if (ml2cap_link->shutting_down) {
+        return; // immediately return!
+    }
 
     while (sent < length) {
         //LOGF("l2cap_transmit_bytes sent %d", sent);
