@@ -192,7 +192,7 @@ class RandomWaypoint(object):
             
             self.velocity = velocity
             self.wt = wt
-            yield positions
+            yield np.array(positions)
 
 class StochasticWalk(object):
     
