@@ -60,17 +60,20 @@ static void cla_contact_tx_task(void *param)
 					link->config->vtable->cla_name_get()
 				);
 
-                LOG_EV("transmit_bundle", "\"link\": \"%p\", \"local_bundle_id\": %d",link, b->id);
+                const uint32_t serialized_size = bundle_get_serialized_size(b);
+                LOG_EV("transmit_bundle", "\"link\": \"%p\", \"local_bundle_id\": %d, \"serialized_size\": %d", link, b->id, serialized_size);
 
 				link->config->vtable->cla_begin_packet(
 					link,
-					bundle_get_serialized_size(b)
+                    serialized_size
 				);
+
 				s = bundle_serialize(
 					b,
 					cla_send_packet_data,
 					(void *)link
 				);
+
 				link->config->vtable->cla_end_packet(link);
 			} else {
 				LOGF("TX: Bundle #%d not found!",
