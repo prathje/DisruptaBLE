@@ -60,33 +60,36 @@ def time_dist_iter_from_time_pos_iter(time_pos_iter, a, b):
         pos_b = positions[b]
         diff_x = pos_a[0] - pos_b[0]
         diff_y = pos_a[1] - pos_b[1]
+
         yield t_us, math.sqrt(diff_x * diff_x + diff_y * diff_y)
 
 
+# https://stackoverflow.com/a/44638570/6669161
+class safeteeobject(object):
+    """tee object wrapped to make it thread-safe"""
+    def __init__(self, teeobj, lock):
+        self.teeobj = teeobj
+        self.lock = lock
+    def __iter__(self):
+        return self
+    def __next__(self):
+        with self.lock:
+            return next(self.teeobj)
+    def __copy__(self):
+        return safeteeobject(self.teeobj.__copy__(), self.lock)
+
 def time_dist_iter_from_pos_iter(pos_iter, num_nodes, step_us):
+    lock = threading.Lock()
 
     tp_iter = time_pos_iter(pos_iter, step_us)
 
-    time_pos_iters = iter(itertools.tee(tp_iter, len(list(iter_nodes(num_nodes)))))
-
-    lock = threading.Lock()
-
-    # itertools.tee is sadly not thread-safe ...
-    def thread_safe_iter(it):
-        try:
-            while True:
-                lock.acquire()
-                res = next(it)
-                lock.release()
-                yield res
-        except StopIteration:
-            lock.release()
-            print("iterator done")
-
+    time_pos_iters = list(itertools.tee(tp_iter, len(list(iter_nodes(num_nodes)))))
+    time_pos_iters = [safeteeobject(it, lock) for it in time_pos_iters]
 
     time_dist_iters = {}
+    i = 0
     for (a, b) in iter_nodes(num_nodes):
-        thread_safe_it = thread_safe_iter(next(time_pos_iters))
-        time_dist_iters[(a, b)] = time_dist_iter_from_time_pos_iter(thread_safe_it, a, b)
+        time_dist_iters[(a, b)] = time_dist_iter_from_time_pos_iter(time_pos_iters[i], a, b)
+        i += 1
 
     return time_dist_iters

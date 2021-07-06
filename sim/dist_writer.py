@@ -53,14 +53,14 @@ def rwp_iterators(num_proxy_nodes, model_options):
 
 
     # TODO Add those to arguments
-    vel_min = model_options['vel_min'] if 'vel_min' in model_options else 0.1
+    vel_min = model_options['vel_min'] if 'vel_min' in model_options else 1.0
     vel_max = model_options['vel_max'] if 'vel_max' in model_options else 1.0
 
     max_waiting_time = model_options['max_waiting_time'] if 'max_waiting_time' in model_options else 0.0 # we run without waiting time for now!
 
     assert seconds_per_step > 0.0
     assert dim_width > 0
-    assert vel_min <= vel_max
+    assert 0.0 <= vel_min <= vel_max
     assert dim_height > 0
     assert max_waiting_time >= 0
 
@@ -73,10 +73,13 @@ def rwp_iterators(num_proxy_nodes, model_options):
     # a seconds * (steps / second) = a steps
     proxy_pos_iter = random_waypoint(num_proxy_nodes, dimensions=(dim_width, dim_height),
                                      velocity=(vel_min * seconds_per_step, vel_max * seconds_per_step),
-                                     wt_max=max_waiting_time * steps_per_second)
+                                     wt_max=max_waiting_time * steps_per_second,
+                                     init_stationary=False
+                                     )
+
     def add_static_source_node(it):
         for pos_list in it:
-            yield [(dim_width/2, dim_height/2)] + list(pos_list)
+            yield ([(dim_width/2, dim_height/2)] + list(pos_list))
 
     pos_iter = add_static_source_node(proxy_pos_iter)
 
