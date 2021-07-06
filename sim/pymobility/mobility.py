@@ -112,7 +112,7 @@ def init_random_waypoint(nr_nodes, dimensions,
 
 class RandomWaypoint(object):
     
-    def __init__(self, nr_nodes, dimensions, velocity=(0.1, 1.), wt_max=None):
+    def __init__(self, nr_nodes, dimensions, velocity=(0.1, 1.), wt_max=None, init_stationary=True):
         '''
         Random Waypoint model.
         
@@ -138,7 +138,7 @@ class RandomWaypoint(object):
         self.dimensions = dimensions
         self.velocity = velocity
         self.wt_max = wt_max
-        self.init_stationary = True
+        self.init_stationary = init_stationary
     
     def __iter__(self):
         
@@ -148,7 +148,6 @@ class RandomWaypoint(object):
         wt_min = 0.
         
         if self.init_stationary:
-
             positions, waypoints, velocity, wt = \
                 init_random_waypoint(self.nr_nodes, self.dimensions, MIN_V, MAX_V, wt_min, 
                              (self.wt_max if self.wt_max is not None else 0.))
