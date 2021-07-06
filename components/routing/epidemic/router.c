@@ -243,7 +243,7 @@ enum ud3tn_result router_init(const struct bundle_agent_interface *bundle_agent_
     router_config.bundle_agent_interface = bundle_agent_interface;
     router_config.next_bundle_update = 0;
 
-    htab_init(&router_config.router_contact_htab, CONFIG_BT_MAX_CONN, router_config.router_contact_htab_elem);
+    htab_init(&router_config.router_contact_htab, CONFIG_BT_MAX_CONN-1, router_config.router_contact_htab_elem);
 
     router_config.router_contact_htab_sem = hal_semaphore_init_binary();
 
@@ -485,7 +485,7 @@ void router_handle_contact_event(void *context, enum contact_manager_event event
 
     if (contact->active && rc == NULL) {
 
-        if (router_config.num_router_contacts < CONFIG_BT_MAX_CONN) {
+        if (router_config.num_router_contacts < CONFIG_BT_MAX_CONN-1) {
 
             rc = malloc(sizeof(struct router_contact));
 

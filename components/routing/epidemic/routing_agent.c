@@ -63,7 +63,7 @@ struct routing_agent_contact {
 static struct routing_agent_config {
     const struct bundle_agent_interface *bundle_agent_interface;
 
-    struct htab_entrylist *routing_agent_contact_htab_elem[CONFIG_BT_MAX_CONN]; // we should not have really more entries than active connections?
+    struct htab_entrylist *routing_agent_contact_htab_elem[CONFIG_BT_MAX_CONN-1]; // we should not have really more entries than active connections?
     struct htab routing_agent_contact_htab;
     Semaphore_t routing_agent_contact_htab_sem;
     struct known_bundle_list *known_bundle_list; // TODO: This also contains our custom bundles (which we do not need to offer -> use current bundles from router)
@@ -283,7 +283,7 @@ enum ud3tn_result routing_agent_init(const struct bundle_agent_interface *bundle
         return UD3TN_FAIL;
     }
 
-    htab_init(&routing_agent_config.routing_agent_contact_htab, CONFIG_BT_MAX_CONN, routing_agent_config.routing_agent_contact_htab_elem);
+    htab_init(&routing_agent_config.routing_agent_contact_htab, CONFIG_BT_MAX_CONN-1, routing_agent_config.routing_agent_contact_htab_elem);
 
     routing_agent_config.routing_agent_contact_htab_sem = hal_semaphore_init_binary();
 
