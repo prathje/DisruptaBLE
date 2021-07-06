@@ -38,3 +38,9 @@ config HEAP_SIZE
     int "The available Heap size for malloc functionality. Disabled for native applications."
     depends on !NATIVE_APPLICATION
 	default 16384
+
+
+config NB_BLE_MIN_RSSI
+    int "The minimum rssi required to report neighbors (and thus initialize a connection)"
+    range -120 20
+	default -120

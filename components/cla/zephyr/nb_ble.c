@@ -35,10 +35,6 @@
 #define CONFIG_NB_BLE_DEBUG 0
 #endif
 
-#ifndef CONFIG_NB_BLE_MIN_RSSI
-#define CONFIG_NB_BLE_MIN_RSSI -80
-#endif
-
 // TODO: Not the best to define them statically...
 static struct nb_ble_config nb_ble_config;
 
@@ -47,10 +43,6 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
                             struct net_buf_simple *ad) {
 
     /* filter devices with too poor quality */
-    // TODO: Make this configurable!
-    if (rssi < CONFIG_NB_BLE_MIN_RSSI) {
-        return;
-    }
 
     char dev[BT_ADDR_LE_STR_LEN];
 
@@ -91,7 +83,9 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
 
                     LOG_EV("adv_received", "\"other_mac_addr\": \"%s\", \"rssi\": %d, \"other_eid\": \"%s\"", node_info.mac_addr, rssi, eid);
 
-                    nb_ble_config.discover_cb(nb_ble_config.discover_cb_context, &node_info);
+                    if (rssi >= CONFIG_NB_BLE_MIN_RSSI) {
+                        nb_ble_config.discover_cb(nb_ble_config.discover_cb_context, &node_info);
+                    }
 
                     free((void*)node_info.eid);
                     free((void*)node_info.mac_addr);
