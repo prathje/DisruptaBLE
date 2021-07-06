@@ -161,6 +161,7 @@ enum ud3tn_result send_sv(const char* sink, const char *destination_eid, struct 
     }
 
     bundle->creation_timestamp_ms = Z_MAX(1, hal_time_get_timestamp_ms());
+    bundle7_recalculate_primary_block_length(bundle); // we need to recalculate the primary block length due to the ts change
 
     bundleid_t bundle_id = bundle_storage_add(bundle);
 
@@ -447,6 +448,7 @@ void generate_fake_bundles() {
         }
 
         bundle->creation_timestamp_ms = Z_MAX(1, hal_time_get_timestamp_ms());
+        bundle7_recalculate_primary_block_length(bundle); // we need to recalculate the primary block length due to the ts change
 
         bundleid_t bundle_id = bundle_storage_add(bundle);
 
