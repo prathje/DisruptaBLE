@@ -25,6 +25,7 @@
 
 #include "ud3tn/simplehtab.h"
 #include "ud3tn/known_bundle_list.h"
+#include "bundle7/bundle7.h"
 
 #include "platform/hal_io.h"
 #include "platform/hal_task.h"
