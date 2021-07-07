@@ -291,11 +291,12 @@ static inline void handle_signal(const struct bundle_processor_signal signal)
 /* 5.3 */
 static void bundle_dispatch(struct bundle *bundle)
 {
-    LOG_EV("bundle_dispatch", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d",
+    LOG_EV("bundle_dispatch", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d, \"sequence_number\": %d",
            bundle->id,
            bundle->source,
            bundle->destination,
-           bundle->creation_timestamp_ms
+           (uint32_t)(bundle->creation_timestamp_ms&0xFFFF),
+           (uint32_t)(bundle->sequence_number&0xFFFF)
     );
 
 	/* 5.3-1 */
@@ -422,11 +423,12 @@ static void bundle_forwarding_failed(
 /* 5.5 */
 static void bundle_expired(struct bundle *bundle)
 {
-    LOG_EV("bundle_expired", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d",
+    LOG_EV("bundle_expired", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d, \"sequence_number\": %d",
            bundle->id,
            bundle->source,
            bundle->destination,
-           bundle->creation_timestamp_ms
+           (uint32_t)(bundle->creation_timestamp_ms&0xFFFF),
+           (uint32_t)(bundle->sequence_number&0xFFFF)
     );
 	bundle_delete(bundle, BUNDLE_SR_REASON_LIFETIME_EXPIRED);
 }
@@ -820,11 +822,12 @@ static void bundle_delete(
 /* 5.15 (BPv7-bis) */
 static void bundle_discard(struct bundle *bundle)
 {
-    LOG_EV("bundle_delete", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d",
+    LOG_EV("bundle_delete", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d, \"sequence_number\": %d",
            bundle->id,
            bundle->source,
            bundle->destination,
-           bundle->creation_timestamp_ms
+           (uint32_t)(bundle->creation_timestamp_ms&0xFFFF),
+           (uint32_t)(bundle->sequence_number&0xFFFF)
     );
 	bundle_storage_delete(bundle->id);
 	bundle_drop(bundle);

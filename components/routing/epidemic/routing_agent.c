@@ -56,6 +56,7 @@
 
 // the routing agent only decides if a bundles should be forwarded to another node (comparable to the routing table)
 
+static uint32_t sequence_number = 1;
 
 struct routing_agent_contact {
     const struct contact *contact;    // a pointer to contact_manager's contact
@@ -162,6 +163,8 @@ enum ud3tn_result send_sv(const char* sink, const char *destination_eid, struct 
     }
 
     bundle->creation_timestamp_ms = Z_MAX(1, hal_time_get_timestamp_ms());
+    bundle->sequence_number = sequence_number;
+    sequence_number++;
     bundle7_recalculate_primary_block_length(bundle); // we need to recalculate the primary block length due to the ts change
 
     bundleid_t bundle_id = bundle_storage_add(bundle);
@@ -172,14 +175,15 @@ enum ud3tn_result send_sv(const char* sink, const char *destination_eid, struct 
         return UD3TN_FAIL;
     }
 
-    LOG_EV("sv_bundle", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"payload_length\": %d, \"lifetime_s\": %d, \"hop_count\": %d, \"creation_timestamp_ms\": %d",
+    LOG_EV("sv_bundle", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"payload_length\": %d, \"lifetime_s\": %d, \"hop_count\": %d, \"sequence_number\": %d, \"creation_timestamp_ms\": %d",
            bundle->id,
            bundle->source,
            bundle->destination,
            payload_size,
            CONFIG_ROUTING_AGENT_BUNDLE_LIFETIME_S,
            0,
-           bundle->creation_timestamp_ms
+           (uint32_t)(bundle->sequence_number&0xFFFF),
+           (uint32_t)(bundle->creation_timestamp_ms&0xFFFF)
     );
 
     // from now on, the bundle and its resources (e.g. the payload are handled by the bundle processor)
@@ -449,19 +453,23 @@ void generate_fake_bundles() {
         }
 
         bundle->creation_timestamp_ms = Z_MAX(1, hal_time_get_timestamp_ms());
+        bundle->sequence_number = sequence_number;
+        sequence_number++;
+
         bundle7_recalculate_primary_block_length(bundle); // we need to recalculate the primary block length due to the ts change
 
         bundleid_t bundle_id = bundle_storage_add(bundle);
 
         if (bundle_id != BUNDLE_INVALID_ID) {
-              LOG_EV("generate_fake_bundle", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"payload_length\": %d, \"lifetime_s\": %d, \"hop_count\": %d, \"creation_timestamp_ms\": %d",
+              LOG_EV("generate_fake_bundle", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"payload_length\": %d, \"lifetime_s\": %d, \"hop_count\": %d, \"sequence_number\": %d, \"creation_timestamp_ms\": %d",
                bundle->id,
                bundle->source,
                bundle->destination,
                payload_length,
                CONFIG_FAKE_BUNDLE_LIFETIME,
                0,
-               bundle->creation_timestamp_ms // we put this one towards the end as it is a uint64
+               (uint32_t)(bundle->sequence_number&0xFFFF),
+               (uint32_t)(bundle->creation_timestamp_ms&0xFFFF)
            );
             bundle_processor_inform(
                     routing_agent_config.bundle_agent_interface->bundle_signaling_queue,

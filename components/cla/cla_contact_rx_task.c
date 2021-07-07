@@ -40,11 +40,12 @@ static void bundle_send(struct bundle *bundle, void *param)
 		     new_id, bundle->source, bundle->destination,
 		     config->vtable->cla_name_get());
 
-        LOG_EV("bundle_receive", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d",
+        LOG_EV("bundle_receive", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d, \"sequence_number\": %d",
                bundle->id,
                bundle->source,
                bundle->destination,
-               bundle->creation_timestamp_ms
+               (uint32_t)(bundle->creation_timestamp_ms&0xFFFF),
+               (uint32_t)(bundle->sequence_number&0xFFFF)
         );
 
 		bundle_processor_inform(
