@@ -581,10 +581,15 @@ void router_update_request_sv(const char* eid, struct summary_vector *request_sv
 
         rc->request_sv = request_sv;
 
-        // as we updated the requested sv, we schedule all bundles again
-        rc->next_bundle_candidate = router_config.bundle_info_list.head;
-
         if (rc->current_bundle == NULL) {
+            // as we updated the requested sv, we schedule all bundles again
+            // This can result in retransmission of bundles that were currently sent
+            // (i.e. that have not arrived and therefore not been included in the sv)
+            // for that reason, we schedule them again only if the current bundle is NULL
+            // to prevent that the current bundle will be transmitted multiple times
+            // the drawback is ofc that failed bundles get not immediately retransmitted
+            rc->next_bundle_candidate = router_config.bundle_info_list.head;
+
             // reschedule directly
             send_bundles_to_contact(rc);
         }
