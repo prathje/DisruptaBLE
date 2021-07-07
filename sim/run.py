@@ -112,7 +112,7 @@ def output_to_event_iter(o):
                     "device": int(device),
                     "us": overall_us,
                     "type": "error",
-                    "data_json": json.dumps({"msg": data_str})
+                    "data_json": json.dumps({"msg": error_str})
                 }
 
 if __name__ == "__main__":
