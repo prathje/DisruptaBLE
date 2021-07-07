@@ -350,28 +350,26 @@ def handle_bundles(db, run):
             (db.stored_bundle.device == other_device) &
             (db.stored_bundle.created_us >= min_rx_us) &
             (db.stored_bundle.created_us <= max_rx_us)
-        ).select())
+        ).select(orderby=~db.stored_bundle.created_us))
 
         received_stored_bundle = None
 
         for sb in potential_stored_bundles:
             # check if this stored_bundle was already assigned (as we go backwards!)
             if db(db.bundle_transmission.received_stored_bundle == sb.id).count() == 0:
-                assert received_stored_bundle is None
                 received_stored_bundle = sb
+                break
 
         if received_stored_bundle:
             num_receptions += 1
             end_us = received_stored_bundle.created_us
             assert bt.start_us <= end_us
-        else:
-            end_us = None
 
-        db(db.bundle_transmission.id == bt.id).update(
-            received_stored_bundle=received_stored_bundle,
-            end_us=end_us
-        )
-        db.commit()
+            db(db.bundle_transmission.id == bt.id).update(
+                received_stored_bundle=received_stored_bundle,
+                end_us=end_us
+            )
+            db.commit()
 
     assert num_reception_events == db((db.bundle_transmission.run==run) & (db.bundle_transmission.received_stored_bundle != None)).count()
 
@@ -404,6 +402,18 @@ def eval_connections(db, runs):
         AVG(peripheral_rx_bytes / ((peripheral_channel_down_us-peripheral_channel_up_us)/ 1000000))
         FROM conn_info where {}
     '''.format(run_in(runs))))
+    pprint(db.executesql('''
+        SELECT r.name, AVG(MAX(client_rx_bytes_per_second, peripheral_rx_bytes_per_second)) FROM  
+        (SELECT
+        r.id as run_id, r.name as run_name,
+        (client_rx_bytes / ((COALESCE(client_channel_down_us, r.simulation_time)-client_channel_up_us)/ 1000000.0)) as client_rx_bytes_per_second,
+        (peripheral_rx_bytes / ((COALESCE(peripheral_channel_down_us, r.simulation_time)-peripheral_channel_up_us)/ 1000000.0)) as peripheral_rx_bytes_per_second
+        FROM conn_info JOIN run r on r.id = conn_info.run)
+        LEFT JOIN run r on r.id = run_id
+        WHERE client_rx_bytes_per_second IS NOT NULL AND client_rx_bytes_per_second IS NOT NULL
+        GROUP BY r.id
+        ORDER BY r.name
+    '''))
     pass
 
 def eval_transmission(db, runs):
@@ -418,6 +428,7 @@ def eval_transmission(db, runs):
         JOIN run r ON bt.run = r.id
         WHERE b.destination_eid = "dtn://fake"
         GROUP BY r.id
+        ORDER BY r.name ASC
     '''.format(run_in(runs))))
 
     pass
