@@ -15,7 +15,7 @@ struct nb_ble_node_info {
  * Callback is invoked everytime a node was discovered.
  * node_info is automatically freed afterward
  */
-typedef void (*nb_ble_discovered_cb)(void * context, const struct nb_ble_node_info * const ble_node_info);
+typedef void (*nb_ble_discovered_cb)(void * context, const struct nb_ble_node_info * const ble_node_info, bool connectable);
 
 struct nb_ble_config {
     nb_ble_discovered_cb discover_cb;
@@ -30,14 +30,11 @@ enum ud3tn_result nb_ble_init(const struct nb_ble_config * const config);
 
 /**
  * Resume the neighbor discovery (NOOP if already running).
- * Important: Will block until nb_ble is launched
  */
-void nb_ble_start();
+void nb_ble_start(bool connectable);
 
 /**
  * Pause the neighbor discovery (NOOP if already paused)
- * This might be required to establish a BLE connection
- * Important: Will block until nb_ble is launched
  */
 void nb_ble_stop();
 

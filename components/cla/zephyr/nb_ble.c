@@ -39,7 +39,7 @@
 static struct nb_ble_config nb_ble_config;
 
 
-static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
+static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_type,
                             struct net_buf_simple *ad) {
 
     /* filter devices with too poor quality */
@@ -49,9 +49,11 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
     bt_addr_le_to_str(addr, dev, sizeof(dev));
     //LOGF("[NB BLE]: %s, AD evt type %u, AD data len %u, RSSI %i\n", dev, type, ad->len, rssi);
 
-    /* We're only interested in connectable events */
-    if (type == BT_GAP_ADV_TYPE_ADV_IND ||
-        type == BT_GAP_ADV_TYPE_ADV_DIRECT_IND) {
+    if (adv_type == BT_GAP_ADV_TYPE_ADV_IND ||
+        adv_type == BT_GAP_ADV_TYPE_ADV_DIRECT_IND ||
+        adv_type == BT_GAP_ADV_TYPE_ADV_SCAN_IND ||
+        adv_type == BT_GAP_ADV_TYPE_ADV_NONCONN_IND
+        ) {
 
         // TODO: This is not standard-conform advertisement parsing!
         if (ad->len >= 5) {
@@ -81,10 +83,12 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
                             .mac_addr = bt_addr_le_to_mac_addr(addr)
                     };
 
-                    LOG_EV("adv_received", "\"other_mac_addr\": \"%s\", \"rssi\": %d, \"other_eid\": \"%s\"", node_info.mac_addr, rssi, eid);
+                    bool connectable = adv_type == BT_GAP_ADV_TYPE_ADV_IND || adv_type == BT_GAP_ADV_TYPE_ADV_DIRECT_IND;
+                    LOG_EV("adv_received", "\"other_mac_addr\": \"%s\", \"rssi\": %d, \"other_eid\": \"%s\", \"connectable\": %d",
+                           node_info.mac_addr, rssi, eid, connectable);
 
                     if (rssi >= CONFIG_NB_BLE_MIN_RSSI) {
-                        nb_ble_config.discover_cb(nb_ble_config.discover_cb_context, &node_info);
+                        nb_ble_config.discover_cb(nb_ble_config.discover_cb_context, &node_info, connectable);
                     }
 
                     free((void*)node_info.eid);
@@ -92,10 +96,12 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
                 }
             }
         }
+    } else {
+
     }
 }
 
-void nb_ble_start() {
+void nb_ble_start(bool connectable) {
     int err = 0;
 
     size_t data_len = strlen(nb_ble_config.eid)+2; // 2 byte uuid
@@ -112,7 +118,11 @@ void nb_ble_start() {
     };
 
     err = bt_le_adv_start(
-            BT_LE_ADV_CONN,
+            BT_LE_ADV_PARAM(
+                    connectable ? (BT_LE_ADV_OPT_CONNECTABLE | BT_LE_ADV_OPT_ONE_TIME) : BT_LE_ADV_OPT_NONE,
+                    BT_GAP_ADV_FAST_INT_MIN_2,
+                    BT_GAP_ADV_FAST_INT_MAX_2,
+                    NULL),
             ad,
             ARRAY_SIZE(ad), NULL, 0);
 
@@ -130,9 +140,12 @@ void nb_ble_start() {
 
     /* Use active scanning and disable duplicate filtering to handle any
     * devices that might update their advertising data at runtime. */
+
+
+
     struct bt_le_scan_param scan_param = {
             .type       = BT_LE_SCAN_TYPE_PASSIVE,
-            .options    = BT_LE_SCAN_OPT_NONE,
+            .options    = BT_LE_ADV_OPT_ONE_TIME,
             .interval   = BT_GAP_SCAN_FAST_INTERVAL,    // TODO: Adapt interval and window
             .window     = BT_GAP_SCAN_FAST_WINDOW,
     };

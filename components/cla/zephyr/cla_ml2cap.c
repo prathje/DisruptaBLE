@@ -213,7 +213,7 @@ static const char *ml2cap_name_get(void) {
 /**
  * We pump discovered neighbors through the CLA layer as we add the correct CLA address.
  */
-static void handle_discovered_neighbor_info(void *context, const struct nb_ble_node_info * const ble_node_info) {
+static void handle_discovered_neighbor_info(void *context, const struct nb_ble_node_info * const ble_node_info, bool connectable) {
     (void)context; // this is just our configuration again :)
 
     //LOGF("ML2CAP: Found other device with mac_address %s and eid %s", ble_node_info->mac_addr, ble_node_info->eid);
@@ -237,6 +237,11 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
             ml2cap_config->base.bundle_agent_interface;
     hal_queue_push_to_back(bundle_agent_interface->router_signaling_queue,
                            &rt_signal);
+
+
+    if (!connectable) {
+        return;
+    }
 
 
     // we also check if we reached our limit of active links
@@ -272,7 +277,7 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
     if (err) {
         // we get EINVAL in case the connection already exists...
         LOGF("ML2CAP: Failed to create connection (err %d)\n", err);
-        nb_ble_start(); // directly try to start neighbor discovery
+        //nb_ble_start(); // directly try to start neighbor discovery // TODO: We only do that in the main loop
     } else {
         char *cla_address = cla_get_cla_addr(ml2cap_name_get(), ble_node_info->mac_addr);
         LOG_EV("conn_init", "\"other_mac_addr\": \"%s\", \"other_cla_addr\": \"%s\", \"other_eid\": \"%s\", \"connection\": \"%p\", \"own_eid\": \"%s\"", ble_node_info->mac_addr, cla_address, ble_node_info->eid, conn, ml2cap_config->base.bundle_agent_interface->local_eid);
@@ -485,6 +490,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason) {
     }
 
     hal_semaphore_release(ml2cap_config->links_sem);
+    nb_ble_stop(); // we stop non-connectable advertisements for now
 }
 
 static struct ml2cap_link *ml2cap_link_create(
@@ -662,7 +668,7 @@ static void mtcp_management_task(void *param) {
     while (true) {
 
         for(int i = 0; i < 5; i++) {
-            nb_ble_start(); // we need to periodically try to activate advertisements again..
+            nb_ble_start(ml2cap_config->num_links < ML2CAP_MAX_CONN); // we need to periodically try to activate advertisements again..
             // we try a few times in a row before checking links etc.
             hal_task_delay(50);
         }
