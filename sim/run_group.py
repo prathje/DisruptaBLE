@@ -67,7 +67,6 @@ if __name__ == "__main__":
         if rseed is not None:
             rseed_lock.acquire()
             run_env["SIM_RANDOM_SEED"] = str(rseed)
-            run_env["SIM_NAME"] += "-" + str(rseed)
             rseed += 1
             rseed_lock.release()
 

@@ -137,10 +137,12 @@ if __name__ == "__main__":
     else:
         fixed_sim_name = True
     if config['SIM_RANDOM_SEED'] == "":
-        config['SIM_RANDOM_SEED'] = round(time.time())
+        config['SIM_RANDOM_SEED'] = str(round(time.time()))
 
-
+    origin_run_name = config['SIM_NAME']
+    config['SIM_NAME'] += "--" + config['SIM_RANDOM_SEED']
     run_name = config['SIM_NAME']
+
     print("########################")
     print("Starting run {}".format(run_name))
     pprint(config)
@@ -160,7 +162,7 @@ if __name__ == "__main__":
     random.seed(rseed)
 
     run = db['run'].insert(**{
-        "name": run_name,
+        "name": origin_run_name, # we use the
         "group": config['SIM_GROUP'] if 'SIM_GROUP' in config and config['SIM_GROUP'] != "" else None,
         "start_ts": now,
         "end_ts": None,
@@ -260,7 +262,6 @@ if __name__ == "__main__":
         global max_us
 
         for e in output_to_event_iter(p.stdout):
-            e['run'] = run_name
             if e['us'] > max_us:
                 max_us = e['us']
                 print(max_us/1000000)
