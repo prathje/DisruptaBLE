@@ -197,17 +197,19 @@ if __name__ == "__main__":
         )
 
     wifi_interference_proceses = []
-    for i in range(2, 13, 2):
-        wifi_interference_proceses.append(
-            spawn_node_process(
-                "bs_device_2G4_WLAN_actmod",
-                len(node_processes)+len(wifi_interference_proceses),
-                [
-                    "-ConfigSet={}".format(int(config['SIM_WIFI_INTERFERENCE'])),
-                    "-channel={}".format(i)
-                ]
+
+    if int(config['SIM_WIFI_INTERFERENCE']) > 0:
+        for i in range(2, 13, 2):
+            wifi_interference_proceses.append(
+                spawn_node_process(
+                    "bs_device_2G4_WLAN_actmod",
+                    len(node_processes)+len(wifi_interference_proceses),
+                    [
+                        "-ConfigSet={}".format(int(config['SIM_WIFI_INTERFERENCE'])),
+                        "-channel={}".format(i)
+                    ]
+                )
             )
-        )
 
 
     model = config['SIM_MODEL']
