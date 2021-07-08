@@ -23,6 +23,7 @@ struct bundle_info_list_entry {
     enum bundle_routing_priority prio;
     uint32_t size;
     uint64_t exp_time;
+    char *destination;
     struct bundle_info_list_entry *next;
 };
 

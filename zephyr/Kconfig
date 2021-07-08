@@ -34,6 +34,11 @@ config FAKE_BUNDLE_LIFETIME
     int "The interval to generate fake bundles (in seconds)."
 	default 5
 
+config DIRECT_TRANSMISSION_REPLICAS
+    int "The amount of replicas on top of the direct transmission"
+	default 0
+
+
 config HEAP_SIZE
     int "The available Heap size for malloc functionality. Disabled for native applications."
     depends on !NATIVE_APPLICATION

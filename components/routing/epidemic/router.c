@@ -21,16 +21,21 @@ static struct router_config router_config;
 bool bundle_should_be_offered(struct router_contact *rc, struct bundle_info_list_entry *candidate) {
     uint64_t cur_time = hal_time_get_timestamp_s();
 
-    if (candidate->num_pending_transmissions == 0) {
-        LOG("candidate->num_pending_transmissions == 0");
-        // TODO: Shall we do direct delivery in case the bundle destination is actually this contact? -> hash the eid of the contact and the destination of bundles!
-        return false;
-    }
-
     if (candidate->exp_time < cur_time) {
         return false; // bundle is sadly expired -> will be removed eventually
     }
-    return true;
+
+    if (candidate->num_pending_transmissions == 0) {
+        // if there are no pending transmissions anymore, the only way to transmit this bundle is if this is the bundle's real destination!
+        if (rc->contact->node->eid != NULL && strstr(candidate->destination, rc->contact->node->eid) != NULL) {
+            LOG("Found direct delivery contact! \\o/");
+            return true;
+        } else {
+            return false;
+        }
+    } else {
+        return true;
+    }
 }
 
 /**
@@ -143,6 +148,7 @@ void update_bundle_info_list() {
 
             signal_bundle_expired(current);
 
+            free(current->destination); //nothing more todo atm :)
             free(current); //nothing more todo atm :)
             // prev stays the same
             current = next;
@@ -211,9 +217,6 @@ static void send_bundles_to_contact(struct router_contact *router_contact ) {
         // next candidate is the following bundle, ignoring the success of transmisions (for now)
         // we try to schedule it
         if (try_to_send_bundle(router_contact->contact->node->eid, candidate) == UD3TN_OK) {
-            if (candidate->num_pending_transmissions > 0) {
-                candidate->num_pending_transmissions--;
-            }
             // we could schedule the send process! this means that we get a transmission success / fail in all cases (even in case of a connection failure)
             // we therefore set the curret bundle and further increment to the next_bundle_candidate (which could be null (!))
             router_contact->current_bundle = candidate;
@@ -283,15 +286,45 @@ bool route_epidemic_bundle(struct bundle *bundle) {
         current = current->next;
     }
 
-    info->id = bundle->id;
+    info->destination = strdup(bundle->destination);
 
-    info->num_pending_transmissions = CONFIG_EPIDEMIC_ROUTING_NUM_REPLICAS; // -1 will result in infinite retransmissions, see CONFIG_EPIDEMIC_ROUTING_NUM_REPLICAS
+    if (!info->destination) {
+        LOG("Router: Could not duplicate destination to route epidemic bundle!");
+        free(info);
+        return false;
+    }
+
+    info->id = bundle->id;
 
     info->prio = bundle_get_routing_priority(bundle);
     info->size = bundle_get_serialized_size(bundle);
     info->exp_time = bundle_get_expiration_time_s(bundle);
-
     info->next = NULL;
+
+    const char *type = "unknown";
+    if (strstr(bundle->destination, EPIDEMIC_DESTINATION) != NULL) {
+        type = "epidemic";
+        info->num_pending_transmissions = -1; // we will have infinite retransmissions!
+    } else if (strstr(bundle->destination, DIRECT_TRANSMISSION_DESTINATION) != NULL) {
+        // this is a direct (or spray-and-wait) bundle
+        type = "direct";
+        if (CONFIG_DIRECT_TRANSMISSION_REPLICAS == -1) {
+            info->num_pending_transmissions = -1; // if the num_replicas is also set to -1, we also do epidemic forwarding!
+        } else {
+            if (strstr(bundle->source, router_config.bundle_agent_interface->local_eid) != NULL) {
+                // this bundle is from us -> we allow a specific amount of direct transmissions
+                info->num_pending_transmissions = CONFIG_DIRECT_TRANSMISSION_REPLICAS;
+            } else {
+                info->num_pending_transmissions = 0; // we do not allow additional transmission except directly to the destination!
+            }
+        }
+    } else {
+        LOG("Router: Could not determine correct bundle type!");
+        info->num_pending_transmissions = 0;
+    }
+
+    LOG_EV("bundle_routing", "\"local_id\": %d, \"type\": \"%s\", \"num_pending_transmissions\": %d",  bundle->id, type, info->num_pending_transmissions);
+
     // we append this element to list's tail
 
     struct bundle_info_list_entry *cur_tail = router_config.bundle_info_list.tail;
@@ -410,9 +443,6 @@ void router_signal_bundle_transmission(struct routed_bundle *routed_bundle, bool
                         // TODO: We might be able to transmit more if we have multiple bundles available
                     } else {
                         // we increase the transmissions at this point so we already limit transmissions
-                        if (rc->current_bundle->num_pending_transmissions >= 0) {
-                            rc->current_bundle->num_pending_transmissions++;
-                        }
                         LOGF("Router: transmission failed %d for contact %s", routed_bundle->id, eid);
                     }
 
@@ -576,6 +606,26 @@ void router_update_request_sv(const char* eid, struct summary_vector *request_sv
     if (rc) {
         // destroy current summary_vector!
         if (rc->request_sv) {
+
+            struct summary_vector *old = rc->request_sv;
+            struct summary_vector *new = request_sv;
+
+            struct bundle_info_list_entry *current = router_config.bundle_info_list.head;
+
+            // we loop through all current bundles
+            // TODO: As the summary vectors and list of bundles might be a big larger, it would make more sense to calculate the diff before
+            while (current != NULL) {
+                // we assume that the current bundle has been transmitted successfully if it was present in the previous request but not in the current!
+                if (summary_vector_contains_entry(old, &current->sv_entry) && !summary_vector_contains_entry(new, &current->sv_entry)) {
+                    if (current->num_pending_transmissions > 0) {
+                        // we do not change values at or below 0
+                        current->num_pending_transmissions -= 1;
+                    }
+                }
+                current = current->next;
+            }
+
+            // now we only need to destroy the old request_sv
             summary_vector_destroy(rc->request_sv);
         }
 

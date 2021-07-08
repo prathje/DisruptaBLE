@@ -415,8 +415,6 @@ void routing_agent_handle_contact_event(void *context, enum contact_manager_even
 }
 
 #if (CONFIG_FAKE_BUNDLE_INTERVAL > 0)
-
-#define FAKE_DESTINATION "dtn://fake"
 #include "platform/hal_random.h"
 
 void generate_fake_bundles() {
@@ -442,8 +440,15 @@ void generate_fake_bundles() {
 
         memset(payload, 0, payload_length);
 
+
+        bool is_source = strstr(routing_agent_config.bundle_agent_interface->local_eid, DIRECT_TRANSMISSION_DESTINATION) != NULL;
+
+        // We set the destination of fake bundles to be either a fake one for epidemic propagation or the source as the target for direct transmissions
+        // The source fakes bundles for everyone and everyone else generates bundles for the source
+        const char *destination = is_source ? EPIDEMIC_DESTINATION : DIRECT_TRANSMISSION_DESTINATION;
+
          struct bundle *bundle = bundle7_create_local(
-            payload, payload_length, routing_agent_config.bundle_agent_interface->local_eid, FAKE_DESTINATION,
+            payload, payload_length, routing_agent_config.bundle_agent_interface->local_eid, destination,
             0, // we force at least a ts of 1 as zero is the "unknown" ts
             CONFIG_FAKE_BUNDLE_LIFETIME,
             0);
@@ -461,13 +466,14 @@ void generate_fake_bundles() {
         bundleid_t bundle_id = bundle_storage_add(bundle);
 
         if (bundle_id != BUNDLE_INVALID_ID) {
-              LOG_EV("generate_fake_bundle", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"payload_length\": %d, \"lifetime_s\": %d, \"hop_count\": %d, \"sequence_number\": %d, \"creation_timestamp_ms\": %d",
+              LOG_EV("generate_fake_bundle", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"payload_length\": %d, \"lifetime_s\": %d, \"hop_count\": %d, \"type\": \"%s\", \"sequence_number\": %d, \"creation_timestamp_ms\": %d",
                bundle->id,
                bundle->source,
                bundle->destination,
                payload_length,
                CONFIG_FAKE_BUNDLE_LIFETIME,
                0,
+               is_source ? "epidemic" : "direct",   // "direct" might actually also be spray and wait - depending on the DIRECT_TRANSMISSION_REPLICAS configuration
                (uint32_t)(bundle->sequence_number&0xFFFF),
                (uint32_t)(bundle->creation_timestamp_ms&0xFFFF)
            );
