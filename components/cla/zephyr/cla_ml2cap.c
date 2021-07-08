@@ -127,7 +127,7 @@ static void on_tx(struct ml2cap_link *link) {
 }
 static void on_rx(struct ml2cap_link *link) {
     link->rx_ts = hal_time_get_timestamp_ms();
-    int avg_kbits_per_sec = (link->bytes_received*8) / MAX(1, (link->rx_ts-link->channel_up_ts));
+    //int avg_kbits_per_sec = (link->bytes_received*8) / MAX(1, (link->rx_ts-link->channel_up_ts));
     /*LOGF("ML2CAP: on_rx | %s | %s | %d kbps\n",
          own_addr_str,
          link->mac_addr,
