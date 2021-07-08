@@ -42,15 +42,17 @@ def find_device_by_eid(db, run, eid):
     return db((db.device.run == run) & (db.device.eid == eid)).select()[0]
 
 
-def find_bundle(db, run, source_eid, dest_eid, creation_timestamp_ms):
+def find_bundle(db, run, source_eid, dest_eid, creation_timestamp_ms, sequence_number):
     res = list(
         db(
             (db.bundle.run == run)
             & (db.bundle.source_eid == source_eid)
             & (db.bundle.destination_eid == dest_eid)
             & (db.bundle.creation_timestamp_ms == creation_timestamp_ms)
+            & (db.bundle.sequence_number == sequence_number)
         ).select()
     )
+
     assert len(res) == 1
     return res[0]
 
@@ -262,6 +264,7 @@ def handle_bundles(db, run):
                 destination=find_device_by_eid(db, run, e.data['destination']),
                 destination_eid=e.data['destination'],
                 creation_timestamp_ms=e.data['creation_timestamp_ms'],
+                sequence_number=e.data['sequence_number'],
                 payload_length=e.data['payload_length'],
                 is_sv=et == 'sv_bundle',
                 lifetime_ms=e.data['lifetime_s']*1000,
@@ -283,7 +286,7 @@ def handle_bundles(db, run):
     # "bundle_receive", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d"
     num_reception_events = 0
     for e in iter_events_with_devices(db, run, 'bundle_receive'):
-        bundle = find_bundle(db, run, e.data['source'], e.data['destination'], e.data['creation_timestamp_ms'])
+        bundle = find_bundle(db, run, e.data['source'], e.data['destination'], e.data['creation_timestamp_ms'], e.data['sequence_number'])
 
         db.stored_bundle.insert(
             run=run,

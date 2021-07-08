@@ -73,6 +73,7 @@ def init_eval_tables(db):
         Field('source_eid'),
         Field('destination', 'reference device', notnull=False),
         Field('creation_timestamp_ms', type='integer'),
+        Field('sequence_number', type='integer'),
         Field('payload_length', type='integer'),
         Field('is_sv', type='boolean'),
         Field('lifetime_ms', type='integer'),
