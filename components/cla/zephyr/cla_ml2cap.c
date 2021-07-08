@@ -272,7 +272,7 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
 
     // We now try to connect as soon as we received that advertisement
     nb_ble_stop(); // we need to disable the advertisements for that, Note that this cb is called by the NB_BLE TASK
-    int err = bt_conn_le_create(&other_addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM(6, 6, 0, 400), &conn);
+    int err = bt_conn_le_create(&other_addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM(6, 6, 0, IDLE_TIMEOUT_MS/10), &conn);
 
     if (err) {
         // we get EINVAL in case the connection already exists...
