@@ -352,5 +352,12 @@ if __name__ == "__main__":
     subprocess.run("${{BSIM_COMPONENTS_PATH}}/common/stop_bsim.sh {} || 1".format(config['SIM_NAME']), shell=True, check=True)
 
     results_dir = os.path.join(config['BSIM_COMPONENTS_PATH'], "..", "results", config['SIM_NAME'])
+
     print("Removing results_dir {}".format(results_dir))
     subprocess.run("rm -rf {} || 1".format(results_dir), shell=True, check=True)
+
+    print("Removing source exec {}".format(run_name+"_source"))
+    subprocess.run("rm -rf {} || 1".format(os.path.join(config['BSIM_OUT_PATH'], "bin", run_name+"_source")), shell=True, check=True)
+
+    print("Removing proxy exec {}".format(run_name+"_proxy"))
+    subprocess.run("rm -rf {} || 1".format(os.path.join(config['BSIM_OUT_PATH'], "bin", run_name+"_proxy")), shell=True, check=True)
