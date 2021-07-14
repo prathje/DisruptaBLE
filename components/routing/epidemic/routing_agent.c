@@ -175,13 +175,11 @@ enum ud3tn_result send_sv(const char* sink, const char *destination_eid, struct 
         return UD3TN_FAIL;
     }
 
-    LOG_EV("sv_bundle", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"payload_length\": %d, \"lifetime_s\": %d, \"hop_count\": %d, \"sequence_number\": %d, \"creation_timestamp_ms\": %d",
+    LOG_EV("sv_bundle", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"payload_length\": %d, \"sequence_number\": %d, \"creation_timestamp_ms\": %d",
            bundle->id,
            bundle->source,
            bundle->destination,
            payload_size,
-           CONFIG_ROUTING_AGENT_BUNDLE_LIFETIME_S,
-           0,
            (uint32_t)(bundle->sequence_number&0xFFFF),
            (uint32_t)(bundle->creation_timestamp_ms&0xFFFF)
     );
@@ -466,13 +464,11 @@ void generate_fake_bundles() {
         bundleid_t bundle_id = bundle_storage_add(bundle);
 
         if (bundle_id != BUNDLE_INVALID_ID) {
-              LOG_EV("generate_fake_bundle", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"payload_length\": %d, \"lifetime_s\": %d, \"hop_count\": %d, \"type\": \"%s\", \"sequence_number\": %d, \"creation_timestamp_ms\": %d",
+              LOG_EV("generate_fake_bundle", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"payload_length\": %d, \"type\": \"%s\", \"sequence_number\": %d, \"creation_timestamp_ms\": %d",
                bundle->id,
                bundle->source,
                bundle->destination,
                payload_length,
-               CONFIG_FAKE_BUNDLE_LIFETIME,
-               0,
                is_source ? "epidemic" : "direct",   // "direct" might actually also be spray and wait - depending on the DIRECT_TRANSMISSION_REPLICAS configuration
                (uint32_t)(bundle->sequence_number&0xFFFF),
                (uint32_t)(bundle->creation_timestamp_ms&0xFFFF)
