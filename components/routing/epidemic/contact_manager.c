@@ -27,7 +27,7 @@
 
 // TODO: Configure this!
 #ifndef MAX_CONCURRENT_CONTACTS
-#define MAX_CONCURRENT_CONTACTS 20
+#define MAX_CONCURRENT_CONTACTS 25
 #endif
 
 

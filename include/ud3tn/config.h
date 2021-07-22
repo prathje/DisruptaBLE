@@ -163,7 +163,7 @@ enum failed_forwarding_policy {
 /* Maximum period (in ms) for checking */
 #define CONTACT_CHECKING_MAX_PERIOD 600000
 /* Maximum number of concurrent contacts that can be handled by CM */
-#define MAX_CONCURRENT_CONTACTS 10
+#define MAX_CONCURRENT_CONTACTS 25
 
 
 #endif /* CONFIG_H_INCLUDED */
