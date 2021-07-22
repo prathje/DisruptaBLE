@@ -990,7 +990,7 @@ static struct cla_tx_queue ml2cap_get_tx_queue(
     hal_semaphore_take_blocking(ml2cap_config->links_sem);
     struct ml2cap_link *link = find_link_by_cla_address(cla_addr);
 
-    if (link && !link->shutting_down) {
+    if (link && !link->shutting_down && link->chan_connected) {
         struct cla_link *const cla_link = &link->base;
 
         hal_semaphore_take_blocking(cla_link->tx_queue_sem);
