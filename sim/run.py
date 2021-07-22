@@ -330,10 +330,12 @@ if __name__ == "__main__":
     commit_thread.join()
 
     success = True
+    i = 0
     for p in [phy_process]+node_processes:
         if p.returncode != 0:
             success = False
-            print("Got weird response code: "+ str(p.returncode))
+            print("Got weird response code: "+ str(p.returncode) + " from " + str(i))
+        i += 1
 
     db(db.run.id == run).update(
         status='finished' if success else 'error',
