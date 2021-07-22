@@ -420,7 +420,7 @@ void generate_fake_bundles() {
     static uint32_t num_generated = 0;
     uint64_t cur = hal_time_get_timestamp_s();
 
-    uint32_t planned = (cur / CONFIG_FAKE_BUNDLE_INTERVAL)+1;
+    uint32_t planned = ((cur / CONFIG_FAKE_BUNDLE_INTERVAL)+1)*CONFIG_FAKE_BUNDLE_MULTIPLIER;
 
     while(num_generated < planned) {
 

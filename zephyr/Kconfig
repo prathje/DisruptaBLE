@@ -22,6 +22,10 @@ config FAKE_BUNDLE_INTERVAL
     int "The interval to generate fake bundles (in seconds). 0 for no generation"
 	default 0
 
+config FAKE_BUNDLE_MULTIPLIER
+    int "The number of fake bundles to generate at each interval"
+	default 1
+
 config FAKE_BUNDLE_SIZE_MIN
     int "The minimum size of a fake bundle (in bytes)"
 	default 1024
