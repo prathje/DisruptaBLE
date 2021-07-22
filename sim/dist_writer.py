@@ -171,6 +171,9 @@ def distance_writer_thread(tmp_dir, num_nodes, iterators):
                         time.sleep(0.1)
                         #print("Sleeping write for " + str((a, b)))
                         pass  # try later
+                except BrokenPipeError as e:
+                    print("Broken pipe from beginning?!" + str(e))
+                    pass  # try later
 
     # we finished writing the dist file
     os.close(dist_fd)
@@ -207,8 +210,8 @@ def distance_writer_thread(tmp_dir, num_nodes, iterators):
                     one_successful_write = True
                 except BlockingIOError as ex:
                     pass    # nothing
-                except BrokenPipeError:
-                    print("BrokenPipeError!")
+                except BrokenPipeError as e:
+                    print("BrokenPipeError!" + str(e))
                     break   # we close this writer thread straight away TODO: This could deadlock the execution?
 
             if not one_successful_write:
