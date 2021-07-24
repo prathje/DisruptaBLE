@@ -422,7 +422,7 @@ void generate_fake_bundles() {
 
     uint32_t planned = ((cur / CONFIG_FAKE_BUNDLE_INTERVAL)+1)*CONFIG_FAKE_BUNDLE_MULTIPLIER;
 
-    while(num_generated < planned) {
+    if(num_generated < planned) {
 
 #if (CONFIG_FAKE_BUNDLE_SIZE_MAX > CONFIG_FAKE_BUNDLE_SIZE_MIN)
         uint32_t payload_length = (hal_random_get() % (CONFIG_FAKE_BUNDLE_SIZE_MAX-CONFIG_FAKE_BUNDLE_SIZE_MIN)) + CONFIG_FAKE_BUNDLE_SIZE_MIN;
