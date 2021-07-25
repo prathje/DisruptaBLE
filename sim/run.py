@@ -153,7 +153,7 @@ if __name__ == "__main__":
     os.makedirs(logdir, exist_ok=True)
 
     # Get access to the database (create if necessary!)
-    db = DAL("sqlite://sqlite.db", folder=logdir, attempts=10)
+    db = DAL("sqlite://sqlite.db", folder=logdir, attempts=30)
 
     tables.init_tables(db)
 
