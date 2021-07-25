@@ -39,7 +39,7 @@
 #define ML2CAP_PARALLEL_BUFFERS 1
 
 // we will disconnect the connection if we did not receive something for X msec
-#define IDLE_TIMEOUT_MS 500
+#define IDLE_TIMEOUT_MS 4000
 
 #define TIMEOUT_WARNING_MS 6000
 
@@ -272,7 +272,7 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
 
     // We now try to connect as soon as we received that advertisement
     nb_ble_stop(); // we need to disable the advertisements for that, Note that this cb is called by the NB_BLE TASK
-    int err = bt_conn_le_create(&other_addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM(6, 6, 0, IDLE_TIMEOUT_MS/10), &conn);
+    int err = bt_conn_le_create(&other_addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM(BT_GAP_INIT_CONN_INT_MIN, BT_GAP_INIT_CONN_INT_MAX, 0, IDLE_TIMEOUT_MS/10), &conn);
 
     if (err) {
         // we get EINVAL in case the connection already exists...
