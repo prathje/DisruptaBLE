@@ -2,7 +2,7 @@ import sys
 import json
 import dotenv
 import os
-
+import random
 
 from pprint import pprint
 import sqlite3
@@ -267,8 +267,8 @@ def handle_bundles(db, run):
                 sequence_number=e.data['sequence_number'],
                 payload_length=e.data['payload_length'],
                 is_sv=et == 'sv_bundle',
-                lifetime_ms=e.data['lifetime_s']*1000,
-                hop_count=e.data['hop_count']
+                lifetime_ms=0, #e.data['lifetime_s']*1000,
+                hop_count=0 #e.data['hop_count']
             )
 
             db.stored_bundle.insert(
@@ -277,7 +277,7 @@ def handle_bundles(db, run):
                 bundle=bundle,
                 created_us=e['us'],
                 local_id=e.data['local_id'],
-                remaining_hops=e.data['hop_count']
+                remaining_hops=0 #e.data['hop_count']
             )
 
             db.commit()
@@ -379,6 +379,22 @@ def handle_bundles(db, run):
     db.commit()
     #pprint(list(db(db.device).select()))
 
+
+def handle_advertisements(db, run):
+    for e in iter_events_with_devices(db, run, 'adv_received'):
+        adv = db.advertisements.insert(
+            run=run,
+            sender=find_device_by_eid(db, run, e.data['other_eid']),
+            receiver=e.device,
+            received_us=e.us,
+            connectable=int(e.data['connectable']) == 1,
+            rssi=int(e.data['rssi']),
+        )
+        if random.random() < 0.1:
+            db.commit()
+    db.commit()
+
+
 def handle_positions(db, run):
     pass
     # TODO: import all positions using the dist_writer
@@ -452,10 +468,13 @@ if __name__ == "__main__":
     # And init again ;)
     tables.init_eval_tables(db)
 
+    db.commit() # we need to commit
+
     handlers = [
         handle_devices,
+        handle_advertisements,
         handle_connections,
-        handle_bundles
+        handle_bundles,
     ]
 
     runs = db(db.run.status == 'finished').iterselect()
@@ -463,6 +482,7 @@ if __name__ == "__main__":
     for run in runs:
         print("Handling run {}".format(run.name))
         for h in handlers:
+            print(h.__name__)
             h(db, run)
 
     # TODO: Group them by something?!

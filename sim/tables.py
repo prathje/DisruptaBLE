@@ -104,10 +104,22 @@ def init_eval_tables(db):
         redefine=False
     )
 
+    db.define_table(
+        'advertisements',
+        Field('run', 'reference run', notnull=True),
+        Field('sender', 'reference device', notnull=True),
+        Field('receiver', 'reference device', notnull=True),
+        Field('received_us', type='bigint', notnull=True),
+        Field('rssi', type='integer', notnull=True),
+        Field('connectable', type='boolean', notnull=True),
+        redefine=False
+    )
+
     # TODO: Extra handling of summary vectors?
 
 def reset_eval_tables(db):
     eval_tables = [
+        'advertisements',
         'bundle_transmission',
         'stored_bundle',
         'bundle',

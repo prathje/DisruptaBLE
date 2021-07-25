@@ -10,6 +10,7 @@ from pydal import DAL, Field
 from utils import iter_nodes
 import tables
 from pprint import pprint
+import math
 
 config = {
     **dotenv.dotenv_values(".env"),  # load shared development variables
@@ -41,7 +42,7 @@ def contact_pairs_iter(dist_time_iter, max_us, max_dist):
                 yield (last_contact_start, ts)
                 last_contact_start = None
 
-    if last_contact_start is not None:
+    if last_contact_start is not None and last_contact_start != max_us: # prevent empty intervals
         yield (last_contact_start, max_us)
 
 
@@ -63,6 +64,7 @@ def extract_contact_pairs(dist_time_iters, max_us, max_dist):
                 still_looping = True
 
     return contact_pairs
+
 
 #
 # def extract_contact_pairs(config, max_dist):
@@ -116,6 +118,42 @@ def extract_contact_pairs(dist_time_iters, max_us, max_dist):
 #     return contact_pairs
 
 
+def contact_pairs_to_contact_histogramm(contact_pairs):
+
+    s = []
+
+    for (a,b) in contact_pairs:
+        for (start, end) in contact_pairs[(a,b)]:
+            s.append((end-start)/1000000)
+
+    for t in range(0, 301, 1):
+
+        p =  len([x for x in s if x > t]) / len(s)
+        print("{}, {}".format(t, p))
+
+
+
+
+def contact_pairs_to_num_neighbors(nr_nodes, contact_pairs, max_s=1.0):
+
+    # for each node, we calculate
+
+    num_neighbors_per_step = {}
+    for n in range(nr_nodes):
+        num_neighbors_per_step[n] = [0]*(1+int(max_s))
+
+        for (a, b) in iter_nodes(nr_nodes):
+            if n in [a, b]:
+                for (start, end) in contact_pairs[(a,b)]:
+                    start_s = math.floor(start/1000000)
+                    end_s = math.floor(end/1000000)
+                    for i in range(start_s, end_s+1):
+                        num_neighbors_per_step[n][i] += 1
+
+    print("node, min, max, avg")
+    for n in range(nr_nodes):
+        print("{}, {}, {}, {}".format(n, min(num_neighbors_per_step[n]), max(num_neighbors_per_step[n]), sum(num_neighbors_per_step[n])/len(num_neighbors_per_step[n])))
+
 if __name__ == "__main__":
     logdir = config['SIM_LOG_DIR']
     os.makedirs(logdir, exist_ok=True)
@@ -125,20 +163,22 @@ if __name__ == "__main__":
     tables.init_tables(db)
     tables.init_eval_tables(db)
 
-    runs = list(db(db.run.status == 'finished').select())
+    db.commit()
+
+    runs = list(db(db.run).select(orderby=db.run.name))
+
+    print(runs)
+
 
     max_dist = 50.0 # TODO: Derive this based on the pair-wise advertisement reception and connection quality!
     for run in runs:
-        print("Handling run {}".format(run.name))
+        print("Handling run {} {}".format(run.id, run.name))
         run_config = json.loads(run.configuration_json)
 
-        run_config['SIM_PROXY_NUM_NODES'] = 99
-        run_config['SIM_LENGTH'] = 3600000000
-
         max_us = int(float(run_config['SIM_LENGTH']))
-
+        max_us = 3600000000
         contact_pairs = extract_contact_pairs(dist_time_iters_from_run(run_config), max_us, max_dist)
 
-        pprint(contact_pairs)
+        contact_pairs_to_num_neighbors(int(run_config['SIM_PROXY_NUM_NODES'])+1, contact_pairs, int(max_us/1000000))
 
-
+        contact_pairs_to_contact_histogramm(contact_pairs)
