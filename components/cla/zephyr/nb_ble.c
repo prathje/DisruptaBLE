@@ -119,7 +119,7 @@ void nb_ble_start(bool connectable) {
 
     err = bt_le_adv_start(
             BT_LE_ADV_PARAM(
-                    connectable ? (BT_LE_ADV_OPT_CONNECTABLE | BT_LE_ADV_OPT_ONE_TIME) : BT_LE_ADV_OPT_NONE,
+                    (connectable ? (BT_LE_ADV_OPT_CONNECTABLE | BT_LE_ADV_OPT_ONE_TIME) : BT_LE_ADV_OPT_NONE) | BT_LE_ADV_OPT_USE_IDENTITY,
                     BT_GAP_ADV_FAST_INT_MIN_2,
                     BT_GAP_ADV_FAST_INT_MAX_2,
                     NULL),
