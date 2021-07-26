@@ -29,6 +29,8 @@ def init_tables(db):
         migrate=False
     )
 
+    db.executesql('CREATE INDEX IF NOT EXISTS type_index ON event (type);')
+
 
 def init_eval_tables(db):
     # Actual parsed data
@@ -137,7 +139,11 @@ def reset_eval_tables(db):
         'device'  # last since every other reference this one
     ]
 
-    for t in eval_tables:
-        db[t].drop()
+    if db._dbname == 'sqlite':
+        for t in eval_tables:
+            db[t].drop()
+    else:
+        for t in eval_tables:
+            db(db[t]).delete()
 
     db.commit()
