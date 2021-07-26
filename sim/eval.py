@@ -449,9 +449,6 @@ def handle_positions(db, run):
         pos_with_ts_iter = dist_writer.rwp_raw_positions(int(run_config['SIM_RANDOM_SEED']), int(run_config['SIM_PROXY_NUM_NODES']), json.loads(run_config['SIM_MODEL_OPTIONS']))
 
         for (ts, positions) in pos_with_ts_iter:
-            print(ts)
-            print(positions)
-
             pos_batch = []
             d = 0
             for (x, y) in positions:
