@@ -39,7 +39,9 @@ def init_eval_tables(db):
         Field('run', 'reference run', notnull=True),
         Field('number', type='integer', notnull=True),
         Field('eid', notnull=True),
-        Field('mac_addr', notnull=True)
+        Field('mac_addr', notnull=True),
+        redefine=False,
+        migrate=False
     )
 
     db.define_table(
@@ -65,7 +67,9 @@ def init_eval_tables(db):
         Field('peripheral_connection_failure_us', type='bigint'),
         Field('peripheral_disconnect_us', type='bigint'),
         Field('peripheral_disconnect_reason', type='bigint'),
-        Field('peripheral_idle_disconnect_us', type='bigint')
+        Field('peripheral_idle_disconnect_us', type='bigint'),
+        redefine=False,
+        migrate=False
     )
 
     db.define_table(
@@ -80,7 +84,9 @@ def init_eval_tables(db):
         Field('payload_length', type='integer'),
         Field('is_sv', type='boolean'),
         Field('lifetime_ms', type='integer'),
-        Field('hop_count', type='integer')
+        Field('hop_count', type='integer'),
+        redefine=False,
+        migrate=False
     )
 
     db.define_table(
@@ -91,7 +97,9 @@ def init_eval_tables(db):
         Field('created_us', type='bigint', notnull=True),
         Field('local_id', type='integer', notnull=True),
         Field('deleted_us', type='bigint', notnull=False),
-        Field('remaining_hops', type='integer', notnull=False)
+        Field('remaining_hops', type='integer', notnull=False),
+        redefine=False,
+        migrate=False
     )
 
     db.define_table(
@@ -101,7 +109,9 @@ def init_eval_tables(db):
         Field('source_stored_bundle', 'reference stored_bundle', notnull=True),
         Field('received_stored_bundle', 'reference stored_bundle', notnull=False),
         Field('start_us', type='bigint'),
-        Field('end_us', type='bigint')
+        Field('end_us', type='bigint'),
+        redefine=False,
+        migrate=False
     )
 
     db.define_table(
@@ -111,7 +121,9 @@ def init_eval_tables(db):
         Field('receiver', 'reference device', notnull=True),
         Field('received_us', type='bigint', notnull=True),
         Field('rssi', type='integer', notnull=True),
-        Field('connectable', type='boolean', notnull=True)
+        Field('connectable', type='boolean', notnull=True),
+        redefine=False,
+        migrate=False
     )
 
     # TODO: Extra handling of summary vectors?
