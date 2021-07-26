@@ -30,7 +30,19 @@ def find_eid_by_mac_addr(db, run, mac_addr):
 #def find_device_by_number(db, run, device_number):
 #    return db((db.device.run == run) & (db.device.number == device_number)).select()[0]
 
+
+eid_cache_run = None
+eid_cache = {}
+
+
 def find_device_by_eid(db, run, eid):
+    global eid_cache_run
+    global eid_cache
+
+    if run.id != eid_cache_run:
+        eid_cache = {}  # we reset the cache for each run (in the general case, we process runs sequentially anyway)
+        eid_cache_run = run.id
+
     if eid == "dtn://fake":
         return None
 
@@ -39,7 +51,9 @@ def find_device_by_eid(db, run, eid):
     if service >= 0:
         eid = eid[:service]
 
-    return db((db.device.run == run) & (db.device.eid == eid)).select()[0]
+    if eid not in eid_cache:
+        eid_cache[eid] = db((db.device.run == run) & (db.device.eid == eid)).select()[0]
+    return eid_cache[eid]
 
 
 def find_bundle(db, run, source_eid, dest_eid, creation_timestamp_ms, sequence_number):
