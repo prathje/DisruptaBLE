@@ -395,18 +395,30 @@ def handle_bundles(db, run):
 
 
 def handle_advertisements(db, run):
+
+    batch_size = 100
+    batch = []
+
     for e in iter_events_with_devices(db, run, 'adv_received'):
-        adv = db.advertisements.insert(
-            run=run,
-            sender=find_device_by_eid(db, run, e.data['other_eid']),
-            receiver=e.device,
-            received_us=e.us,
-            connectable=int(e.data['connectable']) == 1,
-            rssi=int(e.data['rssi']),
+
+        batch.append(
+            { 'run': run,
+              'sender': find_device_by_eid(db, run, e.data['other_eid']),
+              'receiver': e.device,
+              'received_us': e.us,
+              'connectable': int(e.data['connectable']) == 1,
+              'rssi': int(e.data['rssi'])
+              }
         )
-        if random.random() < 0.1:
+
+        if len(batch) >= batch_size:
+            db.advertisements.bulk_insert(batch)
+            batch = []
             db.commit()
-    db.commit()
+
+    if len(batch) > 0:
+        db.advertisements.bulk_insert(batch)
+        db.commit()
 
 
 def handle_positions(db, run):
