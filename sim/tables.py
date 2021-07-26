@@ -14,7 +14,7 @@ def init_tables(db):
         Field('progress', type='bigint', notnull=True),
         Field('num_proxy_devices', type='integer', notnull=True),
         Field('configuration_json', type='text', notnull=True),
-        redefine=False,
+        redefine=True,
         migrate=False
     )
 
@@ -25,7 +25,7 @@ def init_tables(db):
         Field('device', type='integer', notnull=True),
         Field('us', type='bigint', notnull=True),
         Field('data_json', type='text', notnull=True),
-        redefine=False,
+        redefine=True,
         migrate=False
     )
 
@@ -40,7 +40,7 @@ def init_eval_tables(db):
         Field('number', type='integer', notnull=True),
         Field('eid', notnull=True),
         Field('mac_addr', notnull=True),
-        redefine=False,
+        redefine=True,
         migrate=False
     )
 
@@ -68,7 +68,7 @@ def init_eval_tables(db):
         Field('peripheral_disconnect_us', type='bigint'),
         Field('peripheral_disconnect_reason', type='bigint'),
         Field('peripheral_idle_disconnect_us', type='bigint'),
-        redefine=False,
+        redefine=True,
         migrate=False
     )
 
@@ -85,7 +85,7 @@ def init_eval_tables(db):
         Field('is_sv', type='boolean'),
         Field('lifetime_ms', type='integer'),
         Field('hop_count', type='integer'),
-        redefine=False,
+        redefine=True,
         migrate=False
     )
 
@@ -98,7 +98,7 @@ def init_eval_tables(db):
         Field('local_id', type='integer', notnull=True),
         Field('deleted_us', type='bigint', notnull=False),
         Field('remaining_hops', type='integer', notnull=False),
-        redefine=False,
+        redefine=True,
         migrate=False
     )
 
@@ -110,7 +110,7 @@ def init_eval_tables(db):
         Field('received_stored_bundle', 'reference stored_bundle', notnull=False),
         Field('start_us', type='bigint'),
         Field('end_us', type='bigint'),
-        redefine=False,
+        redefine=True,
         migrate=False
     )
 
@@ -122,7 +122,7 @@ def init_eval_tables(db):
         Field('received_us', type='bigint', notnull=True),
         Field('rssi', type='integer', notnull=True),
         Field('connectable', type='boolean', notnull=True),
-        redefine=False,
+        redefine=True,
         migrate=False
     )
 
