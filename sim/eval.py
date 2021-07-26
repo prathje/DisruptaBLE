@@ -3,6 +3,7 @@ import json
 import dotenv
 import os
 import random
+import dist_writer
 
 from pprint import pprint
 import sqlite3
@@ -120,6 +121,22 @@ def iter_events_with_devices(db, run, type):
         e.data = json.loads(e.data_json)
         e.device = device_list[e.device]
         yield e
+    #
+    # batch_size = 200
+    # cur_offset = 0
+    #
+    # while True:
+    #     entries = db((db.event.run == run) & (db.event.type == type)).select(orderby=db.event.us|db.event.device, limitby=(cur_offset, cur_offset+batch_size))
+    #
+    #     for e in entries:
+    #         e.data = json.loads(e.data_json)
+    #         e.device = device_list[e.device]
+    #         yield e
+    #
+    #     if len(entries) < batch_size:
+    #         return
+    #     else:
+    #         cur_offset += batch_size
 
 def handle_devices(db, run):
     for e in iter_events(db, run, 'ml2cap_init'):
@@ -422,7 +439,34 @@ def handle_advertisements(db, run):
 
 
 def handle_positions(db, run):
-    pass
+
+    run_config = json.loads(run.configuration_json)
+
+    if run_config['SIM_MODEL'] == 'rwp':
+        device_list = list(
+            db((db.device.run == run)).select(orderby=db.device.number)
+        )
+        pos_with_ts_iter = dist_writer.rwp_raw_positions(int(run_config['SIM_RANDOM_SEED']), int(run_config['SIM_PROXY_NUM_NODES']), json.loads(run_config['SIM_MODEL_OPTIONS']))
+
+        for (ts, positions) in pos_with_ts_iter:
+            print(ts)
+            print(positions)
+
+            pos_batch = []
+            d = 0
+            for (x, y) in positions:
+                pos_batch.append({
+                    'run': run,
+                    'device': device_list[d],
+                    'us': ts,
+                    'pos_x': x,
+                    'pos_y': y
+                })
+                d += 1
+            db.position.bulk_insert(pos_batch)
+            db.commit()
+
+
     # TODO: import all positions using the dist_writer
 
 def run_in(runs):
@@ -489,15 +533,14 @@ if __name__ == "__main__":
 
     # we reset everything for testing purposes
     tables.init_eval_tables(db)
+    db.commit()
+
     tables.reset_eval_tables(db)
-
-    # And init again ;)
-    tables.init_eval_tables(db)
-
-    db.commit() # we need to commit
+    db.commit()
 
     handlers = [
         handle_devices,
+        handle_positions,
         handle_advertisements,
         handle_connections,
         handle_bundles,

@@ -126,11 +126,23 @@ def init_eval_tables(db):
         migrate=False
     )
 
+    db.define_table(
+        'position',
+        Field('run', 'reference run', notnull=True),
+        Field('device', 'reference device', notnull=True),
+        Field('us', type='bigint', notnull=True),
+        Field('pos_x', 'double', notnull=True),
+        Field('pos_y', 'double', notnull=True),
+        redefine=True,
+        migrate=False
+    )
+
     # TODO: Extra handling of summary vectors?
 
 
 def reset_eval_tables(db):
     eval_tables = [
+        'position',
         'advertisements',
         'bundle_transmission',
         'stored_bundle',
