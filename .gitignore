@@ -45,3 +45,4 @@ __pycache__
 *.plist
 *.envrc
 .directory
+/sim/.env.local

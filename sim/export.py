@@ -105,7 +105,7 @@ if __name__ == "__main__":
     os.makedirs(logdir, exist_ok=True)
     os.makedirs(export_dir, exist_ok=True)
 
-    db = DAL("sqlite://sqlite.db", folder=logdir)
+    db = DAL(config['SIM_DB_URI'], folder=logdir)
 
     tables.init_tables(db)
     tables.init_eval_tables(db)
