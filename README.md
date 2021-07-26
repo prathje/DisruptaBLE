@@ -147,7 +147,7 @@ west debug --build-dir build_proxy
 
 Running Simulations:
 ```
-pip3 install python-dotenv pydal progressbar2 matplotlib
+pip3 install python-dotenv pydal progressbar2 matplotlib pymysql
 cd /app/sim/
 python3 run.py
 ```

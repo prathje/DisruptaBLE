@@ -13,29 +13,33 @@ def init_tables(db):
         Field('simulation_time', type='bigint', notnull=True),
         Field('progress', type='bigint', notnull=True),
         Field('num_proxy_devices', type='integer', notnull=True),
-        Field('configuration_json',  type='text', notnull=True),
-        redefine=False
+        Field('configuration_json', type='text', notnull=True),
+        redefine=False,
+        migrate=False
     )
 
     db.define_table(
         'event',
         Field('run', 'reference run', notnull=True),
         Field('type', notnull=True),
-        Field('device',  type='integer', notnull=True),
-        Field('us',  type='bigint', notnull=True),
-        Field('data_json',  type='text', notnull=True),
-        redefine=False
+        Field('device', type='integer', notnull=True),
+        Field('us', type='bigint', notnull=True),
+        Field('data_json', type='text', notnull=True),
+        redefine=False,
+        migrate=False
     )
+
 
 def init_eval_tables(db):
     # Actual parsed data
     db.define_table(
         'device',
         Field('run', 'reference run', notnull=True),
-        Field('number',  type='integer', notnull=True),
-        Field('eid',  notnull=True),
-        Field('mac_addr',  notnull=True),
-        redefine=False
+        Field('number', type='integer', notnull=True),
+        Field('eid', notnull=True),
+        Field('mac_addr', notnull=True),
+        redefine=False,
+        migrate=False
     )
 
     db.define_table(
@@ -62,7 +66,8 @@ def init_eval_tables(db):
         Field('peripheral_disconnect_us', type='bigint'),
         Field('peripheral_disconnect_reason', type='bigint'),
         Field('peripheral_idle_disconnect_us', type='bigint'),
-        redefine=False
+        redefine=False,
+        migrate=False
     )
 
     db.define_table(
@@ -78,7 +83,8 @@ def init_eval_tables(db):
         Field('is_sv', type='boolean'),
         Field('lifetime_ms', type='integer'),
         Field('hop_count', type='integer'),
-        redefine=False
+        redefine=False,
+        migrate=False
     )
 
     db.define_table(
@@ -90,7 +96,8 @@ def init_eval_tables(db):
         Field('local_id', type='integer', notnull=True),
         Field('deleted_us', type='bigint', notnull=False),
         Field('remaining_hops', type='integer', notnull=False),
-        redefine=False
+        redefine=False,
+        migrate=False
     )
 
     db.define_table(
@@ -99,9 +106,10 @@ def init_eval_tables(db):
         Field('conn_info', 'reference conn_info', notnull=True),
         Field('source_stored_bundle', 'reference stored_bundle', notnull=True),
         Field('received_stored_bundle', 'reference stored_bundle', notnull=False),
-        Field('start_us',  type='bigint'),
-        Field('end_us',  type='bigint'),
-        redefine=False
+        Field('start_us', type='bigint'),
+        Field('end_us', type='bigint'),
+        redefine=False,
+        migrate=False
     )
 
     db.define_table(
@@ -112,10 +120,12 @@ def init_eval_tables(db):
         Field('received_us', type='bigint', notnull=True),
         Field('rssi', type='integer', notnull=True),
         Field('connectable', type='boolean', notnull=True),
-        redefine=False
+        redefine=False,
+        migrate=False
     )
 
     # TODO: Extra handling of summary vectors?
+
 
 def reset_eval_tables(db):
     eval_tables = [
@@ -124,7 +134,7 @@ def reset_eval_tables(db):
         'stored_bundle',
         'bundle',
         'conn_info',
-        'device'    #last since every other reference this one
+        'device'  # last since every other reference this one
     ]
 
     for t in eval_tables:
