@@ -30,6 +30,22 @@ def init_tables(db):
     )
 
     db.executesql('CREATE INDEX IF NOT EXISTS type_index ON event (type);')
+    db.executesql('''
+        CREATE OR REPLACE VIEW pos_pair
+        AS SELECT pa.run as run, pa.us as us, pc.us as us_next, pa.device as device_a, pb.device as device_b, pa.pos_x as pa_x, pa.pos_y as pa_y, pb.pos_x as pb_x, pb.pos_y as pb_y, pc.pos_x as pc_x, pc.pos_y as pc_y, pd.pos_x as pd_x, pd.pos_y as pd_y
+        FROM position pa
+        JOIN position pb ON pa.run = pb.run AND pb.us = pa.us
+        LEFT JOIN position pc ON pc.device = pa.device AND pc.us = (pa.us + 1000000)
+        LEFT JOIN position pd ON pd.device = pb.device AND pd.us = (pb.us + 1000000);
+    ''')
+
+    db.executesql('''
+        CREATE OR REPLACE VIEW distance_pair
+        AS SELECT pa.run as run, pa.us as us, pa.us_next as us_next, pa.device_a as device_a, pa.device_b as device_b,
+        SQRT( POWER(pa.pa_x - pa.pb_x, 2) + POWER(pa.pa_y - pa.pb_y, 2)) as d,
+        SQRT( POWER(pa.pc_x - pa.pd_x, 2) + POWER(pa.pc_y - pa.pd_y, 2)) as d_next
+        FROM pos_pair pa;
+    ''')
 
 
 def init_eval_tables(db):

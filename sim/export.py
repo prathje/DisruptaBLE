@@ -98,6 +98,32 @@ def export_pair_timings(db, base_path):
 
     pass
 
+def export_rssi_per_distance(db, base_path):
+
+    # SELECT * FROM distance_pair WHERE device_a = 326 AND device_b = 327 AND us = FLOOR(2028932/1000000)*1000000
+    '''
+    SELECT ROUND(d) as de, AVG(rssi) FROM (
+SELECT adv.id, adv.received_us, adv.rssi, dp.d + (dp.d_next-dp.d)* ((adv.received_us-dp.us)/(dp.us_next-dp.us)) as d
+FROM advertisements adv
+LEFT JOIN run r ON r.id = adv.run
+LEFT JOIN distance_pair dp ON dp.device_a = adv.sender AND dp.device_b = adv.receiver AND dp.us = FLOOR(adv.received_us/1000000)*1000000
+WHERE r.status = 'finished' LIMIT 10000) as a
+GROUP BY de
+    '''
+    pass
+
+def export_bundle_transmission_success_per_distance(db, base_path):
+    '''
+ SELECT ROUND(d) as de, AVG(rssi) FROM (
+SELECT adv.id, adv.received_us, adv.rssi, dp.d + (dp.d_next-dp.d)* ((adv.received_us-dp.us)/(dp.us_next-dp.us)) as d
+FROM advertisements adv
+LEFT JOIN run r ON r.id = adv.run
+LEFT JOIN distance_pair dp ON dp.device_a = adv.sender AND dp.device_b = adv.receiver AND dp.us = FLOOR(adv.received_us/1000000)*1000000
+WHERE r.status = 'finished' LIMIT 10000) as a
+GROUP BY de
+ '''
+    pass
+
 if __name__ == "__main__":
 
     logdir = config['SIM_LOG_DIR']
