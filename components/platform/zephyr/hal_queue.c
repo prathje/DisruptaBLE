@@ -79,7 +79,7 @@ enum ud3tn_result hal_queue_try_push_to_back(struct k_msgq *queue,
 
     if(ret) {
         if (-ret != EAGAIN) {
-            hal_io_message_printf("Error in hal_queue_push_to_back\n");
+            hal_io_message_printf("Error in hal_queue_push_to_back %d\n", ret);
         }
         return UD3TN_FAIL;
     } else {
