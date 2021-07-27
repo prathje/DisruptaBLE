@@ -180,7 +180,7 @@ enum ud3tn_result try_to_send_bundle(const char* eid, struct bundle_info_list_en
         return UD3TN_FAIL;
     }
 
-    enum ud3tn_result res = contact_manager_try_to_send_bundle(routed_bundle, 0); // TODO: which timeout to use?
+    enum ud3tn_result res = contact_manager_try_to_send_bundle(routed_bundle, 100); // TODO: which timeout to use?
 
     if (res == UD3TN_FAIL) {
         free(routed_bundle->destination);
