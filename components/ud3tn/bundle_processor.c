@@ -295,8 +295,8 @@ static void bundle_dispatch(struct bundle *bundle)
            bundle->id,
            bundle->source,
            bundle->destination,
-           (uint32_t)(bundle->creation_timestamp_ms&0xFFFF),
-           (uint32_t)(bundle->sequence_number&0xFFFF)
+           (uint32_t)(bundle->creation_timestamp_ms&0xFFFFFFFF),
+           (uint32_t)(bundle->sequence_number&0xFFFFFFFF)
     );
 
 	/* 5.3-1 */
@@ -427,8 +427,8 @@ static void bundle_expired(struct bundle *bundle)
            bundle->id,
            bundle->source,
            bundle->destination,
-           (uint32_t)(bundle->creation_timestamp_ms&0xFFFF),
-           (uint32_t)(bundle->sequence_number&0xFFFF)
+           (uint32_t)(bundle->creation_timestamp_ms&0xFFFFFFFF),
+           (uint32_t)(bundle->sequence_number&0xFFFFFFFF)
     );
 	bundle_delete(bundle, BUNDLE_SR_REASON_LIFETIME_EXPIRED);
 }
@@ -826,8 +826,8 @@ static void bundle_discard(struct bundle *bundle)
            bundle->id,
            bundle->source,
            bundle->destination,
-           (uint32_t)(bundle->creation_timestamp_ms&0xFFFF),
-           (uint32_t)(bundle->sequence_number&0xFFFF)
+           (uint32_t)(bundle->creation_timestamp_ms&0xFFFFFFFF),
+           (uint32_t)(bundle->sequence_number&0xFFFFFFFF)
     );
 	bundle_storage_delete(bundle->id);
 	bundle_drop(bundle);

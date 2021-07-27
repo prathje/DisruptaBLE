@@ -180,8 +180,8 @@ enum ud3tn_result send_sv(const char* sink, const char *destination_eid, struct 
            bundle->source,
            bundle->destination,
            payload_size,
-           (uint32_t)(bundle->sequence_number&0xFFFF),
-           (uint32_t)(bundle->creation_timestamp_ms&0xFFFF)
+           (uint32_t)(bundle->sequence_number&0xFFFFFFFF),
+           (uint32_t)(bundle->creation_timestamp_ms&0xFFFFFFFF)
     );
 
     // from now on, the bundle and its resources (e.g. the payload are handled by the bundle processor)
@@ -470,8 +470,8 @@ void generate_fake_bundles() {
                bundle->destination,
                payload_length,
                is_source ? "epidemic" : "direct",   // "direct" might actually also be spray and wait - depending on the DIRECT_TRANSMISSION_REPLICAS configuration
-               (uint32_t)(bundle->sequence_number&0xFFFF),
-               (uint32_t)(bundle->creation_timestamp_ms&0xFFFF)
+               (uint32_t)(bundle->sequence_number&0xFFFFFFFF),
+               (uint32_t)(bundle->creation_timestamp_ms&0xFFFFFFFF)
            );
             bundle_processor_inform(
                     routing_agent_config.bundle_agent_interface->bundle_signaling_queue,

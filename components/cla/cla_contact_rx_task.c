@@ -44,8 +44,8 @@ static void bundle_send(struct bundle *bundle, void *param)
                bundle->id,
                bundle->source,
                bundle->destination,
-               (uint32_t)(bundle->creation_timestamp_ms&0xFFFF),
-               (uint32_t)(bundle->sequence_number&0xFFFF)
+               (uint32_t)(bundle->creation_timestamp_ms&0xFFFFFFFF),
+               (uint32_t)(bundle->sequence_number&0xFFFFFFFF)
         );
 
 		bundle_processor_inform(
