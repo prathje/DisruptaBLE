@@ -182,14 +182,14 @@ def reset_eval_tables(db, run=None):
     ]
 
     if db._dbname == 'sqlite':
-        for t in eval_tables:
-            if run is not None:
-                db(db[t].run == run).delete()
-            else:
-                db[t].drop()
-    else:
         assert run is None
         for t in eval_tables:
-            db(db[t]).delete()
+                db[t].drop()
+    else:
+        for t in eval_tables:
+            if run:
+                db(db[t].run == run).delete()
+            else:
+                db(db[t]).delete()
 
     db.commit()
