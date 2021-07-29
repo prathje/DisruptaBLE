@@ -47,12 +47,10 @@ def init_tables(db):
         FROM pos_pair pa;
     ''')
 
-
+    db.executesql(
     '''
-    
-  CREATE OR REPLACE VIEW bundle_reception
-        AS 
-        
+        CREATE OR REPLACE VIEW bundle_reception
+        AS
         SELECT bt.run as run, bt.id as bundle_transmission, MIN(bt.end_us) as us, b.id as bundle, ssb.device as source_device, rsb.device as device, d.eid as receiver_eid, b.destination_eid as destination_eid         
         FROM bundle_transmission bt
         JOIN stored_bundle ssb ON ssb.id = bt.source_stored_bundle
@@ -61,7 +59,7 @@ def init_tables(db):
         JOIN bundle b ON b.id = ssb.bundle
          WHERE bt.end_us IS NOT NULL
           GROUP BY b.id, rsb.device
-    '''
+    ''')
 
 
 def init_eval_tables(db):
@@ -172,7 +170,7 @@ def init_eval_tables(db):
     # TODO: Extra handling of summary vectors?
 
 
-def reset_eval_tables(db):
+def reset_eval_tables(db, run=None):
     eval_tables = [
         'position',
         'advertisements',
@@ -185,8 +183,12 @@ def reset_eval_tables(db):
 
     if db._dbname == 'sqlite':
         for t in eval_tables:
-            db[t].drop()
+            if run is not None:
+                db(db[t].run == run).delete()
+            else:
+                db[t].drop()
     else:
+        assert run is None
         for t in eval_tables:
             db(db[t]).delete()
 

@@ -536,8 +536,8 @@ if __name__ == "__main__":
     tables.init_eval_tables(db)
     db.commit()
 
-    tables.reset_eval_tables(db)
-    db.commit()
+    #tables.reset_eval_tables(db)
+    #db.commit()
 
     handlers = [
         handle_devices,
@@ -551,9 +551,16 @@ if __name__ == "__main__":
 
     for run in runs:
         print("Handling run {}".format(run.name))
+        tables.reset_eval_tables(db, run)
+
         for h in handlers:
             print(h.__name__)
             h(db, run)
+
+        db(db.run.id == run).update(
+            status='processed'
+        )
+        db.commit()
 
     # TODO: Group them by something?!
     runs = list(db(db.run.status == 'finished').iterselect())

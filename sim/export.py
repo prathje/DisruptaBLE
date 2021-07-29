@@ -18,6 +18,19 @@ config = {
     **os.environ,  # override loaded values with environment variables
 }
 
+
+CONFIDENCE_FILL_COLOR = '0.8'
+COLOR_MAP = 'tab10'
+
+def configure_plots():
+    plt.rc('lines', linewidth=2.5)
+    plt.rc('legend', framealpha=1.0, fancybox=True)
+    plt.rc('errorbar', capsize=3)
+    font = {'size': '12'}
+    plt.rc('font', **font)
+
+configure_plots()
+
 def run_in(runs):
     s = "run IN ("
     s += ", ".join([str(r.id) for r in runs])
@@ -150,21 +163,21 @@ GROUP BY de
 
 def export_fake_bundle_propagation_epidemic(db, base_path):
 
-
     length_s = 3000
     step = 1.0
 
 
-    runs = db((db.run.status == 'finished') & (db.run.group == 'app')).select()
+    runs = db((db.run.status == 'processed') & (db.run.group == 'app')).select()
 
 
     max_step = math.ceil(length_s/step)
-    avg_receptions_steps = [0]*(max_step+1)
-    min_receptions_steps = [24]*(max_step+1)
-    max_receptions_steps = [0]*(max_step+1)
+
 
     num_bundles = 0
     for r in runs:
+
+        run_reception_steps = []
+
         # & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))
         bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://fake')).iterselect()
         for b in bundles:
@@ -200,44 +213,37 @@ def export_fake_bundle_propagation_epidemic(db, base_path):
                 for x in range(ts, max_step+1):
                     receptions_steps[x] += 1
 
-            for x in range(0, max_step+1):
-                min_receptions_steps[x] = min(min_receptions_steps[x], receptions_steps[x])
-                max_receptions_steps[x] = max(max_receptions_steps[x], receptions_steps[x])
-                avg_receptions_steps[x] += receptions_steps[x]
+            run_reception_steps.append(receptions_steps)
 
-            # print("{}".format(b.id))
-            # print("############")
-            # ts = 0.0
-            # for rs in receptions_steps:
-            #     print("{}, {}".format(ts, (rs/24)))
-            #     ts += step
-            #
-            # if receptions_steps[max_step]/24 <= 0.041666666666666664:
-            #     return
+        run_config = json.loads(r.configuration_json)
+
+        run_reception_steps = np.array(run_reception_steps, dtype=np.float64)
+        run_reception_steps = run_reception_steps / (float(run_config['SIM_PROXY_NUM_NODES']))
+
+        print(r.id)
+        print(r.name)
+        run_reception_steps = np.swapaxes(run_reception_steps, 0, 1) # we swap the axes to get all t=0 values at the first position together
 
 
+        # Export one graph per run for now
+        positions = range(0, max_step+1)
+        plt.clf()
 
-    print("############")
-    ts = 0.0
-    for (rs, min_rs, max_rs)  in zip(avg_receptions_steps, min_receptions_steps, max_receptions_steps):
-        print("'{}', '{}', '{}', '{}'".format(ts, (rs/(24*num_bundles)), min_rs/24, max_rs/24))
-        ts += step
+        mean = np.mean(run_reception_steps, axis=1)
+        plt.plot(positions, mean, linestyle='-', label="Mean")
+        (lq, uq) = np.percentile(run_reception_steps, [2.5, 97.5], axis=1)
 
-    '''
-        SELECT ROUND(d/5)*5 as de, AVG(end_us-start_us)/1000000 FROM (
+        plt.fill_between(positions, lq, uq, color=CONFIDENCE_FILL_COLOR, label='95% Confidence Interval')
 
-        SELECT bt.*, dp.d + (dp.d_next-dp.d)* ((bt.start_us-dp.us)/(dp.us_next-dp.us)) as d
-
-        FROM bundle_transmission bt
-        JOIN stored_bundle ssb ON ssb.id = bt.source_stored_bundle
-        JOIN conn_info ci ON ci.id = bt.conn_info
-        JOIN bundle b ON b.id = ssb.bundle AND b.b.destination_eid = 'dtn://fake' AND b.is_sv = 'F'
-        JOIN run r ON r.id = bt.run
-        JOIN distance_pair dp ON dp.device_a = ci.client AND dp.device_b = ci.peripheral AND dp.us = FLOOR(bt.start_us/1000000)*1000000
-        WHERE r.status = 'finished') as a
-        GROUP BY de
-     '''
-    pass
+        plt.legend()
+        # plt.title("Chaos Network Size")
+        plt.xlabel("Time")
+        plt.ylabel('Bundle Reception Rate')
+        plt.axis([None, None, None, None])
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(base_path + str(r.name) + str(r.id) + ".pdf", format="pdf")
+        plt.close()
 
 
 
@@ -246,15 +252,14 @@ def export_fake_bundle_propagation_direct(db, base_path):
     length_s = 3000
     step = 1.0
 
-    runs = db((db.run.status == 'finished') & (db.run.group == 'app')).select()
+    runs = db((db.run.status == 'processed') & (db.run.group == 'app')).select()
 
     max_step = math.ceil(length_s/step)
-    avg_receptions_steps = [0]*(max_step+1)
-    min_receptions_steps = [24]*(max_step+1)
-    max_receptions_steps = [0]*(max_step+1)
 
     num_bundles = 0
     for r in runs:
+
+        run_reception_steps = []
         # & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))
         bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://source')).iterselect()
         for b in bundles:
@@ -289,44 +294,38 @@ def export_fake_bundle_propagation_direct(db, base_path):
                 for x in range(ts, max_step+1):
                     receptions_steps[x] += 1
 
-            for x in range(0, max_step+1):
-                min_receptions_steps[x] = min(min_receptions_steps[x], receptions_steps[x])
-                max_receptions_steps[x] = max(max_receptions_steps[x], receptions_steps[x])
-                avg_receptions_steps[x] += receptions_steps[x]
-
-            # print("{}".format(b.id))
-            # print("############")
-            # ts = 0.0
-            # for rs in receptions_steps:
-            #     print("{}, {}".format(ts, (rs/24)))
-            #     ts += step
-            #
-            # if receptions_steps[max_step]/24 <= 0.041666666666666664:
-            #     return
+            run_reception_steps.append(receptions_steps)
 
 
+        run_config = json.loads(r.configuration_json)
 
-    print("############")
-    ts = 0.0
-    for (rs, min_rs, max_rs)  in zip(avg_receptions_steps, min_receptions_steps, max_receptions_steps):
-        print("'{}', '{}', '{}', '{}'".format(ts, (rs/(num_bundles)), min_rs, max_rs))
-        ts += step
+        run_reception_steps = np.array(run_reception_steps, dtype=np.float64)
 
-    '''
-        SELECT ROUND(d/5)*5 as de, AVG(end_us-start_us)/1000000 FROM (
+        print(r.id)
+        print(r.name)
+        run_reception_steps = np.swapaxes(run_reception_steps, 0,
+                                          1)  # we swap the axes to get all t=0 values at the first position together
 
-        SELECT bt.*, dp.d + (dp.d_next-dp.d)* ((bt.start_us-dp.us)/(dp.us_next-dp.us)) as d
+        # Export one graph per run for now
+        positions = range(0, max_step + 1)
+        plt.clf()
 
-        FROM bundle_transmission bt
-        JOIN stored_bundle ssb ON ssb.id = bt.source_stored_bundle
-        JOIN conn_info ci ON ci.id = bt.conn_info
-        JOIN bundle b ON b.id = ssb.bundle AND b.b.destination_eid = 'dtn://fake' AND b.is_sv = 'F'
-        JOIN run r ON r.id = bt.run
-        JOIN distance_pair dp ON dp.device_a = ci.client AND dp.device_b = ci.peripheral AND dp.us = FLOOR(bt.start_us/1000000)*1000000
-        WHERE r.status = 'finished') as a
-        GROUP BY de
-     '''
-    pass
+        mean = np.mean(run_reception_steps, axis=1)
+        plt.plot(positions, mean, linestyle='-', label="Mean")
+        (lq, uq) = np.percentile(run_reception_steps, [2.5, 97.5], axis=1)
+
+        plt.fill_between(positions, lq, uq, color=CONFIDENCE_FILL_COLOR, label='95% Confidence Interval')
+
+        plt.legend()
+        # plt.title("Chaos Network Size")
+        plt.xlabel("Time")
+        plt.ylabel('Bundle Reception Rate')
+        plt.axis([None, None, None, None])
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(base_path + str(r.name) + str(r.id) + ".pdf", format="pdf")
+        plt.close()
+
 
 if __name__ == "__main__":
 
@@ -346,7 +345,7 @@ if __name__ == "__main__":
         #export_pair_packets,
         #export_pair_timings
         export_fake_bundle_propagation_direct,
-        export_fake_bundle_propagation_epidemic
+        #export_fake_bundle_propagation_epidemic
     ]
 
     for e in exports:
