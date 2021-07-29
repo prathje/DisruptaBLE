@@ -550,7 +550,7 @@ if __name__ == "__main__":
     runs = db(db.run.status == 'finished').iterselect()
 
     for run in runs:
-        print("Handling run {}".format(run.name))
+        print("Handling run {} ({})".format(run.name, run.id))
         tables.reset_eval_tables(db, run)
 
         for h in handlers:
