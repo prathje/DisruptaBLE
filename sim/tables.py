@@ -48,6 +48,22 @@ def init_tables(db):
     ''')
 
 
+    '''
+    
+  CREATE OR REPLACE VIEW bundle_reception
+        AS 
+        
+        SELECT bt.run as run, bt.id as bundle_transmission, MIN(bt.end_us) as us, b.id as bundle, ssb.device as source_device, rsb.device as device, d.eid as receiver_eid, b.destination_eid as destination_eid         
+        FROM bundle_transmission bt
+        JOIN stored_bundle ssb ON ssb.id = bt.source_stored_bundle
+        JOIN stored_bundle rsb ON rsb.id = bt.received_stored_bundle
+        JOIN device d ON d.id = rsb.device
+        JOIN bundle b ON b.id = ssb.bundle
+         WHERE bt.end_us IS NOT NULL
+          GROUP BY b.id, rsb.device
+    '''
+
+
 def init_eval_tables(db):
     # Actual parsed data
     db.define_table(
