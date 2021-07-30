@@ -36,7 +36,7 @@
 // TODO: Make them configurable
 #define ML2CAP_PSM 0x6c
 #define ML2CAP_MAX_CONN 1
-#define ML2CAP_PARALLEL_BUFFERS 1
+#define ML2CAP_PARALLEL_BUFFERS 256
 
 // we will disconnect the connection if we did not receive something for X msec
 #define IDLE_TIMEOUT_MS 4000
@@ -272,7 +272,7 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
 
     // We now try to connect as soon as we received that advertisement
     nb_ble_stop(); // we need to disable the advertisements for that, Note that this cb is called by the NB_BLE TASK
-    int err = bt_conn_le_create(&other_addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM(BT_GAP_INIT_CONN_INT_MIN, BT_GAP_INIT_CONN_INT_MAX, 0, IDLE_TIMEOUT_MS/10), &conn);
+    int err = bt_conn_le_create(&other_addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM(6, 6, 0, IDLE_TIMEOUT_MS/10), &conn);
 
     if (err) {
         // we get EINVAL in case the connection already exists...
@@ -923,9 +923,9 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
         //LOGF("l2cap_transmit_bytes sent %d", sent);
         uint32_t frag_size = Z_MIN(mtu, length - sent);
 
-        while (!atomic_get(&ml2cap_link->le_chan.tx.credits) && !ml2cap_link->shutting_down) {
-            hal_task_delay(1); // yield as long as no credits are available, we need to add some time to prevent loops in bsim
-        }
+        //while (!atomic_get(&ml2cap_link->le_chan.tx.credits) && !ml2cap_link->shutting_down) {
+        //    hal_task_delay(1); // yield as long as no credits are available, we need to add some time to prevent loops in bsim
+        //}
 
         struct net_buf *buf = NULL;
         while(buf == NULL && !ml2cap_link->shutting_down) {
