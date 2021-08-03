@@ -2,6 +2,7 @@ import sys
 import json
 import dotenv
 import os
+import gzip
 
 from pprint import pprint
 import sqlite3
@@ -11,6 +12,9 @@ import tables
 import matplotlib.pyplot as plt
 import numpy as np
 import math
+import re
+
+from dist_eval import extract_contact_pairs, dist_time_iters_from_run
 
 config = {
     **dotenv.dotenv_values(".env"),  # load shared development variables
@@ -22,20 +26,51 @@ config = {
 CONFIDENCE_FILL_COLOR = '0.8'
 COLOR_MAP = 'tab10'
 
-def configure_plots():
+def default_plots():
     plt.rc('lines', linewidth=2.5)
     plt.rc('legend', framealpha=1.0, fancybox=True)
     plt.rc('errorbar', capsize=3)
     font = {'size': '12'}
     plt.rc('font', **font)
 
-configure_plots()
+# https://stackoverflow.com/a/46801075/6669161
+def slugify(s):
+    if not isinstance(s, str):
+        s = " ".join(s)
+    s = str(s).strip().replace(' ', '_')
+    return re.sub(r'(?u)[^-\w.]', '', s)
 
-def run_in(runs):
-    s = "run IN ("
-    s += ", ".join([str(r.id) for r in runs])
-    s += ")"
-    return s
+default_plots()
+
+
+# Source: https://github.com/mpld3/mpld3/issues/434#issuecomment-340255689
+class NumpyEncoder(json.JSONEncoder):
+    """ Special json encoder for numpy types """
+    def default(self, obj):
+        if isinstance(obj, (np.int_, np.intc, np.intp, np.int8,
+                            np.int16, np.int32, np.int64, np.uint8,
+                            np.uint16, np.uint32, np.uint64)):
+            return int(obj)
+        elif isinstance(obj, (np.float_, np.float16, np.float32,
+                              np.float64)):
+            return float(obj)
+        elif isinstance(obj,(np.ndarray,)):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
+
+export_cache_dir = None
+def cached(id, proc_cb):
+    if export_cache_dir:
+        cache_file = os.path.join(export_cache_dir, slugify(id) + '.json.gz')
+        if not os.path.isfile(cache_file):
+            data = proc_cb()
+            with gzip.open(cache_file, 'wt', encoding='UTF-8') as zipfile:
+                json.dump(data, zipfile, cls=NumpyEncoder)
+        with gzip.open(cache_file, 'rt', encoding='UTF-8') as json_file:
+            return json.load(json_file)
+    else:
+        return proc_cb()
+
 
 
 def export_pair_packets(db, base_path):
@@ -173,57 +208,58 @@ def export_fake_bundle_propagation_epidemic(db, base_path):
     max_step = math.ceil(length_s/step)
 
 
-    num_bundles = 0
     for r in runs:
 
-        run_reception_steps = []
-
-        # & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))
-        bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://fake')).iterselect()
-        for b in bundles:
-            # TODO: this creation time is currently needed due to formatting bugs.. see f602e6d6d909aff4cd89ee371b4d955fb61ce7ef
-            b_creation_time_ms = (db.executesql(
-                '''
-                    SELECT MIN(created_us) FROM stored_bundle
-                    WHERE device = {} AND bundle = {}
-                    GROUP BY bundle
-                '''.format(b.source, b.id)
-            )[0][0]) / 1000
-
-            if b_creation_time_ms > ((r.simulation_time/1000)-(length_s*1000)):
-                continue    # this bundle is too late
-
-
-            receptions_steps = [0]*(max_step+1)
-            num_bundles += 1
-
-            res = db.executesql(
-                '''
-                    SELECT us, receiver_eid = destination_eid FROM bundle_reception
-                    WHERE bundle = {}
-                    ORDER BY us ASC
-                '''.format(b.id)
-            )
-
-            for row in res:
-                ms = (row[0]/1000)-b_creation_time_ms #b.creation_timestamp_ms
-
-                ts = round((ms/1000) / step)
-
-                for x in range(ts, max_step+1):
-                    receptions_steps[x] += 1
-
-            run_reception_steps.append(receptions_steps)
-
         run_config = json.loads(r.configuration_json)
+        name = slugify(("epidemic propagation", str(r.name), str(r.id)))
 
+        def proc():
+            run_reception_steps = []
+
+            # & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))
+            bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://fake')).iterselect()
+            for b in bundles:
+                # TODO: this creation time is currently needed due to formatting bugs.. see f602e6d6d909aff4cd89ee371b4d955fb61ce7ef
+                b_creation_time_ms = (db.executesql(
+                    '''
+                        SELECT MIN(created_us) FROM stored_bundle
+                        WHERE device = {} AND bundle = {}
+                        GROUP BY bundle
+                    '''.format(b.source, b.id)
+                )[0][0]) / 1000
+
+                if b_creation_time_ms > ((r.simulation_time/1000)-(length_s*1000)):
+                    continue    # this bundle is too late
+
+
+                receptions_steps = [0]*(max_step+1)
+
+                res = db.executesql(
+                    '''
+                        SELECT us, receiver_eid = destination_eid FROM bundle_reception
+                        WHERE bundle = {}
+                        ORDER BY us ASC
+                    '''.format(b.id)
+                )
+
+                for row in res:
+                    ms = (row[0]/1000)-b_creation_time_ms #b.creation_timestamp_ms
+
+                    ts = round((ms/1000) / step)
+
+                    for x in range(ts, max_step+1):
+                        receptions_steps[x] += 1
+
+                run_reception_steps.append(receptions_steps)
+            return run_reception_steps
+
+        run_reception_steps = cached(name, proc)
         run_reception_steps = np.array(run_reception_steps, dtype=np.float64)
         run_reception_steps = run_reception_steps / (float(run_config['SIM_PROXY_NUM_NODES']))
 
         print(r.id)
         print(r.name)
         run_reception_steps = np.swapaxes(run_reception_steps, 0, 1) # we swap the axes to get all t=0 values at the first position together
-
 
         # Export one graph per run for now
         positions = range(0, max_step+1)
@@ -256,53 +292,51 @@ def export_fake_bundle_propagation_direct(db, base_path):
 
     max_step = math.ceil(length_s/step)
 
-    num_bundles = 0
     for r in runs:
-
-        run_reception_steps = []
-        # & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))
-        bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://source')).iterselect()
-        for b in bundles:
-            # TODO: this creation time is currently needed due to formatting bugs.. see f602e6d6d909aff4cd89ee371b4d955fb61ce7ef
-            b_creation_time_ms = (db.executesql(
-                '''
-                    SELECT MIN(created_us) FROM stored_bundle
-                    WHERE device = {} AND bundle = {}
-                    GROUP BY bundle
-                '''.format(b.source, b.id)
-            )[0][0]) /  1000
-
-            if b_creation_time_ms > ((r.simulation_time/1000)-(length_s*1000)):
-                continue    # this bundle is too late
-
-            receptions_steps = [0]*(max_step+1)
-            num_bundles += 1
-
-            res = db.executesql(
-                '''
-                    SELECT us FROM bundle_reception
-                    WHERE bundle = {} AND receiver_eid = destination_eid
-                    ORDER BY us ASC
-                '''.format(b.id)
-            )
-
-            for row in res:
-                ms = (row[0]/1000)-b_creation_time_ms #b.creation_timestamp_ms
-
-                ts = round((ms/1000) / step)
-
-                for x in range(ts, max_step+1):
-                    receptions_steps[x] += 1
-
-            run_reception_steps.append(receptions_steps)
-
-
         run_config = json.loads(r.configuration_json)
+        name = slugify(("direct propagation", str(r.name), str(r.id)))
 
+        def proc():
+            run_reception_steps = []
+            # & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))
+            bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://source')).iterselect()
+            for b in bundles:
+                # TODO: this creation time is currently needed due to formatting bugs.. see f602e6d6d909aff4cd89ee371b4d955fb61ce7ef
+                b_creation_time_ms = (db.executesql(
+                    '''
+                        SELECT MIN(created_us) FROM stored_bundle
+                        WHERE device = {} AND bundle = {}
+                        GROUP BY bundle
+                    '''.format(b.source, b.id)
+                )[0][0]) /  1000
+
+                if b_creation_time_ms > ((r.simulation_time/1000)-(length_s*1000)):
+                    continue    # this bundle is too late
+
+                receptions_steps = [0]*(max_step+1)
+
+                res = db.executesql(
+                    '''
+                        SELECT us FROM bundle_reception
+                        WHERE bundle = {} AND receiver_eid = destination_eid
+                        ORDER BY us ASC
+                    '''.format(b.id)
+                )
+
+                for row in res:
+                    ms = (row[0]/1000)-b_creation_time_ms #b.creation_timestamp_ms
+
+                    ts = round((ms/1000) / step)
+
+                    for x in range(ts, max_step+1):
+                        receptions_steps[x] += 1
+
+                run_reception_steps.append(receptions_steps)
+            return run_reception_steps
+
+        run_reception_steps = cached(name, proc)
         run_reception_steps = np.array(run_reception_steps, dtype=np.float64)
 
-        print(r.id)
-        print(r.name)
         run_reception_steps = np.swapaxes(run_reception_steps, 0,
                                           1)  # we swap the axes to get all t=0 values at the first position together
 
@@ -323,16 +357,64 @@ def export_fake_bundle_propagation_direct(db, base_path):
         plt.axis([None, None, None, None])
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(base_path + str(r.name) + str(r.id) + ".pdf", format="pdf")
+        plt.savefig(base_path + name + ".pdf", format="pdf")
         plt.close()
 
+
+def export_ict(db, base_path):
+
+    runs = db((db.run.status == 'processed') & (db.run.group == 'app')).select()
+
+
+    for max_dist in [25,50,100]:
+        for r in runs:
+            name = slugify(("ict", str(max_dist), str(r.name), str(r.id)))
+
+            run_config = json.loads(r.configuration_json)
+            max_s = math.floor(r.simulation_time/1000000)
+
+            def proc():
+                # build ict map
+                contact_pairs = extract_contact_pairs(dist_time_iters_from_run(run_config), r.simulation_time, max_dist)
+
+                s = []
+
+                for (a,b) in contact_pairs:
+                    for (start, end) in contact_pairs[(a,b)]:
+                        s.append((end-start)/1000000)
+
+                xs = []
+                for t in range(0, max_s+1, 1):
+                    p =  len([x for x in s if x > t]) / len(s)
+                    xs.append(p)
+                return np.array(xs, dtype=np.float64)
+
+
+            xs = cached(name, proc)
+
+            # Export one graph per run for now
+            positions = range(0, max_s + 1)
+            plt.clf()
+
+            plt.plot(positions, xs, linestyle='-', label="ICT")
+            plt.legend()
+            # plt.title("Chaos Network Size")
+            plt.xlabel("Time")
+            plt.ylabel('P(X>x)')
+            plt.axis([None, None, None, None])
+            plt.grid(True)
+            plt.tight_layout()
+            plt.savefig(base_path + name + ".pdf", format="pdf")
+            plt.close()
 
 if __name__ == "__main__":
 
     logdir = config['SIM_LOG_DIR']
     export_dir = config['SIM_EXPORT_DIR']
+    export_cache_dir = config['SIM_EXPORT_CACHE_DIR']
     os.makedirs(logdir, exist_ok=True)
     os.makedirs(export_dir, exist_ok=True)
+    os.makedirs(export_cache_dir, exist_ok=True)
 
     db = DAL(config['SIM_DB_URI'], folder=logdir)
 
@@ -342,10 +424,9 @@ if __name__ == "__main__":
     db.commit() # we need to commit
 
     exports = [
-        #export_pair_packets,
-        #export_pair_timings
+        export_fake_bundle_propagation_epidemic,
         export_fake_bundle_propagation_direct,
-        #export_fake_bundle_propagation_epidemic
+        export_ict,
     ]
 
     for e in exports:
