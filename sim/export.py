@@ -13,6 +13,8 @@ from dist_eval import extract_contact_pairs, dist_time_iters_from_run
 import matplotlib.pyplot as plt
 from export_utility import slugify, cached, init_cache, load_env_config
 
+from scipy.optimize import curve_fit
+
 
 METHOD_PREFIX = 'export_'
 
@@ -116,21 +118,30 @@ def export_rssi_per_distance(db, base_path):
     def handle_adv_data(name, data):
         max_dist = 200
 
-        xs = range(0, max_dist+1)
+        xs = range(1, max_dist+1)
 
         per_dist = [[] for x in xs]
 
         for d in data:
             dist = round(d[1])
-            if dist <= max_dist:
-                per_dist[dist].append(d[0])
+            if 1 <= dist <= max_dist:
+                per_dist[dist-1].append(d[0])
 
         per_dist_mean = [np.nanmean(vals) for vals in per_dist]
         per_dist_lq = [np.nanpercentile(vals, 2.5) for vals in per_dist]
         per_dist_uq = [np.nanpercentile(vals, 97.5) for vals in per_dist]
 
+
+        def rssi_from_d(d, n, rssi_0):
+            ad = -10*n*np.log10(d)+rssi_0
+            print(ad)
+            return ad
+        finiteYmask = np.isfinite(per_dist_mean)
+        ((n, rssi_0), _) = curve_fit(rssi_from_d, np.array(xs)[finiteYmask], np.array(per_dist_mean)[finiteYmask], bounds=([0,-100], [10,0]))
+
         plt.clf()
         plt.plot(xs, per_dist_mean, linestyle='-', label="Mean", color='C1')
+        plt.plot(xs, rssi_from_d(np.array(xs), n, rssi_0), linestyle='--', label="Base n={}, rssi_0={}".format(round(n, 2), round(rssi_0,2)), color='C2')
         plt.fill_between(xs, per_dist_lq, per_dist_uq, color=CONFIDENCE_FILL_COLOR, label='95% Confidence Interval')
         plt.legend()
         plt.xlabel("Distance [m]")
