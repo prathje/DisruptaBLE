@@ -1,75 +1,33 @@
-import sys
 import json
-import dotenv
 import os
-import gzip
 
 from pprint import pprint
-import sqlite3
 
 from pydal import DAL, Field
 import tables
-import matplotlib.pyplot as plt
 import numpy as np
 import math
-import re
 
 from dist_eval import extract_contact_pairs, dist_time_iters_from_run
 
-config = {
-    **dotenv.dotenv_values(".env"),  # load shared development variables
-    **dotenv.dotenv_values(".env.local"),  # load sensitive variables
-    **os.environ,  # override loaded values with environment variables
-}
+import matplotlib.pyplot as plt
+from export_utility import slugify, cached, init_cache, load_env_config
 
+
+METHOD_PREFIX = 'export_'
 
 CONFIDENCE_FILL_COLOR = '0.8'
 COLOR_MAP = 'tab10'
 
-def default_plots():
-    plt.rc('lines', linewidth=2.5)
+def load_plot_defaults():
+    # Configure as needed
+    plt.rc('lines', linewidth=2.0)
     plt.rc('legend', framealpha=1.0, fancybox=True)
     plt.rc('errorbar', capsize=3)
-    font = {'size': '12'}
-    plt.rc('font', **font)
+    plt.rc('pdf', fonttype=42)
+    plt.rc('ps', fonttype=42)
+    plt.rc('font', size=11)
 
-# https://stackoverflow.com/a/46801075/6669161
-def slugify(s):
-    if not isinstance(s, str):
-        s = " ".join(s)
-    s = str(s).strip().replace(' ', '_')
-    return re.sub(r'(?u)[^-\w.]', '', s)
-
-default_plots()
-
-
-# Source: https://github.com/mpld3/mpld3/issues/434#issuecomment-340255689
-class NumpyEncoder(json.JSONEncoder):
-    """ Special json encoder for numpy types """
-    def default(self, obj):
-        if isinstance(obj, (np.int_, np.intc, np.intp, np.int8,
-                            np.int16, np.int32, np.int64, np.uint8,
-                            np.uint16, np.uint32, np.uint64)):
-            return int(obj)
-        elif isinstance(obj, (np.float_, np.float16, np.float32,
-                              np.float64)):
-            return float(obj)
-        elif isinstance(obj,(np.ndarray,)):
-            return obj.tolist()
-        return json.JSONEncoder.default(self, obj)
-
-export_cache_dir = None
-def cached(id, proc_cb):
-    if export_cache_dir:
-        cache_file = os.path.join(export_cache_dir, slugify(id) + '.json.gz')
-        if not os.path.isfile(cache_file):
-            data = proc_cb()
-            with gzip.open(cache_file, 'wt', encoding='UTF-8') as zipfile:
-                json.dump(data, zipfile, cls=NumpyEncoder)
-        with gzip.open(cache_file, 'rt', encoding='UTF-8') as json_file:
-            return json.load(json_file)
-    else:
-        return proc_cb()
 
 
 
@@ -149,17 +107,88 @@ def export_pair_timings(db, base_path):
 
 def export_rssi_per_distance(db, base_path):
 
+    runs = db((db.run.status == 'processed') & (db.run.group == 'app')).select()
+
+    overall_limit = 5000
+    overall_data = []
+
+
+    def handle_adv_data(name, data):
+        max_dist = 200
+
+        xs = range(0, max_dist+1)
+
+        per_dist = [[] for x in xs]
+
+        for d in data:
+            dist = round(d[1])
+            if dist <= max_dist:
+                per_dist[dist].append(d[0])
+
+        per_dist_mean = [np.nanmean(vals) for vals in per_dist]
+        per_dist_lq = [np.nanpercentile(vals, 2.5) for vals in per_dist]
+        per_dist_uq = [np.nanpercentile(vals, 97.5) for vals in per_dist]
+
+        plt.clf()
+        plt.plot(xs, per_dist_mean, linestyle='-', label="Mean", color='C1')
+        plt.fill_between(xs, per_dist_lq, per_dist_uq, color=CONFIDENCE_FILL_COLOR, label='95% Confidence Interval')
+        plt.legend()
+        plt.xlabel("Distance [m]")
+        plt.ylabel("RSSI [dBm]")
+        plt.axis([0, max_dist, -100, -40])
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(export_dir + slugify(name) + ".pdf", format="pdf")
+        plt.close()
+
+
+    for r in runs:
+        name = slugify(("rssi per distance", str(r.name), str(r.id), str(overall_limit)))
+        print("Handling {}".format(name))
+
+        def proc():
+            limit = 1000   # batch processing slows down everything right now
+            offset = 0
+
+            data = []
+
+            while True:
+                rows = db.executesql('''
+                    SELECT adv.rssi as rssi, dp.d + (dp.d_next-dp.d)* ((adv.received_us-dp.us)/(dp.us_next-dp.us)) as d
+                    FROM advertisements adv
+                    JOIN distance_pair dp ON dp.run = adv.run AND dp.device_a = adv.sender AND dp.device_b = adv.receiver AND dp.us = FLOOR(adv.received_us/1000000)*1000000
+                    WHERE adv.run = {} LIMIT {} OFFSET {}
+                '''.format(r.id, limit, offset))
+
+                # rows = db.executesql('''
+                #     SELECT adv.rssi as rssi, adv.received_us, pr.pa_x, pr.pa_y, pr.pb_x, pr.pb_y, pr.pc_x, pr.pc_y, pr.pd_x, pr.pd_y
+                #     FROM advertisements adv
+                #     JOIN pos_pair pr ON pr.run = adv.run AND pr.device_a = adv.sender AND pr.device_b = adv.receiver AND pr.us = FLOOR(adv.received_us/1000000)*1000000
+                #     WHERE adv.run = {} LIMIT {} OFFSET {}
+                # '''.format(r.id, limit, offset))
+
+                for row in rows:
+                    if len(data) < overall_limit:
+                        data.append(row)
+
+                if len(data) == overall_limit:
+                    break
+
+                offset += limit
+
+                if len(rows) < limit:
+                    break
+
+            return data
+
+        data = cached(name, proc)
+        handle_adv_data(name, data)
+
+        overall_data += data
+
+    handle_adv_data(slugify("RSSI per Distance (overall)"), overall_data)
+
     # SELECT * FROM distance_pair WHERE device_a = 326 AND device_b = 327 AND us = FLOOR(2028932/1000000)*1000000
-    '''
-    SELECT ROUND(d) as de, AVG(rssi) FROM (
-SELECT adv.id, adv.received_us, adv.rssi, dp.d + (dp.d_next-dp.d)* ((adv.received_us-dp.us)/(dp.us_next-dp.us)) as d
-FROM advertisements adv
-JOIN run r ON r.id = adv.run
-JOIN distance_pair dp ON dp.device_a = adv.sender AND dp.device_b = adv.receiver AND dp.us = FLOOR(adv.received_us/1000000)*1000000
-WHERE r.status = 'finished' LIMIT 10000) as a
-GROUP BY de
-    '''
-    pass
 
 def export_bundle_transmission_success_per_distance(db, base_path):
     '''
@@ -366,7 +395,7 @@ def export_ict(db, base_path):
     runs = db((db.run.status == 'processed') & (db.run.group == 'app')).select()
 
 
-    for max_dist in [25,50,100]:
+    for max_dist in [50,100]:
         for r in runs:
             name = slugify(("ict", str(max_dist), str(r.name), str(r.id)))
 
@@ -407,14 +436,29 @@ def export_ict(db, base_path):
             plt.savefig(base_path + name + ".pdf", format="pdf")
             plt.close()
 
+
+
+
+def remove_prefix(text, prefix):
+    if text.startswith(prefix):
+        return text[len(prefix):]
+    return text
+
+
 if __name__ == "__main__":
+    config = load_env_config()
+
+    load_plot_defaults()
 
     logdir = config['SIM_LOG_DIR']
     export_dir = config['SIM_EXPORT_DIR']
     export_cache_dir = config['SIM_EXPORT_CACHE_DIR']
     os.makedirs(logdir, exist_ok=True)
-    os.makedirs(export_dir, exist_ok=True)
-    os.makedirs(export_cache_dir, exist_ok=True)
+
+    assert 'SIM_EXPORT_DIR' in config and config['SIM_EXPORT_DIR']
+
+    if 'SIM_EXPORT_CACHE_DIR' in config and config['SIM_EXPORT_CACHE_DIR']:
+        init_cache(config['SIM_EXPORT_CACHE_DIR'])
 
     db = DAL(config['SIM_DB_URI'], folder=logdir)
 
@@ -424,13 +468,15 @@ if __name__ == "__main__":
     db.commit() # we need to commit
 
     exports = [
+        export_rssi_per_distance,
         export_fake_bundle_propagation_epidemic,
         export_fake_bundle_propagation_direct,
         export_ict,
     ]
 
-    for e in exports:
-        print("Handling {}".format(e.__name__))
-        file_prefix = e.__name__[len("export_"):] + "_"
-        base_path = os.path.join(export_dir, file_prefix)
-        e(db, base_path)
+    for step in exports:
+        name = remove_prefix(step.__name__, METHOD_PREFIX)
+        print("Handling {}".format(name))
+        export_dir = os.path.join(config['SIM_EXPORT_DIR'], name) + '/'
+        os.makedirs(export_dir, exist_ok=True)
+        step(db, export_dir)
