@@ -29,7 +29,14 @@ def init_tables(db):
         migrate=False
     )
 
+
+    db.commit()
+
     db.executesql('CREATE INDEX IF NOT EXISTS type_index ON event (type);')
+
+
+    db.commit()
+
     db.executesql('''
         CREATE OR REPLACE VIEW pos_pair
         AS SELECT pa.run as run, pa.us as us, pc.us as us_next, pa.device as device_a, pb.device as device_b, pa.pos_x as pa_x, pa.pos_y as pa_y, pb.pos_x as pb_x, pb.pos_y as pb_y, pc.pos_x as pc_x, pc.pos_y as pc_y, pd.pos_x as pd_x, pd.pos_y as pd_y
@@ -39,6 +46,8 @@ def init_tables(db):
         LEFT JOIN position pd ON pd.device = pb.device AND pd.us = (pb.us + 1000000);
     ''')
 
+    db.commit()
+
     db.executesql('''
         CREATE OR REPLACE VIEW distance_pair
         AS SELECT pa.run as run, pa.us as us, pa.us_next as us_next, pa.device_a as device_a, pa.device_b as device_b,
@@ -46,6 +55,8 @@ def init_tables(db):
         SQRT( POWER(pa.pc_x - pa.pd_x, 2) + POWER(pa.pc_y - pa.pd_y, 2)) as d_next
         FROM pos_pair pa;
     ''')
+
+    db.commit()
 
     db.executesql(
     '''
@@ -61,6 +72,10 @@ def init_tables(db):
           GROUP BY b.id, rsb.device
     ''')
 
+    db.commit()
+
+
+    # Average doppler speed: SELECT AVG(ABS(dp.d_next-dp.d)) FROM (SELECT * FROM distance_pair LIMIT 5000) as dp
 
 def init_eval_tables(db):
     # Actual parsed data
