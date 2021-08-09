@@ -235,8 +235,8 @@ if __name__ == "__main__":
                                     '-defmodem=BLE_simple',
                                     '-channel=Indoorv1',
                                     '-argschannel',
-                                    '-preset=Huge3',
-                                    '-speed=1.1',
+                                    '-preset=Huge10',
+                                    '-speed=1.0',
                                     '-dist=' + dist_file_path,
                                     '-at='+str(int(config['SIM_FIXED_ATTENUATION']))
                                     ],
