@@ -21,6 +21,8 @@ METHOD_PREFIX = 'export_'
 CONFIDENCE_FILL_COLOR = '0.8'
 COLOR_MAP = 'tab10'
 
+RUN_GROUP = 'app'
+
 def load_plot_defaults():
     # Configure as needed
     plt.rc('lines', linewidth=2.0)
@@ -109,7 +111,7 @@ def export_pair_timings(db, base_path):
 
 def export_rssi_per_distance(db, export_dir):
 
-    runs = db((db.run.status == 'processed') & (db.run.group == 'app')).select()
+    runs = db((db.run.status == 'processed') & (db.run.group == RUN_GROUP)).select()
 
     overall_limit = 5000
     overall_data = []
@@ -198,7 +200,7 @@ def export_rssi_per_distance(db, export_dir):
         handle_adv_data(slugify("RSSI per Distance (overall) {}".format(r.id)), overall_data)
 
 def export_advertisement_reception_rate(db, export_dir):
-    runs = db((db.run.status == 'processed') & (db.run.group == 'app')).select()
+    runs = db((db.run.status == 'processed') & (db.run.group == RUN_GROUP)).select()
 
     overall_limit = 1000
     overall_data = []
@@ -298,7 +300,7 @@ WHERE r.status = 'finished' LIMIT 10000)
 
 def export_bundle_transmission_time_per_distance(db, base_path):
 
-    runs = db((db.run.status == 'processed') & (db.run.group == 'app')).select()
+    runs = db((db.run.status == 'processed') & (db.run.group == RUN_GROUP)).select()
 
     for r in runs:
 
@@ -430,7 +432,7 @@ def export_fake_bundle_propagation_epidemic(db, base_path):
     step = 1.0
 
 
-    runs = db((db.run.status == 'processed') & (db.run.group == 'app')).select()
+    runs = db((db.run.status == 'processed') & (db.run.group == RUN_GROUP)).select()
 
 
     max_step = math.ceil(length_s/step)
@@ -516,7 +518,7 @@ def export_fake_bundle_propagation_direct(db, base_path):
     length_s = 3000
     step = 1.0
 
-    runs = db((db.run.status == 'processed') & (db.run.group == 'app')).select()
+    runs = db((db.run.status == 'processed') & (db.run.group == RUN_GROUP)).select()
 
     max_step = math.ceil(length_s/step)
 
@@ -591,7 +593,7 @@ def export_fake_bundle_propagation_direct(db, base_path):
 
 def export_ict(db, base_path):
 
-    runs = db((db.run.status == 'processed') & (db.run.group == 'app')).select()
+    runs = db((db.run.status == 'processed') & (db.run.group == RUN_GROUP)).select()
 
 
     for max_dist in [50,100]:
