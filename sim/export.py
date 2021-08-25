@@ -21,7 +21,7 @@ METHOD_PREFIX = 'export_'
 CONFIDENCE_FILL_COLOR = '0.8'
 COLOR_MAP = 'tab10'
 
-RUN_GROUP = 'app'
+RUN_GROUP = 'app02'
 
 def load_plot_defaults():
     # Configure as needed
@@ -302,6 +302,79 @@ def export_bundle_transmission_time_per_distance(db, base_path):
 
     runs = db((db.run.status == 'processed') & (db.run.group == RUN_GROUP)).select()
 
+    MIN_SAMPLES = 10
+
+    def handle_transmission_success(name, data):
+        max_dist = 501
+        step = 10
+
+        xs = range(1, max_dist+1, step)
+
+        per_dist = [[] for x in xs]
+
+        for d in data:
+            dist = round(d[-1])
+            if 1 <= dist <= max_dist:
+                index = math.ceil(((dist-1)/step))
+                per_dist[index].append(1 if  d[1] is not None else 0)
+
+        if MIN_SAMPLES > 0:
+            for i in range(len(per_dist)):
+                if len(per_dist[i]) < MIN_SAMPLES:
+                    per_dist[i] = []
+
+
+        per_success_mean = [np.nanmean(vals)*100 for vals in per_dist]
+
+        plt.clf()
+        plt.plot(xs, per_success_mean, linestyle='-', label="Mean", color='C1')
+        #plt.fill_between(xs, per_success_lq, per_success_uq, color=CONFIDENCE_FILL_COLOR, label='95% Confidence Interval')
+        plt.legend()
+        plt.xlabel("Distance [m]")
+        plt.ylabel("Bundle Transmission Success Rate [%]")
+        plt.axis([0, max_dist, 0, 100])
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(export_dir + slugify((name, "Bundle Transmission Success Rate")) + ".pdf", format="pdf")
+        plt.close()
+
+    def handle_transmission_times(name, data):
+        max_dist = 501
+        step = 10
+
+        xs = range(1, max_dist+1, step)
+
+        per_dist = [[] for x in xs]
+
+        for d in data:
+            dist = round(d[-1])
+            if 1 <= dist <= max_dist and d[1] is not None:
+                index = math.ceil(((dist-1)/step))
+                per_dist[index].append((d[1]-d[0])/1000000)
+
+        if MIN_SAMPLES > 0:
+            for i in range(len(per_dist)):
+                if len(per_dist[i]) < MIN_SAMPLES:
+                    per_dist[i] = []
+
+        per_dist_mean = [np.nanmean(vals) for vals in per_dist]
+        per_dist_lq = [np.nanpercentile(vals, 2.5) for vals in per_dist]
+        per_dist_uq = [np.nanpercentile(vals, 97.5) for vals in per_dist]
+
+        plt.clf()
+        plt.plot(xs, per_dist_mean, linestyle='-', label="Mean", color='C1')
+        plt.fill_between(xs, per_dist_lq, per_dist_uq, color=CONFIDENCE_FILL_COLOR, label='95% Confidence Interval')
+        plt.legend()
+        plt.xlabel("Distance [m]")
+        plt.ylabel("Bundle Transmission Time [s]")
+        plt.axis([0, max_dist, 0, 60])
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(export_dir + slugify((name, "Bundle Transmission By Distance")) + ".pdf", format="pdf")
+        plt.close()
+
+    overall_data = []
+
     for r in runs:
 
         run_config = json.loads(r.configuration_json)
@@ -362,9 +435,13 @@ def export_bundle_transmission_time_per_distance(db, base_path):
             return data
 
         data = cached(name, proc)
+        handle_transmission_times(name, data)
+        handle_transmission_success(name, data)
 
-        print("ADASDA")
-        print(data)
+        overall_data += data
+
+    handle_transmission_times(slugify("Bundle Transmission times (overall)"), overall_data)
+    handle_transmission_success(slugify("Bundle Transmission times (overall) {}"), overall_data)
 
 
 
@@ -637,9 +714,6 @@ def export_ict(db, base_path):
             plt.savefig(base_path + name + ".pdf", format="pdf")
             plt.close()
 
-
-
-
 def remove_prefix(text, prefix):
     if text.startswith(prefix):
         return text[len(prefix):]
@@ -669,6 +743,8 @@ if __name__ == "__main__":
     db.commit() # we need to commit
 
     exports = [
+        #export_connection_times,
+        #export_stored_bundles,
         export_bundle_transmission_time_per_distance,
         export_bundle_transmission_time_per_neighbors,
         export_rssi_per_distance,
