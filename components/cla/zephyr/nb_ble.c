@@ -56,7 +56,7 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_t
         ) {
 
         // TODO: This is not standard-conform advertisement parsing!
-        if (ad->len >= 5) {
+        if (ad->len >= 7) {
             /*uint8_t _flags_len = */ net_buf_simple_pull_u8(ad);
             /*uint8_t _flags_type = */ net_buf_simple_pull_u8(ad);
             /*uint8_t _flags = */ net_buf_simple_pull_u8(ad);
