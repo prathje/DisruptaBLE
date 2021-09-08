@@ -664,19 +664,11 @@ static void mtcp_management_task(void *param) {
     }
     LOG("ML2CAP: Registered L2CAP Server");
 
-    uint64_t next_adv_start = 0;
-
     // we loop through the events
     while (true) {
+
         for(int i = 0; i < 5; i++) {
-            uint64_t now = hal_time_get_timestamp_ms();
-
-            if (next_adv_start <= now) {
-                nb_ble_stop();
-                nb_ble_start(ml2cap_config->num_links < ML2CAP_MAX_CONN); // we need to periodically try to activate advertisements again.
-                next_adv_start = now + 500 + hal_random_get()%500;
-            }
-
+            nb_ble_start(ml2cap_config->num_links < ML2CAP_MAX_CONN); // we need to periodically try to activate advertisements again..
             // we try a few times in a row before checking links etc.
             hal_task_delay(50);
         }
