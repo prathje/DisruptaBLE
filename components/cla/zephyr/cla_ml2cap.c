@@ -902,63 +902,62 @@ static void l2cap_chan_tx_resume(struct bt_l2cap_le_chan *ch)
     k_work_submit(&ch->tx_work);
 }
 
+
+/**
+ *
+ * @param ml2cap_link
+ * @param data
+ * @param length
+ * @return < 0 in case of error, otherwise the amount of bytes transmitted
+ */
+static int try_chan_send(const struct ml2cap_link *ml2cap_link, const void *data, const size_t length, int timeout_ms) {
+    uint32_t mtu = ml2cap_link->le_chan.tx.mtu;
+    uint32_t frag_size = Z_MIN(mtu, length);
+
+    struct net_buf *buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, BT_L2CAP_CHAN_SEND_RESERVE+mtu, K_MSEC(timeout_ms));
+
+    if (buf == NULL) {
+        return 0;
+    }
+
+    net_buf_reserve(buf, BT_L2CAP_CHAN_SEND_RESERVE);
+    net_buf_add_mem(buf, ((char *)data), frag_size);
+
+    int ret = bt_l2cap_chan_send(&ml2cap_link->le_chan.chan, buf);
+
+    if (ret < 0) {
+        net_buf_unref(buf);
+        if (ret != -EAGAIN) {
+            LOGF("ml2cap: ml2cap_send_packet_data failed with ret %d", ret);
+        }
+        return ret;
+    }
+
+    return frag_size;
+}
+
 static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const size_t length) {
 
     struct ml2cap_link *const ml2cap_link = (struct ml2cap_link *) link;
     (void) ml2cap_config;
 
     // overall length could be more than the supported MTU -> we need to
-    uint32_t mtu = ml2cap_link->le_chan.tx.mtu;
-    size_t buf_size = BT_L2CAP_CHAN_SEND_RESERVE+mtu;
-
-    uint32_t sent = 0;
 
     //LOG_EV("tx", "\"to_mac_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\", \"num_bytes\": %d", ml2cap_link->mac_addr, ml2cap_link->conn, ml2cap_link, length);
 
-    if (ml2cap_link->shutting_down) {
-        return; // immediately return!
-    }
+    size_t sent = 0;
 
-    while (sent < length) {
-        //LOGF("l2cap_transmit_bytes sent %d", sent);
-        uint32_t frag_size = Z_MIN(mtu, length - sent);
+    while (!ml2cap_link->shutting_down && sent < length) {
 
-        //while (!atomic_get(&ml2cap_link->le_chan.tx.credits) && !ml2cap_link->shutting_down) {
-        //    hal_task_delay(1); // yield as long as no credits are available, we need to add some time to prevent loops in bsim
-        //}
+        int send_res = try_chan_send(ml2cap_link, ((char *)data) + sent, length-sent, COMM_RX_TIMEOUT);
 
-        struct net_buf *buf = NULL;
-        while(buf == NULL && !ml2cap_link->shutting_down) {
-            // TODO: Use another value than COMM_RX_TIMEOUT?
-            l2cap_chan_tx_resume(&ml2cap_link->le_chan);
-            // we still need to timeout as first there is a delay between the destroy callback and actul freeing the buf
-            // and second the connection might possibly be already down
-            buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, buf_size, K_MSEC(COMM_RX_TIMEOUT));
-        }
-
-        if (ml2cap_link->shutting_down) {
-            if (buf != NULL) {
-                net_buf_unref(buf);
-            }
+        if (send_res < 0) {
+            LOGF("ml2cap: ml2cap_send_packet_data failed with ret %d", send_res);
             return;
         }
 
-        net_buf_reserve(buf, BT_L2CAP_CHAN_SEND_RESERVE);
-        net_buf_add_mem(buf, ((char *)data) + sent, frag_size);
-
-        int ret = bt_l2cap_chan_send(&ml2cap_link->le_chan.chan, buf);
-
-        if (ret < 0) {
-            net_buf_unref(buf);
-            if (ret != -EAGAIN) {
-                LOG("ml2cap: ml2cap_send_packet_data failed");
-            }
-            return;
-        }
-
-        // we sent the data successfully, it might got buffered for us, buffer will get released eventually
-        sent += frag_size;
-        ml2cap_link->bytes_sent += frag_size;
+        sent += send_res;
+        ml2cap_link->bytes_sent += send_res;
         on_tx(ml2cap_link);
     }
 }
