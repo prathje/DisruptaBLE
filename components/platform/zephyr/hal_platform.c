@@ -50,6 +50,7 @@ void mpu_init(void)
 
 void hal_platform_init(int argc, char *argv[])
 {
+    hal_io_init();
 }
 
 __attribute__((noreturn))
