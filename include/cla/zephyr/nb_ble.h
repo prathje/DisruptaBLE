@@ -31,7 +31,7 @@ enum ud3tn_result nb_ble_init(const struct nb_ble_config * const config);
 /**
  * Resume the neighbor discovery (NOOP if already running).
  */
-void nb_ble_start(bool connectable);
+void nb_ble_adv(bool connectable);
 
 /**
  * Pause the neighbor discovery (NOOP if already paused)

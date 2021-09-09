@@ -7,6 +7,7 @@
 
 #include "platform/hal_config.h"
 #include "platform/hal_io.h"
+#include "platform/hal_random.h"
 #include "platform/hal_queue.h"
 #include "platform/hal_semaphore.h"
 #include "platform/hal_task.h"
@@ -27,8 +28,9 @@
 #define CONFIG_NB_BLE_QUEUE_SIZE 10
 #endif
 
-#ifndef CONFIG_NB_BLE_SCAN_DELAY_MS
-#define CONFIG_NB_BLE_SCAN_DELAY_MS 50
+#ifndef CONFIG_NB_BLE_ADV_DELAY_MIN_MS
+#define CONFIG_NB_BLE_ADV_DELAY_MIN_MS 50
+#define CONFIG_NB_BLE_ADV_DELAY_MAX_MS 400
 #endif
 
 #ifndef CONFIG_NB_BLE_DEBUG
@@ -135,7 +137,8 @@ void nb_ble_adv(bool connectable) {
             BT_DATA(BT_DATA_SVC_DATA16, data, data_len)
     };
 
-    k_sleep(K_MSEC(400));
+
+    hal_task_delay(hal_random_get()%(CONFIG_NB_BLE_ADV_DELAY_MAX_MS-CONFIG_NB_BLE_ADV_DELAY_MIN_MS)+CONFIG_NB_BLE_ADV_DELAY_MIN_MS);
 
     err = bt_le_adv_start(
             BT_LE_ADV_PARAM(
@@ -160,7 +163,7 @@ void nb_ble_adv(bool connectable) {
     }
 #endif
 
-    k_sleep(K_MSEC(400));
+    hal_task_delay(hal_random_get()%(CONFIG_NB_BLE_ADV_DELAY_MAX_MS-CONFIG_NB_BLE_ADV_DELAY_MIN_MS)+CONFIG_NB_BLE_ADV_DELAY_MIN_MS);
 
     err = bt_le_adv_stop();
 
