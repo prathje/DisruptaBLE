@@ -714,6 +714,45 @@ def export_ict(db, base_path):
             plt.savefig(base_path + name + ".pdf", format="pdf")
             plt.close()
 
+
+def export_connection_times(db, base_path):
+    runs = db((db.run.status == 'processed') & (db.run.group == RUN_GROUP)).select()
+
+
+    overall_times = []
+    for r in runs:
+        name = slugify(("connection_times", str(r.name), str(r.id)))
+        run_config = json.loads(r.configuration_json)
+
+        conn_infos = db((db.conn_info.run == r)).iterselect()
+        setup_times = []
+        for conn_info in conn_infos:
+            if None in [conn_info.client_conn_init_us, conn_info.client_channel_up_us, conn_info.peripheral_channel_up_us]:
+                continue
+
+            setup_time = (max(conn_info.client_channel_up_us, conn_info.peripheral_channel_up_us) - conn_info.client_conn_init_us)/1000000
+            setup_times.append(setup_time)
+
+        overall_times += setup_times
+
+        setup_times = np.array(setup_times)
+
+        mean = np.mean(setup_times)
+        (lq, uq) = np.percentile(setup_times, [2.5, 97.5])
+
+        print(name)
+        print("Mean: {}, LQ: {}, UQ: {}".format(mean, lq, uq))
+
+    overall_times = np.array(overall_times)
+    mean = np.mean(overall_times)
+    (lq, uq) = np.percentile(overall_times, [2.5, 97.5])
+    print("export_connection_times overall")
+    print("Mean: {}, LQ: {}, UQ: {}".format(mean, lq, uq))
+
+    exit()
+
+
+
 def remove_prefix(text, prefix):
     if text.startswith(prefix):
         return text[len(prefix):]
@@ -743,7 +782,7 @@ if __name__ == "__main__":
     db.commit() # we need to commit
 
     exports = [
-        #export_connection_times,
+        export_connection_times,
         #export_stored_bundles,
         export_bundle_transmission_time_per_distance,
         export_bundle_transmission_time_per_neighbors,
