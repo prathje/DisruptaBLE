@@ -28,9 +28,8 @@
 #define CONFIG_NB_BLE_QUEUE_SIZE 10
 #endif
 
-#ifndef CONFIG_NB_BLE_ADV_DELAY_MIN_MS
-#define CONFIG_NB_BLE_ADV_DELAY_MIN_MS 50
-#define CONFIG_NB_BLE_ADV_DELAY_MAX_MS 400
+#ifndef CONFIG_NB_BLE_ADV_TIME_MS
+#define CONFIG_NB_BLE_ADV_TIME_MS 500
 #endif
 
 #ifndef CONFIG_NB_BLE_DEBUG
@@ -137,15 +136,12 @@ void nb_ble_adv(bool connectable) {
             BT_DATA(BT_DATA_SVC_DATA16, data, data_len)
     };
 
-
-    hal_task_delay(hal_random_get()%(CONFIG_NB_BLE_ADV_DELAY_MAX_MS-CONFIG_NB_BLE_ADV_DELAY_MIN_MS)+CONFIG_NB_BLE_ADV_DELAY_MIN_MS);
-
     err = bt_le_adv_start(
             BT_LE_ADV_PARAM(
                     (connectable ? (BT_LE_ADV_OPT_CONNECTABLE | BT_LE_ADV_OPT_ONE_TIME) : BT_LE_ADV_OPT_NONE) |
                     BT_LE_ADV_OPT_USE_IDENTITY,
-                    BT_GAP_ADV_SLOW_INT_MIN,
-                    BT_GAP_ADV_SLOW_INT_MAX,
+                    BT_GAP_ADV_FAST_INT_MIN_2,
+                    BT_GAP_ADV_FAST_INT_MAX_2,
                     NULL),
             ad,
             ARRAY_SIZE(ad), NULL, 0);
@@ -163,7 +159,7 @@ void nb_ble_adv(bool connectable) {
     }
 #endif
 
-    hal_task_delay(hal_random_get()%(CONFIG_NB_BLE_ADV_DELAY_MAX_MS-CONFIG_NB_BLE_ADV_DELAY_MIN_MS)+CONFIG_NB_BLE_ADV_DELAY_MIN_MS);
+    hal_task_delay(CONFIG_NB_BLE_ADV_TIME_MS);
 
     err = bt_le_adv_stop();
 
