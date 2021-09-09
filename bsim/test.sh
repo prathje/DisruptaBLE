@@ -1,7 +1,6 @@
 # Stop current bsims
 ${BSIM_COMPONENTS_PATH}/common/stop_bsim.sh || 1
 
-
 # Clear old executables
 rm /app/build/zephyr/build_source/zephyr/zephyr.exe
 rm /app/build/zephyr/build_proxy/zephyr/zephyr.exe
@@ -11,11 +10,11 @@ rm ${BSIM_OUT_PATH}/bin/bs_nrf52_bsim_dtn_source
 rm ${BSIM_OUT_PATH}/bin/bs_nrf52_bsim_dtn_proxy
 
 # Compile source
-west build -b nrf52_bsim /app/zephyr/ --pristine auto --build-dir /app/build/zephyr/build_source -- -DOVERLAY_CONFIG=source.conf
+west build -b nrf52_bsim /app/zephyr/ --pristine auto --build-dir /app/build/zephyr/build_source -- -DOVERLAY_CONFIG=application-source.conf
 cp /app/build/zephyr/build_source/zephyr/zephyr.exe ${BSIM_OUT_PATH}/bin/bs_nrf52_bsim_dtn_source
 
 # Compile proxy
-west build -b nrf52_bsim /app/zephyr/ --pristine auto --build-dir /app/build/zephyr/build_proxy -- -DOVERLAY_CONFIG=proxy.conf
+west build -b nrf52_bsim /app/zephyr/ --pristine auto --build-dir /app/build/zephyr/build_proxy -- -DOVERLAY_CONFIG=application-proxy.conf
 cp /app/build/zephyr/build_proxy/zephyr/zephyr.exe ${BSIM_OUT_PATH}/bin/bs_nrf52_bsim_dtn_proxy
 
 

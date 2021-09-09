@@ -47,7 +47,6 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_t
     char dev[BT_ADDR_LE_STR_LEN];
 
     bt_addr_le_to_str(addr, dev, sizeof(dev));
-    //LOGF("[NB BLE]: %s, AD evt type %u, AD data len %u, RSSI %i\n", dev, type, ad->len, rssi);
 
     if (adv_type == BT_GAP_ADV_TYPE_ADV_IND ||
         adv_type == BT_GAP_ADV_TYPE_ADV_DIRECT_IND ||
@@ -62,6 +61,7 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_t
             /*uint8_t _flags = */ net_buf_simple_pull_u8(ad);
             uint8_t entry_len = net_buf_simple_pull_u8(ad);
             uint8_t type = net_buf_simple_pull_u8(ad);
+
 
             if (type == BT_DATA_SVC_DATA16 && entry_len >= 4) {
 
@@ -101,47 +101,7 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_t
     }
 }
 
-void nb_ble_start(bool connectable) {
-    int err = 0;
-
-    size_t data_len = strlen(nb_ble_config.eid)+2; // 2 byte uuid
-    char *data = malloc(data_len);
-
-    // Store the UUID in little endian format
-    *data = NB_BLE_UUID&0xFF;
-    *(data+1) = (NB_BLE_UUID>>8)&0xFF;
-    memcpy(data+2, nb_ble_config.eid, data_len-2);  // this copies the data without the null terminator
-
-    struct bt_data ad[] = {
-            BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-            BT_DATA(BT_DATA_SVC_DATA16, data, data_len)
-    };
-
-    err = bt_le_adv_start(
-            BT_LE_ADV_PARAM(
-                    (connectable ? (BT_LE_ADV_OPT_CONNECTABLE | BT_LE_ADV_OPT_ONE_TIME) : BT_LE_ADV_OPT_NONE) | BT_LE_ADV_OPT_USE_IDENTITY,
-                    BT_GAP_ADV_SLOW_INT_MIN,
-                    BT_GAP_ADV_SLOW_INT_MAX,
-                    NULL),
-            ad,
-            ARRAY_SIZE(ad), NULL, 0);
-
-    free(data);
-
-    if (!err) {
-        LOG_EV_NO_DATA("adv_started");
-    }
-
-#if CONFIG_NB_BLE_DEBUG
-    if (err) {
-        LOGF("NB BLE: advertising failed to start (err %d)\n", err);
-    }
-#endif
-
-    /* Use active scanning and disable duplicate filtering to handle any
-    * devices that might update their advertising data at runtime. */
-
-
+void nb_ble_adv(bool connectable) {
 
     struct bt_le_scan_param scan_param = {
             .type       = BT_LE_SCAN_TYPE_PASSIVE,
@@ -150,10 +110,10 @@ void nb_ble_start(bool connectable) {
             .window     = BT_GAP_SCAN_FAST_WINDOW,
     };
 
-    err = bt_le_scan_start(&scan_param, device_found_cb);
+    int err = bt_le_scan_start(&scan_param, device_found_cb);
 
     if (!err) {
-        LOG_EV_NO_DATA("scan_started");
+        //LOG_EV_NO_DATA("scan_started");
     }
 
 #if CONFIG_NB_BLE_DEBUG
@@ -162,27 +122,61 @@ void nb_ble_start(bool connectable) {
     }
 #endif
 
-}
+    size_t data_len = strlen(nb_ble_config.eid) + 2; // 2 byte uuid
+    char *data = malloc(data_len);
 
+    // Store the UUID in little endian format
+    *data = NB_BLE_UUID & 0xFF;
+    *(data + 1) = (NB_BLE_UUID >> 8) & 0xFF;
+    memcpy(data + 2, nb_ble_config.eid, data_len - 2);  // this copies the data without the null terminator
 
-void nb_ble_stop() {
+    struct bt_data ad[] = {
+            BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
+            BT_DATA(BT_DATA_SVC_DATA16, data, data_len)
+    };
 
-    int err = bt_le_adv_stop();
+    k_sleep(K_MSEC(400));
+
+    err = bt_le_adv_start(
+            BT_LE_ADV_PARAM(
+                    (connectable ? (BT_LE_ADV_OPT_CONNECTABLE | BT_LE_ADV_OPT_ONE_TIME) : BT_LE_ADV_OPT_NONE) |
+                    BT_LE_ADV_OPT_USE_IDENTITY,
+                    BT_GAP_ADV_SLOW_INT_MIN,
+                    BT_GAP_ADV_SLOW_INT_MAX,
+                    NULL),
+            ad,
+            ARRAY_SIZE(ad), NULL, 0);
+
 
     if (!err) {
-        LOG_EV_NO_DATA("adv_stopped");
+        //LOG_EV_NO_DATA("adv_started");
     }
+
+    free(data);
+
+#if CONFIG_NB_BLE_DEBUG
+    if (err) {
+        LOGF("NB BLE: advertising failed to start (err %d)\n", err);
+    }
+#endif
+
+    k_sleep(K_MSEC(400));
+
+    err = bt_le_adv_stop();
 
 #if CONFIG_NB_BLE_DEBUG
     if (err) {
         LOGF("NB BLE: advertising failed to stop (err %d)\n", err);
     }
 #endif
+}
 
-    err = bt_le_scan_stop();
+
+void nb_ble_stop() {
+    int err = bt_le_scan_stop();
 
     if (!err) {
-        LOG_EV_NO_DATA("scan_stopped");
+        //LOG_EV_NO_DATA("scan_stopped");
     }
 
 #if CONFIG_NB_BLE_DEBUG

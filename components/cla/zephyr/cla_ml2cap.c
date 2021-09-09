@@ -272,12 +272,12 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
 
     // We now try to connect as soon as we received that advertisement
     nb_ble_stop(); // we need to disable the advertisements for that, Note that this cb is called by the NB_BLE TASK
-    int err = bt_conn_le_create(&other_addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM(6, 6, 0, IDLE_TIMEOUT_MS/10), &conn);
+    int err = bt_conn_le_create(&other_addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM_DEFAULT, &conn);
 
     if (err) {
         // we get EINVAL in case the connection already exists...
         LOGF("ML2CAP: Failed to create connection (err %d)\n", err);
-        //nb_ble_start(); // directly try to start neighbor discovery // TODO: We only do that in the main loop
+        //nb_ble_adv(); // directly try to start neighbor discovery // TODO: We only do that in the main loop
     } else {
         char *cla_address = cla_get_cla_addr(ml2cap_name_get(), ble_node_info->mac_addr);
         LOG_EV("conn_init", "\"other_mac_addr\": \"%s\", \"other_cla_addr\": \"%s\", \"other_eid\": \"%s\", \"connection\": \"%p\", \"own_eid\": \"%s\"", ble_node_info->mac_addr, cla_address, ble_node_info->eid, conn, ml2cap_config->base.bundle_agent_interface->local_eid);
@@ -371,7 +371,7 @@ static int chan_recv_cb(struct bt_l2cap_chan *chan, struct net_buf *buf) {
         //printk("Received %d bytes\n", num_bytes_received);
         on_rx(link);
 
-        LOG_EV("rx", "\"from_mac_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\", \"num_bytes\": %d", link->mac_addr, chan->conn, link, num_bytes_received);
+        //LOG_EV("rx", "\"from_mac_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\", \"num_bytes\": %d", link->mac_addr, chan->conn, link, num_bytes_received);
 
         size_t num_elements = net_buf_frags_len(buf);
         for (int i = 0; i < num_elements; i++) {
@@ -664,14 +664,13 @@ static void mtcp_management_task(void *param) {
     }
     LOG("ML2CAP: Registered L2CAP Server");
 
+    uint64_t next_adv_start = 0;
+
     // we loop through the events
     while (true) {
 
-        for(int i = 0; i < 5; i++) {
-            nb_ble_start(ml2cap_config->num_links < ML2CAP_MAX_CONN); // we need to periodically try to activate advertisements again..
-            // we try a few times in a row before checking links etc.
-            hal_task_delay(50);
-        }
+        // we need to periodically try to activate advertisements again.
+        nb_ble_adv(ml2cap_config->num_links < ML2CAP_MAX_CONN);
 
         hal_semaphore_take_blocking(ml2cap_config->links_sem);
         for(int i = 0; i < ml2cap_config->num_links; ++i) {
@@ -714,7 +713,8 @@ static void mtcp_management_task(void *param) {
 
             if (possibly_broken) {
                 LOGF("ML2CAP: Disconnecting possibly broken connection to \"%s\"", link->cla_addr);
-                bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+                int res = bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+                LOGF("ML2CAP: Disconnecting result: %d", res);
             }
         }
         #endif
@@ -913,7 +913,7 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
 
     uint32_t sent = 0;
 
-    LOG_EV("tx", "\"to_mac_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\", \"num_bytes\": %d", ml2cap_link->mac_addr, ml2cap_link->conn, ml2cap_link, length);
+    //LOG_EV("tx", "\"to_mac_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\", \"num_bytes\": %d", ml2cap_link->mac_addr, ml2cap_link->conn, ml2cap_link, length);
 
     if (ml2cap_link->shutting_down) {
         return; // immediately return!
