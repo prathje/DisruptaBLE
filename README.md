@@ -102,7 +102,7 @@ cd $ZEPHYR_BASE && git fetch && git checkout zephyr-v2.5.0 && west update && sud
 
 ```
 docker run --rm -it -v ${PWD}/ud3tn-ble:/app -v ${PWD}/zephyr:/zephyr/zephyr prathje/babble-sim-docker:latest /bin/bash
-   cd $ZEPHYR_BASE && west update && sudo apt-get install --force-yes gdb valgrind libc6-dbg:i386
+   cd $ZEPHYR_BASE && west update && sudo apt-get install -y gdb valgrind libc6-dbg:i386
 ```
 
 ```
