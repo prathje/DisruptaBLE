@@ -199,6 +199,56 @@ def export_rssi_per_distance(db, export_dir):
 
         handle_adv_data(slugify("RSSI per Distance (overall) {}".format(r.id)), overall_data)
 
+def export_mean_path_loss(db, export_dir):
+    # We only do this for testbed runs
+    runs = db((db.run.status == 'processed') & (db.run.group == 'testbed')).select()
+
+    def handle_loss_histogramm(name, data):
+        step = 1.0
+        xs = range(-100, 0, 1)
+        per_db = [0 for x in xs]
+        for d in data:
+            l = round(d)
+            if 0 <= l < len(per_db):
+                per_db[l] += 1
+        plt.clf()
+        plt.hist(per_db, len(per_db))
+        plt.xlabel("RSSI [dB]")
+        plt.ylabel("Amount")
+        plt.tight_layout()
+        plt.savefig(export_dir + slugify((name, 'histogramm')) + ".pdf", format="pdf")
+        plt.close()
+
+    overall_limit = 1000
+
+    for r in runs:
+        print("Handling {}".format(r.name))
+        devices = db((db.device.run == r)).select()
+
+        for a in devices:
+            for b in devices:
+                if a == b:
+                    continue
+
+                name = slugify(("rssi loss", str(r.name), str(r.id), str(overall_limit), a.number, b.number))
+
+                def proc():
+                    rows = db((db.advertisements.sender == a) & (db.advertisements.receiver == b)).select(limitby=overall_limit)
+                    return [x.rssi for x in rows]
+
+                data = cached(name, proc)
+                handle_loss_histogramm(name, data)
+
+                per_dist_mean = np.nanmean(data)
+                per_dist_lq = np.nanpercentile(data, 2.5)
+                per_dist_uq = np.nanpercentile(data, 97.5)
+
+                print(name)
+                print("per_dist_mean: {}".format(per_dist_mean))
+                print("per_dist_lq: {}".format(per_dist_lq))
+                print("per_dist_uq: {}".format(per_dist_uq))
+
+
 def export_advertisement_reception_rate(db, export_dir):
     runs = db((db.run.status == 'processed') & (db.run.group == RUN_GROUP)).select()
 
@@ -782,6 +832,7 @@ if __name__ == "__main__":
     db.commit() # we need to commit
 
     exports = [
+        export_mean_path_loss,
         export_connection_times,
         #export_stored_bundles,
         export_bundle_transmission_time_per_distance,

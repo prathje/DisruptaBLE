@@ -74,6 +74,8 @@ if __name__ == "__main__":
     config['SIM_NAME'] = sys.argv[1]
     run_name = sys.argv[1]
     config['IMPORTED'] = True
+    config['SIM_RANDOM_SEED'] = "0"
+    config['SIM_GROUP'] = "testbed"
 
     import_file_path = sys.argv[2]
 
@@ -99,7 +101,7 @@ if __name__ == "__main__":
         "start_ts": now,     # TODO This is not correct for imports
         "end_ts": None,      # TODO This is not correct for imports
         "status": "starting",
-        "seed": "import",  # TODO This is not correct for imports
+        "seed": "0",  # TODO This is not correct for imports
         "simulation_time": int(float(config['SIM_LENGTH'])),  # TODO This is not correct for imports
         "progress": 0,  # TODO This is not correct for imports
         "num_proxy_devices": int(config['SIM_PROXY_NUM_NODES']), # TODO This is not correct for imports
@@ -115,6 +117,8 @@ if __name__ == "__main__":
 
     offset_us = None
 
+    device_offsets = {}
+
     with open(import_file_path, encoding='ISO-8859-1') as file:
         events = lines_to_event_iter(file)
 
@@ -123,13 +127,20 @@ if __name__ == "__main__":
 
         for e in events:
             assert e
-            if not offset_us:
-                offset_us = e['us']
-            e['us'] -= offset_us
+            device = e['device']
+
+            if device not in device_offsets:
+                if e['type'] == 'ml2cap_init':
+                    device_offsets[device] = e['us']
+                else:
+                    print(e)
+                    continue # we ignore this entry!
+            e['us'] -= device_offsets[device]
             e['run'] = run.id
 
             assert e['us'] >= 0
             batch.append(e)
+
             if len(batch) >= batch_size:
                 db['event'].bulk_insert(batch)
                 db.commit()
@@ -138,10 +149,10 @@ if __name__ == "__main__":
         if len(batch) > 0:
             db['event'].bulk_insert(batch)
             db.commit()
-
     db(db.run.id == run).update(
         status='finished',
         end_ts=datetime.now()
     )
     db.commit()
     print("DONE!")
+    print(device_offsets)

@@ -169,6 +169,11 @@ def find_conn_info_for_device(db, run, device, at_us):
 def handle_connections(db, run):
     # Select all conn_init calls:
 
+    us_sync = 0
+
+    if run.group == 'testbed':
+        us_sync = 1000000
+
     for e in iter_events_with_devices(db, run, 'conn_init'):
         db.conn_info.insert(**{
             "run": run,
@@ -185,11 +190,10 @@ def handle_connections(db, run):
 
     def find_conn_event(device_a, other_mac, up_to_us):
         device_b = find_device_by_mac_addr(db, run, other_mac)
-
         assert device_b
 
         conn_ev = db(
-                (db.conn_info.run == run) & (db.conn_info.client_conn_init_us <= up_to_us)
+                (db.conn_info.run == run) & (db.conn_info.client_conn_init_us <= (up_to_us+us_sync))
                 & (((db.conn_info.client == device_a) & (db.conn_info.peripheral == device_b)) | ((db.conn_info.client == device_b) & (db.conn_info.peripheral == device_a)))
             ).select(db.conn_info.ALL, orderby=~db.conn_info.client_conn_init_us, limitby=(0,1))[0]
 
@@ -203,7 +207,7 @@ def handle_connections(db, run):
     for et in event_types:
         for e in iter_events_with_devices(db, run, et):
             (is_client, conn_ev) = find_conn_event(e.device, e['data']['other_mac_addr'], e['us'])
-            assert conn_ev.client_conn_init_us < e['us']
+            assert conn_ev.client_conn_init_us < e['us'] + us_sync
 
             us_property = "{}_{}_us".format('client' if is_client else 'peripheral', et)
             assert conn_ev[us_property] is None
@@ -226,7 +230,7 @@ def handle_connections(db, run):
         for e in iter_events_with_devices(db, run, et):
             other_mac_addr_prop = 'from_mac_addr' if et == 'rx' else 'to_mac_addr'
             (is_client, conn_ev) = find_conn_event(e.device, e['data'][other_mac_addr_prop], e['us'])
-            assert conn_ev.client_conn_init_us < e['us']
+            assert conn_ev.client_conn_init_us < e['us'] + us_sync
 
             property = "{}_{}_bytes".format('client' if is_client else 'peripheral', et)
 
