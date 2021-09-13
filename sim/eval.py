@@ -525,6 +525,13 @@ def eval_transmission(db, runs):
 
 if __name__ == "__main__":
 
+    groups = None
+
+    if len(sys.argv) >= 2:
+        print("Using group {}".format(sys.argv[1]))
+        groups = [sys.argv[1]]
+
+
     logdir = config['SIM_LOG_DIR']
     os.makedirs(logdir, exist_ok=True)
 
@@ -547,7 +554,19 @@ if __name__ == "__main__":
         handle_bundles,
     ]
 
-    runs = db(db.run.status == 'finished').iterselect()
+
+    if not groups:
+        res = db.executesql('''
+                SELECT
+                r.group
+                FROM run r
+                GROUP BY r.group
+            ''')
+
+        groups = [r[0] for r in res]
+        print(groups)
+
+    runs = db((db.run.status == 'finished') & (db.run.group.belongs(groups))).iterselect()
 
     for run in runs:
         print("Handling run {} ({})".format(run.name, run.id))
