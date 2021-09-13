@@ -111,15 +111,15 @@ def iter_events(db, run, type):
         yield e
 
 def iter_events_with_devices(db, run, type):
-    device_list = list(
-        db((db.device.run == run)).select(orderby=db.device.number)
-    )
+    devices = {}
+    for d in db((db.device.run == run)).iterselect():
+        devices[d.number] = d
 
     entries = db((db.event.run == run) & (db.event.type == type)).iterselect(orderby=db.event.us|db.event.device)
 
     for e in entries:
         e.data = json.loads(e.data_json)
-        e.device = device_list[e.device]
+        e.device = devices[e.device]
         yield e
     #
     # batch_size = 200
