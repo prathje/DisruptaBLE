@@ -222,7 +222,15 @@ if __name__ == "__main__":
 
     dist_dir = os.path.join(rdir, "distances")
     os.makedirs(dist_dir, exist_ok=True)
-    dist_file_path = dist_writer.start(dist_dir, int(config['SIM_PROXY_NUM_NODES']), rseed, model, model_options)
+
+    if model != "fixed_multiatt":
+        dist_file_path = dist_writer.start(dist_dir, int(config['SIM_PROXY_NUM_NODES']), rseed, model, model_options)
+        channel_args = ['-channel=Indoorv1', '-argschannel', '-preset=Huge10', '-speed=1.0', '-dist=' + dist_file_path, '-at='+str(int(config['SIM_FIXED_ATTENUATION']))]
+    else:
+        dist_file_path = os.path.join(dist_dir, "multi_att")
+        with open(dist_file_path, "w") as f:
+            f.write(model_options["file_content"])
+        channel_args = ['-channel=multiatt', '-argschannel', '-file=' + dist_file_path, '-at='+str(int(config['SIM_FIXED_ATTENUATION']))]
 
     num_overall_devices = len(node_processes)+len(wifi_interference_proceses)
     phy_exec_path = os.path.join(config['BSIM_OUT_PATH'], "bin", "bs_2G4_phy_v1")
@@ -233,13 +241,7 @@ if __name__ == "__main__":
                                     '-D='+str(num_overall_devices),
                                     '-rs='+str(int(rseed)),
                                     '-defmodem=BLE_simple',
-                                    '-channel=Indoorv1',
-                                    '-argschannel',
-                                    '-preset=Huge10',
-                                    '-speed=1.0',
-                                    '-dist=' + dist_file_path,
-                                    '-at='+str(int(config['SIM_FIXED_ATTENUATION']))
-                                    ],
+                                    ] + channel_args,
                                    cwd=config['BSIM_OUT_PATH']+"/bin",
        encoding="ISO-8859-1",
         stdout=sys.stdout,
