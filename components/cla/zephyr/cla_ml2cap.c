@@ -356,7 +356,7 @@ static void chan_disconnected_cb(struct bt_l2cap_chan *chan) {
             link->chan_connected = false;
         }
     } else {
-        printk("Could not find link in chan_disconnected_cb\n");
+        LOG("Could not find link in chan_disconnected_cb\n");
     }
     hal_semaphore_release(ml2cap_config->links_sem);
 }
@@ -368,7 +368,7 @@ static int chan_recv_cb(struct bt_l2cap_chan *chan, struct net_buf *buf) {
     struct ml2cap_link *link = find_link_by_connection(chan->conn);
     if (link != NULL) {
         link->bytes_received += num_bytes_received;
-        //printk("Received %d bytes\n", num_bytes_received);
+        //LOG("Received %d bytes\n", num_bytes_received);
         on_rx(link);
 
         //LOG_EV("rx", "\"from_mac_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\", \"num_bytes\": %d", link->mac_addr, chan->conn, link, num_bytes_received);
@@ -381,7 +381,7 @@ static int chan_recv_cb(struct bt_l2cap_chan *chan, struct net_buf *buf) {
             hal_queue_push_to_back(link->rx_queue, (void *) &b);
         }
     } else {
-        printk("Could not find link in chan_recv_cb\n");
+        LOG("Could not find link in chan_recv_cb\n");
     }
     hal_semaphore_release(ml2cap_config->links_sem);
     return 0;
@@ -394,7 +394,7 @@ int chan_accept(struct bt_conn *conn, struct bt_l2cap_chan **chan) {
     if (link != NULL) {
         *chan = &link->le_chan.chan;
     } else {
-        printk("Could not find link in chan_disconnected_cb\n");
+        LOG("Could not find link in chan_disconnected_cb\n");
         *chan = NULL;
         ret = -EACCES;
     }
@@ -411,7 +411,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
     // we can check the num_active links as this function is the only one that adds links
     if (!err) {
         if (ml2cap_config->num_links == ML2CAP_MAX_CONN) {
-            printk("No more free links!\n");
+            LOG("No more free links!\n");
             reason = "no_free_links";
             goto fail;
         }
@@ -445,18 +445,18 @@ static void connected(struct bt_conn *conn, uint8_t err)
                 }
             } else {
                 // disconnect handler will free link
-                printk("Failed to get connection info!\n");
+                LOG("Failed to get connection info!\n");
                 reason = "connection_info_failed";
                 goto fail;
             }
         } else {
             // seems like we don't have enough memory to connect :(
-            printk("Could not allocate link to connect\n");
+            LOG("Could not allocate link to connect\n");
             reason = "link_allocation_failed";
             goto fail;
         }
     } else {
-        printk("BLE Connection failed (err 0x%02x)\n", err);
+        LOGF("BLE Connection failed (err 0x%02x)\n", err);
         reason = "failure";
         goto fail;
     }
@@ -486,7 +486,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason) {
         ASSERT(!link->chan_connected);
         ml2cap_link_destroy(link);
     } else {
-        printk("Could not find link for connection!\n");
+        LOG("Could not find link for connection!\n");
     }
 
     hal_semaphore_release(ml2cap_config->links_sem);
