@@ -117,8 +117,6 @@ if __name__ == "__main__":
 
     offset_us = None
 
-    device_offsets = {}
-
     with open(import_file_path, encoding='ISO-8859-1') as file:
         events = lines_to_event_iter(file)
 
@@ -129,13 +127,14 @@ if __name__ == "__main__":
             assert e
             device = e['device']
 
-            if device not in device_offsets:
+            if not offset_us:
                 if e['type'] == 'ml2cap_init':
-                    device_offsets[device] = e['us']
+                    offset_us = e['us']
                 else:
                     print(e)
                     continue # we ignore this entry!
-            e['us'] -= device_offsets[device]
+
+            e['us'] -= offset_us
             e['run'] = run.id
 
             assert e['us'] >= 0
@@ -155,4 +154,3 @@ if __name__ == "__main__":
     )
     db.commit()
     print("DONE!")
-    print(device_offsets)

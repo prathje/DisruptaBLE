@@ -53,7 +53,18 @@ def find_device_by_eid(db, run, eid):
         eid = eid[:service]
 
     if eid not in eid_cache:
-        eid_cache[eid] = db((db.device.run == run) & (db.device.eid == eid)).select()[0]
+
+        matches = db((db.device.run == run) & (db.device.eid == eid)).select()
+
+        if len(matches) > 0:
+            eid_cache[eid] = matches[0]
+        else:
+            # We have this specific case if no source is present
+            assert eid == "dtn://source"
+
+            # Also put it in the cache so we do not query it every time...
+            eid_cache[eid] = None
+
     return eid_cache[eid]
 
 
@@ -67,6 +78,8 @@ def find_bundle(db, run, source_eid, dest_eid, creation_timestamp_ms, sequence_n
             & (db.bundle.sequence_number == sequence_number)
         ).select()
     )
+    if len(res) != 1:
+        print((source_eid, dest_eid, creation_timestamp_ms, sequence_number))
 
     assert len(res) == 1
     return res[0]
@@ -172,7 +185,7 @@ def handle_connections(db, run):
     us_sync = 0
 
     if run.group == 'testbed':
-        us_sync = 1000000
+        us_sync = 0
 
     for e in iter_events_with_devices(db, run, 'conn_init'):
         db.conn_info.insert(**{
@@ -453,10 +466,10 @@ def handle_positions(db, run):
         pos_with_ts_iter = dist_writer.rwp_raw_positions(int(run_config['SIM_RANDOM_SEED']), int(run_config['SIM_PROXY_NUM_NODES']), json.loads(run_config['SIM_MODEL_OPTIONS']))
 
         for (ts, positions) in pos_with_ts_iter:
-            
+
             if ts > run.simulation_time:
                 break
-            
+
             pos_batch = []
             d = 0
             for (x, y) in positions:
