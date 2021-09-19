@@ -102,6 +102,8 @@ struct ml2cap_link {
     uint64_t channel_down_ts; // us that the channel went down
     uint64_t rx_ts; // the last us to receive bytes
     uint64_t tx_ts; // the last us to send bytes
+
+    struct net_buf *tx_buf; // queued data for transmission
 };
 
 static struct ml2cap_link *ml2cap_link_create(
@@ -561,6 +563,8 @@ static struct ml2cap_link *ml2cap_link_create(
 
     ml2cap_link->le_chan.chan.ops = &chan_ops;
 
+    ml2cap_link->tx_buf = NULL;
+
     return ml2cap_link;
     
     //fail_after_rx_queue:
@@ -581,6 +585,8 @@ static struct ml2cap_link *ml2cap_link_create(
 }
 
 static void ml2cap_link_destroy(struct ml2cap_link *ml2cap_link) {
+
+    ASSERT(ml2cap_link->tx_buf == NULL);
     mtcp_parser_reset(&ml2cap_link->mtcp_parser);
     hal_queue_delete(ml2cap_link->rx_queue);
     free(ml2cap_link->cla_addr);
@@ -663,8 +669,6 @@ static void mtcp_management_task(void *param) {
         goto terminate;
     }
     LOG("ML2CAP: Registered L2CAP Server");
-
-    uint64_t next_adv_start = 0;
 
     // we loop through the events
     while (true) {
@@ -903,38 +907,64 @@ static void l2cap_chan_tx_resume(struct bt_l2cap_le_chan *ch)
 }
 
 
-/**
- *
- * @param ml2cap_link
- * @param data
- * @param length
- * @return < 0 in case of error, otherwise the amount of bytes transmitted
- */
-static int try_chan_send(const struct ml2cap_link *ml2cap_link, const void *data, const size_t length, int timeout_ms) {
-    uint32_t mtu = ml2cap_link->le_chan.tx.mtu;
-    uint32_t frag_size = Z_MIN(mtu, length);
+static int chan_flush(struct ml2cap_link *ml2cap_link) {
+    LOG("ml2cap: chan_flush");
+    if (ml2cap_link->tx_buf != NULL) {
+        struct net_buf *buf = ml2cap_link->tx_buf;
+        ml2cap_link->tx_buf = NULL; // we reset the tx_buffer
 
-    struct net_buf *buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, BT_L2CAP_CHAN_SEND_RESERVE+mtu, K_MSEC(timeout_ms));
-
-    if (buf == NULL) {
-        return 0;
+        int ret = bt_l2cap_chan_send(&ml2cap_link->le_chan.chan, buf);
+        if (ret < 0) {
+            net_buf_unref(buf);
+            if (ret != -EAGAIN) {
+                LOGF("ml2cap: ml2cap_send_packet_data failed with ret %d", ret);
+            }
+            return ret;
+        }
     }
 
-    net_buf_reserve(buf, BT_L2CAP_CHAN_SEND_RESERVE);
-    net_buf_add_mem(buf, ((char *)data), frag_size);
+    // we return success in the case that the tx buffer is empty, too
+    return 0;
+}
 
-    int ret = bt_l2cap_chan_send(&ml2cap_link->le_chan.chan, buf);
 
-    if (ret < 0) {
-        net_buf_unref(buf);
-        if (ret != -EAGAIN) {
-            LOGF("ml2cap: ml2cap_send_packet_data failed with ret %d", ret);
+static int chan_queue_and_flush(struct ml2cap_link *ml2cap_link, const void *data, const size_t length, int timeout_ms) {
+
+    LOGF("ml2cap: queueing %d bytes", length);
+
+    if (ml2cap_link->tx_buf == NULL) {
+        uint32_t mtu = ml2cap_link->le_chan.tx.mtu;
+        // we need to initialize this buffer
+        LOGF("ml2cap: allocating %d bytes", mtu);
+        struct net_buf *buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, BT_L2CAP_CHAN_SEND_RESERVE+mtu, K_MSEC(timeout_ms));
+
+        if (buf == NULL) {
+            return 0;
         }
-        return ret;
+
+        // we need to reserve headroom
+        net_buf_reserve(buf, BT_L2CAP_CHAN_SEND_RESERVE);
+        ml2cap_link->tx_buf = buf;
+    }
+
+    ASSERT(ml2cap_link->tx_buf);
+
+    size_t num_free_bytes = net_buf_tailroom(ml2cap_link->tx_buf);
+
+    size_t frag_size = Z_MIN(length, num_free_bytes);
+
+    net_buf_add_mem(ml2cap_link->tx_buf, ((char *)data), frag_size);
+
+    if (net_buf_tailroom(ml2cap_link->tx_buf) == 0) {
+        int flush_res = chan_flush(ml2cap_link); // we flush directly as we have no space left
+        if (flush_res) {
+            return flush_res;
+        }
     }
 
     return frag_size;
 }
+
 
 static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const size_t length) {
 
@@ -949,7 +979,7 @@ static void l2cap_transmit_bytes(struct cla_link *link, const void *data, const 
 
     while (!ml2cap_link->shutting_down && sent < length) {
 
-        int send_res = try_chan_send(ml2cap_link, ((char *)data) + sent, length-sent, COMM_RX_TIMEOUT);
+        int send_res = chan_queue_and_flush(ml2cap_link, ((char *)data) + sent, length-sent, COMM_RX_TIMEOUT);
 
         if (send_res < 0) {
             LOGF("ml2cap: ml2cap_send_packet_data failed with ret %d", send_res);
@@ -973,8 +1003,7 @@ static void ml2cap_begin_packet(struct cla_link *link, size_t length) {
 }
 
 static void ml2cap_end_packet(struct cla_link *link) {
-    // STUB
-    (void) link;
+    chan_flush((struct ml2cap_link *) link); // flush the rest of the bundle9
 }
 
 
