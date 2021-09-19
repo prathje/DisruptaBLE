@@ -908,7 +908,7 @@ static void l2cap_chan_tx_resume(struct bt_l2cap_le_chan *ch)
 
 
 static int chan_flush(struct ml2cap_link *ml2cap_link) {
-    LOG("ml2cap: chan_flush");
+    //LOG("ml2cap: chan_flush");
     if (ml2cap_link->tx_buf != NULL) {
         struct net_buf *buf = ml2cap_link->tx_buf;
         ml2cap_link->tx_buf = NULL; // we reset the tx_buffer
@@ -930,12 +930,12 @@ static int chan_flush(struct ml2cap_link *ml2cap_link) {
 
 static int chan_queue_and_flush(struct ml2cap_link *ml2cap_link, const void *data, const size_t length, int timeout_ms) {
 
-    LOGF("ml2cap: queueing %d bytes", length);
+    //LOGF("ml2cap: queueing %d bytes", length);
 
     if (ml2cap_link->tx_buf == NULL) {
         uint32_t mtu = ml2cap_link->le_chan.tx.mtu;
         // we need to initialize this buffer
-        LOGF("ml2cap: allocating %d bytes", mtu);
+        //LOGF("ml2cap: allocating %d bytes", mtu);
         struct net_buf *buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, BT_L2CAP_CHAN_SEND_RESERVE+mtu, K_MSEC(timeout_ms));
 
         if (buf == NULL) {
