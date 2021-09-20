@@ -72,16 +72,17 @@ if __name__ == "__main__":
     # auto generate missing env parameters
 
     config['SIM_NAME'] = sys.argv[1]
-    run_name = sys.argv[1]
+    group_name = sys.argv[1]
     config['IMPORTED'] = True
     config['SIM_RANDOM_SEED'] = "0"
-    config['SIM_GROUP'] = "testbed"
 
     import_file_path = sys.argv[2]
 
+    run_name = os.path.splitext(os.path.basename(import_file_path))[0]
+
 
     print("########################")
-    print("Importing run {}".format(run_name))
+    print("Importing run {} for group {}".format(run_name, group_name))
     pprint(config)
     print("########################")
 
@@ -96,8 +97,8 @@ if __name__ == "__main__":
 
 
     run = db['run'].insert(**{
-        "name": run_name, # we use the
-        "group": config['SIM_GROUP'] if 'SIM_GROUP' in config and config['SIM_GROUP'] != "" else "",
+        "name": run_name, # we use the filename
+        "group": group_name,
         "start_ts": now,     # TODO This is not correct for imports
         "end_ts": None,      # TODO This is not correct for imports
         "status": "starting",
