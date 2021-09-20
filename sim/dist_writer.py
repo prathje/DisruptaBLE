@@ -136,6 +136,7 @@ def rwp_raw_positions(rseed, num_proxy_nodes, model_options):
 
 def model_to_iterators(num_proxy_nodes, model, model_options, rseed):
     numpy.random.seed(rseed)
+
     if model =='rwp':
         return rwp_iterators(num_proxy_nodes, model_options)
     else:
@@ -150,7 +151,7 @@ def model_to_iterators(num_proxy_nodes, model, model_options, rseed):
             ts = 0
             while True:
                 yield (ts, d)
-                ts += 1
+                ts += 1000000
 
         iterators = {}
         for (a,b) in iter_nodes(num_proxy_nodes+1):
@@ -286,15 +287,27 @@ def distance_writer_thread(tmp_dir, num_nodes, iterators):
 
 
 
-
-
-
-def start(directory, num_proxy, rseed, model, model_options={}):
+def start(directory, num_proxy, rseed, model, model_options={}, num_wifi_devices=0, wifi_devices_distance=0):
 
     tmp_dir = tempfile.mkdtemp(dir=directory)
-    dist_file_path = os.path.join(tmp_dir, "distances.matrix")
 
     iterators = model_to_iterators(num_proxy, model, model_options, rseed)
+
+    # we now expand the iterators to match our wifi devices
+    wifi_devices_distance = float(wifi_devices_distance)
+
+    def fixed_wifi_dist_iter():
+        ts = 0
+        while True:
+            yield (ts, wifi_devices_distance)
+            ts += 1000000
+
+    print("USING {} wifi devices at fixed dist {}".format(num_wifi_devices, wifi_devices_distance))
+
+    for (a,b) in iter_nodes(num_proxy+1+num_wifi_devices):
+        if (a,b) not in iterators:
+            assert (a >= num_proxy+1 or b >= num_proxy+1)
+            iterators[(a,b)] = fixed_wifi_dist_iter()
 
     # First: Create the distance matrix pipe so we can return the filepath
     # note that this will block bsim as long as the data has not yet been written to the pipe
@@ -302,7 +315,7 @@ def start(directory, num_proxy, rseed, model, model_options={}):
     os.mkfifo(dist_file_path)
 
     # we can now start the thread that actually writes the file contents
-    t = threading.Thread(target=distance_writer_thread, args=(tmp_dir, num_proxy+1, iterators), daemon=True)
+    t = threading.Thread(target=distance_writer_thread, args=(tmp_dir, num_proxy+1+num_wifi_devices, iterators), daemon=True)
     t.start()
 
     return dist_file_path

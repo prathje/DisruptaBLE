@@ -198,44 +198,73 @@ if __name__ == "__main__":
             spawn_node_process(run_name+"_proxy", len(node_processes))
         )
 
-    wifi_interference_proceses = []
+    wifi_interference_processes = []
 
-    if int(config['SIM_WIFI_INTERFERENCE']) > 0:
+    if float(config['SIM_WIFI_INTERFERENCE_CONFIG']) > 0.0:
         for i in range(2, 13, 2):
-            wifi_interference_proceses.append(
+            wifi_interference_processes.append(
                 spawn_node_process(
                     "bs_device_2G4_WLAN_actmod",
-                    len(node_processes)+len(wifi_interference_proceses),
+                    len(node_processes)+len(wifi_interference_processes),
                     [
-                        "-ConfigSet={}".format(int(config['SIM_WIFI_INTERFERENCE'])),
+                        "-ConfigSet={}".format(int(config['SIM_WIFI_INTERFERENCE_CONFIG'])),
                         "-channel={}".format(i)
                     ]
                 )
             )
 
+    noise_processes = []
+
+    atextra_value = float(config['SIM_EXTRA_ATTENUATION'])
+    at_value = float(config['SIM_BACKGROUND_NOISE_LEVEL']) - atextra_value    # atextra_value is added back again in BSim
+
+    for i in range(2, 13, 2):
+        noise_processes.append(
+            spawn_node_process(
+                "bs_device_2G4_WLAN_actmod",
+                len(node_processes)+len(wifi_interference_processes)+len(noise_processes),
+                [
+                    "-ConfigSet={}".format(100),
+                    "-channel={}".format(i)
+                ]
+            )
+        )
 
     model = config['SIM_MODEL']
     model_options = {}
 
+
     if 'SIM_MODEL_OPTIONS' in config and config['SIM_MODEL_OPTIONS']:
         model_options = json.loads(config['SIM_MODEL_OPTIONS'])
+
+    assert('wifi_devices' not in model_options)
+
 
     dist_dir = os.path.join(rdir, "distances")
     os.makedirs(dist_dir, exist_ok=True)
 
-    dist_file_path = dist_writer.start(dist_dir, int(config['SIM_PROXY_NUM_NODES']), rseed, model, model_options)
+    dist_file_path = dist_writer.start(
+        dist_dir,
+        int(config['SIM_PROXY_NUM_NODES']),
+        rseed,
+        model,
+        model_options,
+        len(wifi_interference_processes),
+        float(config['SIM_WIFI_INTERFERENCE_DISTANCE'])
+    )
+
     channel_args = [
         '-channel=Indoorv1',
         '-argschannel',
         '-preset=Huge10',
         '-speed=1.0',
         '-dist=' + dist_file_path,
-        '-at='+str(float(config['SIM_FIXED_ATTENUATION'])),
-        '-atextra='+str(float(config['SIM_EXTRA_ATTENUATION'])),
-        '-exp='+str(float(config['SIM_DISTANCE_EXPONENT']))
+        '-at='+str(at_value),
+        '-atextra='+str(atextra_value),
+        '-exp='+str(float(config['SIM_DISTANCE_EXPONENT'])),
     ]
 
-    num_overall_devices = len(node_processes)+len(wifi_interference_proceses)
+    num_overall_devices = len(node_processes)+len(wifi_interference_processes)+len(noise_processes)
     phy_exec_path = os.path.join(config['BSIM_OUT_PATH'], "bin", "bs_2G4_phy_v1")
 
     phy_process = subprocess.Popen([phy_exec_path,
@@ -326,7 +355,7 @@ if __name__ == "__main__":
     for t in log_threads:
         t.join()
 
-    for p in [phy_process]+node_processes+wifi_interference_proceses:
+    for p in [phy_process]+node_processes+wifi_interference_processes+noise_processes:
         p.wait()
 
     event_queue.join()
