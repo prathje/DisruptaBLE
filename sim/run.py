@@ -22,6 +22,8 @@ config = {
     **os.environ,  # override loaded values with environment variables
 }
 
+TIMEOUT_S = 60
+
 def compile_and_move(rdir, exec_name, overlay_config):
     # TODO allow to skip compilation?
     bdir = os.path.join(rdir, "build", exec_name)
@@ -312,6 +314,8 @@ if __name__ == "__main__":
     commit_thread_running = True
 
     def commit_thread():
+        last_event_s = None
+
         while commit_thread_running:
 
             #print("event_queue.qsize()")
@@ -323,6 +327,7 @@ if __name__ == "__main__":
             try:
                 while batch_size > 0:
                     ev = event_queue.get_nowait()
+                    last_event_s = int(time.time())
                     events.append(ev)
                     event_queue.task_done()
                     batch_size -= 1
@@ -337,9 +342,10 @@ if __name__ == "__main__":
                 db.commit()
 
             if event_queue.qsize() == 0:
+                if last_event_s and last_event_s < int(time.time()) - TIMEOUT_S:
+                    phy_process.kill()  # this should kill everything at once!
                 # seems like there are not really many events for us to process atm
                 time.sleep(0.5)  # sleep 5 secs
-
 
     commit_thread = threading.Thread(target= commit_thread, args=(), daemon=True)
     commit_thread.start()
