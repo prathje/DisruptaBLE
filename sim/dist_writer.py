@@ -145,9 +145,21 @@ def model_to_iterators(num_proxy_nodes, model, model_options, rseed):
             print("key distance not in model_options")
             exit(1)
 
-        d = float(model_options['distance'])
-        def fixed_iter():
-            # Hacky stuff!
+        overrides = {}
+        if 'overrides' in model_options:
+            for k in model_options['overrides']:
+                (a,b) = tuple(k.split('-'))
+                overrides[(int(a), int(b))] = model_options['overrides'][k]
+                overrides[(int(b), int(a))] = model_options['overrides'][k] # we save both just to be sure ;)
+
+            print("Using overrides:")
+            print(overrides)
+
+        def fixed_iter(a, b):
+            if (a,b) in overrides:
+                d = overrides[(a,b)]
+            else:
+                d = float(model_options['distance'])
             ts = 0
             while True:
                 yield (ts, d)
@@ -155,7 +167,7 @@ def model_to_iterators(num_proxy_nodes, model, model_options, rseed):
 
         iterators = {}
         for (a,b) in iter_nodes(num_proxy_nodes+1):
-            iterators[(a,b)] = fixed_iter()
+            iterators[(a,b)] = fixed_iter(a, b)
 
         return iterators
 
