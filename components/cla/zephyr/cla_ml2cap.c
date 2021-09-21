@@ -322,6 +322,17 @@ static void chan_connected_cb(struct bt_l2cap_chan *chan) {
     hal_semaphore_release(ml2cap_config->links_sem);
 }
 
+
+static void l2cap_chan_tx_resume(struct bt_l2cap_le_chan *ch)
+{
+    if (!atomic_get(&ch->tx.credits) ||
+        (k_fifo_is_empty(&ch->tx_queue) && !ch->tx_buf)) {
+        return;
+    }
+
+    k_work_submit(&ch->tx_work);
+}
+
 static void chan_disconnected_cb(struct bt_l2cap_chan *chan) {
     hal_semaphore_take_blocking(ml2cap_config->links_sem);
     struct ml2cap_link *link = find_link_by_connection(chan->conn);
@@ -354,6 +365,9 @@ static void chan_disconnected_cb(struct bt_l2cap_chan *chan) {
 
             // and wait for clean-up
             // TODO: This could take a while and might block connection handling? (we remove, notify and release therefore before this call)
+
+            l2cap_chan_tx_resume(&link->le_chan); // we submit some work to prevent deadlocks?!?
+
             cla_link_wait_cleanup(&link->base);
             link->chan_connected = false;
         }
@@ -891,37 +905,45 @@ static enum ud3tn_result ml2cap_end_scheduled_contact(
 }
 
 NET_BUF_POOL_DEFINE(ml2cap_send_packet_data_pool, ML2CAP_PARALLEL_BUFFERS,
-    BT_L2CAP_CHAN_SEND_RESERVE+CONFIG_BT_L2CAP_TX_MTU,
+    BT_L2CAP_CHAN_SEND_RESERVE+BT_L2CAP_SDU_HDR_SIZE+CONFIG_BT_L2CAP_TX_MTU,
     0,
     NULL
 );
 
-static void l2cap_chan_tx_resume(struct bt_l2cap_le_chan *ch)
-{
-    if (!atomic_get(&ch->tx.credits) ||
-        (k_fifo_is_empty(&ch->tx_queue) && !ch->tx_buf)) {
-        return;
-    }
-
-    k_work_submit(&ch->tx_work);
-}
 
 
 static int chan_flush(struct ml2cap_link *ml2cap_link) {
     //LOG("ml2cap: chan_flush");
+
+    LOG_EV_NO_DATA("chan_flush_a");
     if (ml2cap_link->tx_buf != NULL) {
         struct net_buf *buf = ml2cap_link->tx_buf;
         ml2cap_link->tx_buf = NULL; // we reset the tx_buffer
 
-        int ret = bt_l2cap_chan_send(&ml2cap_link->le_chan.chan, buf);
-        if (ret < 0) {
+        LOG_EV_NO_DATA("chan_flush_b");
+        if (ml2cap_link->shutting_down) {
+        LOG_EV_NO_DATA("chan_flush_link_shutting_down");
+            // whoops! Link is
             net_buf_unref(buf);
+            return 0; // do not even try to send something!
+        }
+        LOG_EV_NO_DATA("chan_flush_c");
+
+        int ret = bt_l2cap_chan_send(&ml2cap_link->le_chan.chan, buf);
+        LOG_EV_NO_DATA("chan_flush_d");
+        if (ret < 0) {
+        LOG_EV_NO_DATA("chan_flush_e");
+            net_buf_unref(buf);
+        LOG_EV_NO_DATA("chan_flush_f");
             if (ret != -EAGAIN) {
+        LOG_EV_NO_DATA("chan_flush_g");
                 LOGF("ml2cap: ml2cap_send_packet_data failed with ret %d", ret);
+        LOG_EV_NO_DATA("chan_flush_h");
             }
             return ret;
         }
     }
+    LOG_EV_NO_DATA("chan_flush_i");
 
     // we return success in the case that the tx buffer is empty, too
     return 0;
@@ -936,14 +958,14 @@ static int chan_queue_and_flush(struct ml2cap_link *ml2cap_link, const void *dat
         uint32_t mtu = ml2cap_link->le_chan.tx.mtu;
         // we need to initialize this buffer
         //LOGF("ml2cap: allocating %d bytes", mtu);
-        struct net_buf *buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, BT_L2CAP_CHAN_SEND_RESERVE+mtu, K_MSEC(timeout_ms));
+        struct net_buf *buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, BT_L2CAP_CHAN_SEND_RESERVE+BT_L2CAP_SDU_HDR_SIZE+mtu, K_MSEC(timeout_ms));
 
         if (buf == NULL) {
             return 0;
         }
 
         // we need to reserve headroom
-        net_buf_reserve(buf, BT_L2CAP_CHAN_SEND_RESERVE);
+        net_buf_reserve(buf, BT_L2CAP_CHAN_SEND_RESERVE+BT_L2CAP_SDU_HDR_SIZE);
         ml2cap_link->tx_buf = buf;
     }
 
