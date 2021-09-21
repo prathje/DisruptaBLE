@@ -200,14 +200,14 @@ if __name__ == "__main__":
 
     wifi_interference_processes = []
 
-    if float(config['SIM_WIFI_INTERFERENCE_CONFIG']) > 0.0:
+    if len(str(config['SIM_WIFI_INTERFERENCE_CONFIG'])) > 0:
         for i in range(2, 13, 2):
             wifi_interference_processes.append(
                 spawn_node_process(
                     "bs_device_2G4_WLAN_actmod",
                     len(node_processes)+len(wifi_interference_processes),
                     [
-                        "-ConfigSet={}".format(int(config['SIM_WIFI_INTERFERENCE_CONFIG'])),
+                        "-ConfigSet={}".format(str(config['SIM_WIFI_INTERFERENCE_CONFIG'])),
                         "-channel={}".format(i)
                     ]
                 )
