@@ -200,7 +200,16 @@ if __name__ == "__main__":
             spawn_node_process(run_name+"_proxy", len(node_processes))
         )
 
+    atextra_value = float(config['SIM_EXTRA_ATTENUATION'])
+    background_noise_attenuation_dbm = -float(config['SIM_BACKGROUND_NOISE_LEVEL_DBM'])
+    at_value = background_noise_attenuation_dbm - atextra_value    # atextra_value is added back again in BSim
+
+
+    wifi_attenuation_dbm = -float(config['SIM_WIFI_INTERFERENCE_DBM'])
+    wifi_tx_power_dbm = -(wifi_attenuation_dbm-background_noise_attenuation_dbm)  # e.g. - (70-100) = --30=30 dBm
     wifi_interference_processes = []
+
+    print("Using background noise level of {}+{} and wifi_tx_power {}".format(at_value, atextra_value, wifi_tx_power_dbm))
 
     if len(str(config['SIM_WIFI_INTERFERENCE_CONFIG'])) > 0:
         for i in range(2, 13, 2):
@@ -210,15 +219,13 @@ if __name__ == "__main__":
                     len(node_processes)+len(wifi_interference_processes),
                     [
                         "-ConfigSet={}".format(str(config['SIM_WIFI_INTERFERENCE_CONFIG'])),
-                        "-channel={}".format(i)
+                        "-channel={}".format(i),
+                        "-power={}".format(wifi_tx_power_dbm)
                     ]
                 )
             )
 
     noise_processes = []
-
-    atextra_value = float(config['SIM_EXTRA_ATTENUATION'])
-    at_value = float(config['SIM_BACKGROUND_NOISE_LEVEL']) - atextra_value    # atextra_value is added back again in BSim
 
     for i in range(2, 13, 2):
         noise_processes.append(
@@ -227,10 +234,12 @@ if __name__ == "__main__":
                 len(node_processes)+len(wifi_interference_processes)+len(noise_processes),
                 [
                     "-ConfigSet={}".format(100),
-                    "-channel={}".format(i)
+                    "-channel={}".format(i),
+                    "-power={}".format(0)   # we use them just as background noise at -100 dBm
                 ]
             )
         )
+
 
     model = config['SIM_MODEL']
     model_options = {}
@@ -250,9 +259,7 @@ if __name__ == "__main__":
         int(config['SIM_PROXY_NUM_NODES']),
         rseed,
         model,
-        model_options,
-        len(wifi_interference_processes),
-        float(config['SIM_WIFI_INTERFERENCE_DISTANCE'])
+        model_options
     )
 
     channel_args = [
