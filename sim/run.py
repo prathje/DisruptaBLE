@@ -121,6 +121,8 @@ if __name__ == "__main__":
 
     now = datetime.now()
 
+    overriden_params = []
+
     for i in range(1, len(sys.argv)):
         if not os.path.isfile(sys.argv[i]):
             print("Could not load env file {}".format(sys.argv[i]))
@@ -129,11 +131,18 @@ if __name__ == "__main__":
         param_override = dotenv.dotenv_values(sys.argv[i])
 
         for k in param_override:
+            overriden_params.append(k)
             config[k] = param_override[k]
+
+    # We override it with env variables again!
+    for k in os.environ:
+        if k in overriden_params:
+            print("Warning: env overrides parameter {} from {} to {}".format(k, config[k], os.environ[k]))
+        config[k] = os.environ[k]
 
     # auto generate missing env parameters
 
-    if config['SIM_NAME'] == "":
+    if ['SIM_NAME'] == "":
         config['SIM_NAME'] = str(uuid.uuid1())
         fixed_sim_name = False
     else:
