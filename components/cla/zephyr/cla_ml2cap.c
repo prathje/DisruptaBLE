@@ -937,6 +937,8 @@ static int chan_flush(struct ml2cap_link *ml2cap_link) {
                 LOGF("ml2cap: ml2cap_send_packet_data failed with ret %d", ret);
             }
             return ret;
+        } else {
+            hal_task_delay(100); // 100 ms sleep
         }
     }
 
