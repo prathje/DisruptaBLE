@@ -915,35 +915,25 @@ NET_BUF_POOL_DEFINE(ml2cap_send_packet_data_pool, ML2CAP_PARALLEL_BUFFERS,
 static int chan_flush(struct ml2cap_link *ml2cap_link) {
     //LOG("ml2cap: chan_flush");
 
-    LOG_EV_NO_DATA("chan_flush_a");
     if (ml2cap_link->tx_buf != NULL) {
         struct net_buf *buf = ml2cap_link->tx_buf;
         ml2cap_link->tx_buf = NULL; // we reset the tx_buffer
 
-        LOG_EV_NO_DATA("chan_flush_b");
         if (ml2cap_link->shutting_down) {
-        LOG_EV_NO_DATA("chan_flush_link_shutting_down");
-            // whoops! Link is
+            // whoops! Link is already shutting down
             net_buf_unref(buf);
             return 0; // do not even try to send something!
         }
-        LOG_EV_NO_DATA("chan_flush_c");
 
         int ret = bt_l2cap_chan_send(&ml2cap_link->le_chan.chan, buf);
-        LOG_EV_NO_DATA("chan_flush_d");
         if (ret < 0) {
-        LOG_EV_NO_DATA("chan_flush_e");
             net_buf_unref(buf);
-        LOG_EV_NO_DATA("chan_flush_f");
             if (ret != -EAGAIN) {
-        LOG_EV_NO_DATA("chan_flush_g");
                 LOGF("ml2cap: ml2cap_send_packet_data failed with ret %d", ret);
-        LOG_EV_NO_DATA("chan_flush_h");
             }
             return ret;
         }
     }
-    LOG_EV_NO_DATA("chan_flush_i");
 
     // we return success in the case that the tx buffer is empty, too
     return 0;
@@ -1030,6 +1020,7 @@ static void ml2cap_end_packet(struct cla_link *link) {
 
 
 void ml2cap_send_packet_data(struct cla_link *link, const void *data, const size_t length) {
+    // TODO: Add some extra delay for simulations to match serialization?
     l2cap_transmit_bytes(link, data, length);
 }
 
