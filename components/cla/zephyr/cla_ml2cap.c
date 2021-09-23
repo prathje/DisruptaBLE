@@ -930,6 +930,9 @@ static int chan_flush(struct ml2cap_link *ml2cap_link) {
             return 0; // do not even try to send something!
         }
 
+        size_t num_free_bytes = net_buf_tailroom(ml2cap_link->tx_buf);
+        LOG_EV("chan_flush", "\"num_free_bytes\": %d", num_free_bytes);
+
         int ret = bt_l2cap_chan_send(&ml2cap_link->le_chan.chan, buf);
         if (ret < 0) {
             net_buf_unref(buf);
