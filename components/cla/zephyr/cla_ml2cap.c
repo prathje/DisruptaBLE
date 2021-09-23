@@ -736,6 +736,7 @@ static void mtcp_management_task(void *param) {
             }
 
             if (possibly_broken && !link->shutting_down) {
+                link->shutting_down = true;
                 LOGF("ML2CAP: Disconnecting possibly broken connection to \"%s\"", link->cla_addr);
                 hal_semaphore_take_blocking(ml2cap_config->bt_sem);
                 int res = bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
