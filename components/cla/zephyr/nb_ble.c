@@ -20,16 +20,11 @@
 #include <net/buf.h>
 #include <stdlib.h>
 
-
 // TODO: Make this configurable?
 #define NB_BLE_UUID 0xFFFF
 
 #ifndef CONFIG_NB_BLE_QUEUE_SIZE
 #define CONFIG_NB_BLE_QUEUE_SIZE 10
-#endif
-
-#ifndef CONFIG_NB_BLE_ADV_TIME_MS
-#define CONFIG_NB_BLE_ADV_TIME_MS 500
 #endif
 
 #ifndef CONFIG_NB_BLE_DEBUG
