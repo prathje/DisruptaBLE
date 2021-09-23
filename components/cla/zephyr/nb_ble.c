@@ -97,72 +97,15 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_t
     }
 }
 
-void nb_ble_adv(bool connectable) {
+static void nb_ble_stop_unsafe() {
+    nb_ble_config.enabled = false;
 
-    struct bt_le_scan_param scan_param = {
-            .type       = BT_LE_SCAN_TYPE_PASSIVE,
-            .options    = BT_LE_ADV_OPT_ONE_TIME,
-            .interval   = BT_GAP_SCAN_FAST_INTERVAL,    // TODO: Adapt interval and window
-            .window     = BT_GAP_SCAN_FAST_WINDOW,
-    };
-
-    int err = bt_le_scan_start(&scan_param, device_found_cb);
-
-    if (!err) {
-        //LOG_EV_NO_DATA("scan_started");
-    }
-
-#if CONFIG_NB_BLE_DEBUG
-    if (err) {
-        LOGF("NB BLE: Scanning failed to start (err %d)\n", err);
-    }
-#endif
-
-    size_t data_len = strlen(nb_ble_config.eid) + 2; // 2 byte uuid
-    char *data = malloc(data_len);
-
-    // Store the UUID in little endian format
-    *data = NB_BLE_UUID & 0xFF;
-    *(data + 1) = (NB_BLE_UUID >> 8) & 0xFF;
-    memcpy(data + 2, nb_ble_config.eid, data_len - 2);  // this copies the data without the null terminator
-
-    struct bt_data ad[] = {
-            BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-            BT_DATA(BT_DATA_SVC_DATA16, data, data_len)
-    };
-
-    err = bt_le_adv_start(
-            BT_LE_ADV_PARAM(
-                    (connectable ? (BT_LE_ADV_OPT_CONNECTABLE | BT_LE_ADV_OPT_ONE_TIME) : BT_LE_ADV_OPT_NONE) |
-                    BT_LE_ADV_OPT_USE_IDENTITY,
-                    BT_GAP_ADV_FAST_INT_MIN_2,
-                    BT_GAP_ADV_FAST_INT_MAX_2,
-                    NULL),
-            ad,
-            ARRAY_SIZE(ad), NULL, 0);
-
-
-    if (!err) {
-        //LOG_EV_NO_DATA("adv_started");
-    }
-
-    free(data);
-
-#if CONFIG_NB_BLE_DEBUG
-    if (err) {
-        LOGF("NB BLE: advertising failed to start (err %d)\n", err);
-    }
-#endif
-
-}
-
-void nb_ble_stop() {
     int err = bt_le_adv_stop();
 
 #if CONFIG_NB_BLE_DEBUG
     if (err) {
-        LOGF("NB BLE: advertising failed to stop (err %d)\n", err);
-    }
+                LOGF("NB BLE: advertising failed to stop (err %d)\n", err);
+            }
 #endif
 
     err = bt_le_scan_stop();
@@ -173,9 +116,109 @@ void nb_ble_stop() {
 
 #if CONFIG_NB_BLE_DEBUG
     if (err) {
-        LOGF("NB BLE: Scanning failed to stop (err %d)\n", err);
-    }
+                LOGF("NB BLE: Scanning failed to stop (err %d)\n", err);
+            }
 #endif
+}
+
+void nb_ble_start_if_enabled(bool connectable) {
+
+    if (!nb_ble_config.enabled) {
+        return; // directly return since not enabled right now, no need to take the lock
+    }
+
+    hal_semaphore_take_blocking(nb_ble_config.bt_sync_sem);
+
+    if (nb_ble_config.advertising_as_connectable != connectable) {
+        // if this does not match the wanted connectable state, we might need to stop current advertisements before
+        nb_ble_stop_unsafe();
+        nb_ble_config.advertising_as_connectable = connectable;
+    }
+
+    // check again if enabled!
+    if (nb_ble_config.enabled) {
+        struct bt_le_scan_param scan_param = {
+                .type       = BT_LE_SCAN_TYPE_PASSIVE,
+                .options    = BT_LE_ADV_OPT_ONE_TIME,
+                .interval   = BT_GAP_SCAN_FAST_INTERVAL,    // TODO: Adapt interval and window
+                .window     = BT_GAP_SCAN_FAST_WINDOW,
+        };
+
+        int err = bt_le_scan_start(&scan_param, device_found_cb);
+
+        if (!err) {
+            //LOG_EV_NO_DATA("scan_started");
+        }
+
+    #if CONFIG_NB_BLE_DEBUG
+        if (err) {
+            LOGF("NB BLE: Scanning failed to start (err %d)\n", err);
+        }
+    #endif
+
+        size_t data_len = strlen(nb_ble_config.eid) + 2; // 2 byte uuid
+        char *data = malloc(data_len);
+
+        // Store the UUID in little endian format
+        *data = NB_BLE_UUID & 0xFF;
+        *(data + 1) = (NB_BLE_UUID >> 8) & 0xFF;
+        memcpy(data + 2, nb_ble_config.eid, data_len - 2);  // this copies the data without the null terminator
+
+        struct bt_data ad[] = {
+                BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
+                BT_DATA(BT_DATA_SVC_DATA16, data, data_len)
+        };
+
+        err = bt_le_adv_start(
+                BT_LE_ADV_PARAM(
+                        (connectable ? (BT_LE_ADV_OPT_CONNECTABLE | BT_LE_ADV_OPT_ONE_TIME) : BT_LE_ADV_OPT_NONE) |
+                        BT_LE_ADV_OPT_USE_IDENTITY,
+                        BT_GAP_ADV_FAST_INT_MIN_2,
+                        BT_GAP_ADV_FAST_INT_MAX_2,
+                        NULL),
+                ad,
+                ARRAY_SIZE(ad), NULL, 0);
+
+
+        if (!err) {
+            //LOG_EV_NO_DATA("adv_started");
+        }
+
+        free(data);
+
+    #if CONFIG_NB_BLE_DEBUG
+        if (err) {
+            LOGF("NB BLE: advertising failed to start (err %d)\n", err);
+        }
+    #endif
+    }
+
+    hal_semaphore_release(nb_ble_config.bt_sync_sem);
+}
+
+void nb_ble_enable() {
+    if (nb_ble_config.enabled) {
+        return; // no need to lock it
+    }
+
+    hal_semaphore_take_blocking(nb_ble_config.bt_sync_sem);
+    nb_ble_config.enabled = true;   // TODO: does locking make a difference here at all?
+    hal_semaphore_release(nb_ble_config.bt_sync_sem);
+}
+
+/*
+void nb_ble_stop() {
+    hal_semaphore_take_blocking(nb_ble_config.bt_sync_sem);
+    nb_ble_stop_unsafe();
+    hal_semaphore_release(nb_ble_config.bt_sync_sem);
+}
+*/
+
+void nb_ble_disable_and_stop() {
+    hal_semaphore_take_blocking(nb_ble_config.bt_sync_sem);
+    nb_ble_config.enabled = false;
+    nb_ble_stop_unsafe();
+    hal_semaphore_release(nb_ble_config.bt_sync_sem);
 }
 
 
@@ -195,6 +238,11 @@ enum ud3tn_result nb_ble_init(const struct nb_ble_config * const config) {
     memcpy(&nb_ble_config, config, sizeof(struct nb_ble_config));
 
     nb_ble_config.eid = strdup(config->eid);
+    nb_ble_config.bt_sync_sem = hal_semaphore_init_binary();
+    hal_semaphore_release(nb_ble_config.bt_sync_sem);
+
+    nb_ble_config.enabled = true; // enabled right from the start
+    nb_ble_config.advertising_as_connectable = false; // enabled right from the start
 
     return UD3TN_OK;
 }

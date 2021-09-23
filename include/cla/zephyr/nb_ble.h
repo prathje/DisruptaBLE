@@ -6,6 +6,8 @@
 #include "ud3tn/node.h"
 #include "ud3tn/result.h"
 
+#include "platform/hal_semaphore.h"
+
 struct nb_ble_node_info {
     char *eid;
     char *mac_addr;
@@ -21,23 +23,20 @@ struct nb_ble_config {
     nb_ble_discovered_cb discover_cb;
     void * discover_cb_context;
     char *eid;
+    Semaphore_t bt_sync_sem;
+    bool enabled;
+    bool advertising_as_connectable;
 };
 
 /*
- * INITS advertisements. The discovery will be launched immediately
+ * INIT advertisements. The discovery will be launched immediately
  */
 enum ud3tn_result nb_ble_init(const struct nb_ble_config * const config);
 
-/**
- * Resume the neighbor discovery (NOOP if already running).
- */
-void nb_ble_adv(bool connectable);
-
-/**
- * Pause the neighbor discovery (NOOP if already paused)
- */
+void nb_ble_enable();
+void nb_ble_disable_and_stop();
 void nb_ble_stop();
-
+void nb_ble_start_if_enabled(bool connectable);
 
 
 char* bt_addr_le_to_mac_addr(const bt_addr_le_t *addr);

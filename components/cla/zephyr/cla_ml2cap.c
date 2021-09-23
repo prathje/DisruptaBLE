@@ -51,7 +51,6 @@ struct ml2cap_config {
     struct ml2cap_link *links[ML2CAP_MAX_CONN]; // we should not have really more entries than active connections?
     uint8_t num_links;
     Semaphore_t links_sem; // this prevents parallel access to active links
-
     struct bt_l2cap_server l2cap_server;
     Task_t management_task;
     bt_addr_le_t own_addr;
@@ -275,13 +274,15 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
     // but in this case, our addr is actually "bigger" -> initialize connection
 
     // We now try to connect as soon as we received that advertisement
-    nb_ble_stop(); // we need to disable the advertisements for that, Note that this cb is called by the NB_BLE TASK
+
+    nb_ble_disable_and_stop(); // we disable and stop advertising and scanning for now
+
     int err = bt_conn_le_create(&other_addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM_DEFAULT, &conn);
 
     if (err) {
         // we get EINVAL in case the connection already exists...
         LOGF("ML2CAP: Failed to create connection (err %d)\n", err);
-        //nb_ble_adv(); // directly try to start neighbor discovery // TODO: We only do that in the main loop
+        nb_ble_enable(); // we enable advertising and scanning again, note that this does not start it directly
     } else {
         char *cla_address = cla_get_cla_addr(ml2cap_name_get(), ble_node_info->mac_addr);
         LOG_EV("conn_init", "\"other_mac_addr\": \"%s\", \"other_cla_addr\": \"%s\", \"other_eid\": \"%s\", \"connection\": \"%p\", \"own_eid\": \"%s\"", ble_node_info->mac_addr, cla_address, ble_node_info->eid, conn, ml2cap_config->base.bundle_agent_interface->local_eid);
@@ -463,6 +464,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
         goto fail;
     }
 
+    nb_ble_enable(); // we enable advertising again
     return;
     fail:
     if (link) {
@@ -474,6 +476,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
     }
     bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
     LOG_EV("connection_failure", "\"connection\": \"%p\", \"reason\": \"%s\"", conn, reason);
+    nb_ble_enable(); // we enable advertising and scanning directly again
 }
 
 static void disconnected(struct bt_conn *conn, uint8_t reason) {
@@ -489,7 +492,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason) {
         LOG("Could not find link for connection!\n");
     }
     hal_semaphore_release(ml2cap_config->links_sem);
-    nb_ble_stop(); // we stop non-connectable advertisements for now
+    nb_ble_enable(); // we want to advertise again
 }
 
 static struct ml2cap_link *ml2cap_link_create(
@@ -674,7 +677,8 @@ static void mtcp_management_task(void *param) {
 
         // we need to periodically try to activate advertisements again.
         hal_task_delay(25); // add short delay
-        nb_ble_adv(ml2cap_config->num_links < ML2CAP_MAX_CONN);
+
+        nb_ble_start_if_enabled(ml2cap_config->num_links < ML2CAP_MAX_CONN); // we now start it again
 
         for(int i = 0; i < ml2cap_config->num_links; ++i) {
             uint64_t now = hal_time_get_timestamp_ms();
