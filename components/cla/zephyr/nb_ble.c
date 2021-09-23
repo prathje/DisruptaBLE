@@ -98,8 +98,6 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_t
 }
 
 static void nb_ble_stop_unsafe() {
-    nb_ble_config.enabled = false;
-
     int err = bt_le_adv_stop();
 
 #if CONFIG_NB_BLE_DEBUG
