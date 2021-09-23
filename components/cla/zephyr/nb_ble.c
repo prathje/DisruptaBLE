@@ -159,20 +159,18 @@ void nb_ble_adv(bool connectable) {
     }
 #endif
 
-    hal_task_delay(CONFIG_NB_BLE_ADV_TIME_MS);
+}
 
-    err = bt_le_adv_stop();
+void nb_ble_stop() {
+    int err = bt_le_adv_stop();
 
 #if CONFIG_NB_BLE_DEBUG
     if (err) {
         LOGF("NB BLE: advertising failed to stop (err %d)\n", err);
     }
 #endif
-}
 
-
-void nb_ble_stop() {
-    int err = bt_le_scan_stop();
+    err = bt_le_scan_stop();
 
     if (!err) {
         //LOG_EV_NO_DATA("scan_stopped");

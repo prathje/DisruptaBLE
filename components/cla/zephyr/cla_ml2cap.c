@@ -671,7 +671,9 @@ static void mtcp_management_task(void *param) {
 
     // we loop through the events
     while (true) {
+
         // we need to periodically try to activate advertisements again.
+        hal_task_delay(25); // add short delay
         nb_ble_adv(ml2cap_config->num_links < ML2CAP_MAX_CONN);
 
         for(int i = 0; i < ml2cap_config->num_links; ++i) {
@@ -738,7 +740,6 @@ static void mtcp_management_task(void *param) {
                     link->initialized = false;
                 }
                 // finally release all resources
-                // TODO: This will remove the link
                 ml2cap_link_destroy(link);
             }
         }
