@@ -909,13 +909,7 @@ static enum ud3tn_result ml2cap_end_scheduled_contact(
     return UD3TN_OK;
 }
 
-NET_BUF_POOL_DEFINE(ml2cap_send_packet_data_pool, ML2CAP_PARALLEL_BUFFERS,
-    BT_L2CAP_CHAN_SEND_RESERVE+BT_L2CAP_SDU_HDR_SIZE+CONFIG_BT_L2CAP_TX_MTU,
-    0,
-    NULL
-);
-
-
+NET_BUF_POOL_DEFINE(ml2cap_send_packet_data_pool, ML2CAP_PARALLEL_BUFFERS, BT_L2CAP_SDU_BUF_SIZE(BT_L2CAP_SDU_TX_MTU), 0, NULL);
 
 static int chan_flush(struct ml2cap_link *ml2cap_link) {
     //LOG("ml2cap: chan_flush");
@@ -934,6 +928,7 @@ static int chan_flush(struct ml2cap_link *ml2cap_link) {
         LOG_EV("chan_flush", "\"num_free_bytes\": %d", num_free_bytes);
 
         int ret = bt_l2cap_chan_send(&ml2cap_link->le_chan.chan, buf);
+
         if (ret < 0) {
             net_buf_unref(buf);
             if (ret != -EAGAIN) {
@@ -956,14 +951,14 @@ static int chan_queue_and_flush(struct ml2cap_link *ml2cap_link, const void *dat
         uint32_t mtu = ml2cap_link->le_chan.tx.mtu;
         // we need to initialize this buffer
         //LOGF("ml2cap: allocating %d bytes", mtu);
-        struct net_buf *buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, BT_L2CAP_CHAN_SEND_RESERVE+BT_L2CAP_SDU_HDR_SIZE+mtu, K_MSEC(timeout_ms));
+        struct net_buf *buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, BT_L2CAP_SDU_BUF_SIZE(mtu), K_MSEC(timeout_ms));
 
         if (buf == NULL) {
             return 0;
         }
 
         // we need to reserve headroom
-        net_buf_reserve(buf, BT_L2CAP_CHAN_SEND_RESERVE+BT_L2CAP_SDU_HDR_SIZE);
+        net_buf_reserve(buf, BT_L2CAP_SDU_CHAN_SEND_RESERVE);
         ml2cap_link->tx_buf = buf;
     }
 
