@@ -973,7 +973,7 @@ static int chan_queue_and_flush(struct ml2cap_link *ml2cap_link, const void *dat
     if (ml2cap_link->tx_buf == NULL) {
         uint32_t mtu = ml2cap_link->le_chan.tx.mtu;
         // we need to initialize this buffer
-        LOGF("ml2cap: error allocating %d bytes", mtu);
+        LOGF("ml2cap: not an error allocating %d bytes, buf size %d", mtu, BT_L2CAP_SDU_BUF_SIZE(mtu));
         struct net_buf *buf = net_buf_alloc_len(&ml2cap_send_packet_data_pool, BT_L2CAP_SDU_BUF_SIZE(mtu), K_MSEC(timeout_ms));
 
         if (buf == NULL) {
