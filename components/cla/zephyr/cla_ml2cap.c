@@ -676,7 +676,7 @@ static void mtcp_management_task(void *param) {
     while (true) {
 
         // we need to periodically try to activate advertisements again.
-        hal_task_delay(25); // add short delay
+        hal_task_delay(100); // add short delay
 
         nb_ble_start_if_enabled(ml2cap_config->num_links < ML2CAP_MAX_CONN); // we now start it again
 
@@ -693,7 +693,10 @@ static void mtcp_management_task(void *param) {
             if (!link->shutting_down && link->chan_connected && last_chan_update + IDLE_TIMEOUT_MS < now) {
                 LOGF("ML2CAP: Disconnecting idle connection to \"%s\"", link->cla_addr);
                 LOG_EV("idle_disconnect", "\"other_mac_addr\": \"%s\", \"other_cla_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\"", link->mac_addr, link->cla_addr, link->conn, link);
-                bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+                int res = bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+                if (!res) {
+                    link->shutting_down = true;
+                }
             }
             #endif
 
@@ -718,11 +721,15 @@ static void mtcp_management_task(void *param) {
                 possibly_broken = true;
             }
 
-            if (possibly_broken && !link->shutting_down) {
-                link->shutting_down = true;
-                LOGF("ML2CAP: Disconnecting possibly broken connection to \"%s\"", link->cla_addr);
-                int res = bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-                LOGF("ML2CAP: Disconnecting result: %d", res);
+            if (possibly_broken) {
+                LOGF("ML2CAP: Connection to \"%s\" might be broken!", link->cla_addr);
+                if (!link->shutting_down) {
+                    int res = bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+                    LOGF("ML2CAP: Trying to disconnect possibly broken connection to \"%s\" with res %d", link->cla_addr, res);
+                    if (!res) {
+                        link->shutting_down = true;
+                    }
+                }
             }
             #endif
 
@@ -939,6 +946,8 @@ static int chan_flush(struct ml2cap_link *ml2cap_link) {
             }
             return ret;
         }
+
+        hal_task_delay(0); // we yield here
     }
 
     // we return success in the case that the tx buffer is empty, too
