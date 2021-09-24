@@ -468,11 +468,8 @@ static void connected(struct bt_conn *conn, uint8_t err)
     return;
     fail:
     if (link) {
-        if (link->conn) {
-            bt_conn_unref(conn);
-            link->conn = NULL;
-        }
-        free(link);
+        ml2cap_link_destroy(link);
+        link = NULL;
     }
     bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
     LOG_EV("connection_failure", "\"connection\": \"%p\", \"reason\": \"%s\"", conn, reason);
