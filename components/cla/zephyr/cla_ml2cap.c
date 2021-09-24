@@ -357,7 +357,7 @@ static void chan_disconnected_cb(struct bt_l2cap_chan *chan) {
                                    &rt_signal);
         }
 
-        link->shutting_down = true; // this will bring down the rx and tx task
+        bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
     } else {
         LOG("Could not find link in chan_disconnected_cb\n");
     }
@@ -466,13 +466,17 @@ static void connected(struct bt_conn *conn, uint8_t err)
 
     nb_ble_enable(); // we enable advertising again
     return;
+
     fail:
     if (link) {
         ml2cap_link_destroy(link);
         link = NULL;
     }
-    bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+
     LOG_EV("connection_failure", "\"connection\": \"%p\", \"reason\": \"%s\"", conn, reason);
+
+    bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+
     nb_ble_enable(); // we enable advertising and scanning directly again
 }
 
@@ -484,6 +488,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason) {
     if (link != NULL) {
         on_disconnect(link);
         LOG_EV("disconnect", "\"other_mac_addr\": \"%s\", \"connection\": \"%p\", \"link\":\"%p\"", link->mac_addr, conn, link);
+        link->shutting_down = true;
         link->disconnected = true;
     } else {
         LOG("Could not find link for connection!\n");
@@ -690,10 +695,7 @@ static void mtcp_management_task(void *param) {
             if (!link->shutting_down && link->chan_connected && last_chan_update + IDLE_TIMEOUT_MS < now) {
                 LOGF("ML2CAP: Disconnecting idle connection to \"%s\"", link->cla_addr);
                 LOG_EV("idle_disconnect", "\"other_mac_addr\": \"%s\", \"other_cla_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\"", link->mac_addr, link->cla_addr, link->conn, link);
-                int res = bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-                if (!res) {
-                    link->shutting_down = true;
-                }
+                bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
             }
             #endif
 
@@ -722,10 +724,9 @@ static void mtcp_management_task(void *param) {
                 LOGF("ML2CAP: Connection to \"%s\" might be broken!", link->cla_addr);
                 if (!link->shutting_down) {
                     int res = bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-                    LOGF("ML2CAP: Trying to disconnect possibly broken connection to \"%s\" with res %d", link->cla_addr, res);
-                    if (!res) {
-                        link->shutting_down = true;
-                    }
+                    link->shutting_down = true;
+                    LOGF("ML2CAP: Trying to disconnect possibly broken connection to \"%s\" got res %d", link->cla_addr, res);
+                    ASSERT(res == 0 || res == -ENOTCONN);
                 }
             }
             #endif
