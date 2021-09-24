@@ -54,8 +54,6 @@ struct ml2cap_config {
     struct bt_l2cap_server l2cap_server;
     Task_t management_task;
     bt_addr_le_t own_addr;
-
-    Semaphore_t bt_sem;
 };
 
 // it is initialized during the launch task
@@ -277,7 +275,6 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
 
     // We now try to connect as soon as we received that advertisement
 
-    hal_semaphore_take_blocking(ml2cap_config->bt_sem);
     nb_ble_disable_and_stop(); // we disable and stop advertising and scanning for now
 
     int err = bt_conn_le_create(&other_addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM_DEFAULT, &conn);
@@ -292,7 +289,6 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
         free(cla_address);
         bt_conn_unref(conn); // we directly unref here as we will use the callback to handle the connection
     }
-    hal_semaphore_release(ml2cap_config->bt_sem);
 }
 
 
@@ -320,15 +316,11 @@ static void chan_connected_cb(struct bt_l2cap_chan *chan) {
             link->initialized = false;
             link->chan_connected = false;
             LOGF("ML2CAP: Error initializing CLA link for \"%s\"", link->cla_addr);
-            hal_semaphore_take_blocking(ml2cap_config->bt_sem);
             bt_conn_disconnect(chan->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-            hal_semaphore_release(ml2cap_config->bt_sem);
         }
     } else {
         LOG("Could not find link in chan_connected_cb\n");
-        hal_semaphore_take_blocking(ml2cap_config->bt_sem);
         bt_conn_disconnect(chan->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-        hal_semaphore_release(ml2cap_config->bt_sem);
     }
     hal_semaphore_release(ml2cap_config->links_sem);
 }
@@ -433,9 +425,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
             struct bt_conn_info info;
             if (!bt_conn_get_info(link->conn, &info)) {
                 if (info.role == BT_CONN_ROLE_MASTER) {
-                    hal_semaphore_take_blocking(ml2cap_config->bt_sem);
                     int err = bt_l2cap_chan_connect(link->conn, &link->le_chan.chan, ML2CAP_PSM);
-                    hal_semaphore_release(ml2cap_config->bt_sem);
                     if (err) {
                         // we disconnect, this will eventually also clear this link
                         LOG("Could not connect to channel!\n");
@@ -484,9 +474,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
         }
         free(link);
     }
-    hal_semaphore_take_blocking(ml2cap_config->bt_sem);
     bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-    hal_semaphore_release(ml2cap_config->bt_sem);
     LOG_EV("connection_failure", "\"connection\": \"%p\", \"reason\": \"%s\"", conn, reason);
     nb_ble_enable(); // we enable advertising and scanning directly again
 }
@@ -690,9 +678,7 @@ static void mtcp_management_task(void *param) {
         // we need to periodically try to activate advertisements again.
         hal_task_delay(25); // add short delay
 
-        hal_semaphore_take_blocking(ml2cap_config->bt_sem);
         nb_ble_start_if_enabled(ml2cap_config->num_links < ML2CAP_MAX_CONN); // we now start it again
-        hal_semaphore_release(ml2cap_config->bt_sem);
 
         for(int i = 0; i < ml2cap_config->num_links; ++i) {
             uint64_t now = hal_time_get_timestamp_ms();
@@ -705,12 +691,9 @@ static void mtcp_management_task(void *param) {
             #if IDLE_TIMEOUT_MS > 0
             uint64_t last_chan_update = MAX(link->channel_up_ts, MAX(link->rx_ts, link->tx_ts));
             if (!link->shutting_down && link->chan_connected && last_chan_update + IDLE_TIMEOUT_MS < now) {
+                LOGF("ML2CAP: Disconnecting idle connection to \"%s\"", link->cla_addr);
                 LOG_EV("idle_disconnect", "\"other_mac_addr\": \"%s\", \"other_cla_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\"", link->mac_addr, link->cla_addr, link->conn, link);
-
-                link->shutting_down = true;
-                hal_semaphore_take_blocking(ml2cap_config->bt_sem);
                 bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-                hal_semaphore_release(ml2cap_config->bt_sem);
             }
             #endif
 
@@ -738,9 +721,7 @@ static void mtcp_management_task(void *param) {
             if (possibly_broken && !link->shutting_down) {
                 link->shutting_down = true;
                 LOGF("ML2CAP: Disconnecting possibly broken connection to \"%s\"", link->cla_addr);
-                hal_semaphore_take_blocking(ml2cap_config->bt_sem);
                 int res = bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-                hal_semaphore_release(ml2cap_config->bt_sem);
                 LOGF("ML2CAP: Disconnecting result: %d", res);
             }
             #endif
@@ -949,9 +930,7 @@ static int chan_flush(struct ml2cap_link *ml2cap_link) {
         size_t num_free_bytes = net_buf_tailroom(buf);
         LOG_EV("chan_flush", "\"num_free_bytes\": %d", num_free_bytes);
 
-        hal_semaphore_take_blocking(ml2cap_config->bt_sem);
         int ret = bt_l2cap_chan_send(&ml2cap_link->le_chan.chan, buf);
-        hal_semaphore_release(ml2cap_config->bt_sem);
 
         if (ret < 0) {
             net_buf_unref(buf);
@@ -1110,9 +1089,6 @@ static enum ud3tn_result ml2cap_init(
     config->links_sem = hal_semaphore_init_binary();
     config->num_links = 0;
     hal_semaphore_release(config->links_sem);
-
-    config->bt_sem = hal_semaphore_init_binary();
-    hal_semaphore_release(config->bt_sem);
 
 
     /* set base_config vtable */
