@@ -223,7 +223,7 @@ def handle_connections(db, run):
             assert conn_ev.client_conn_init_us < e['us'] + us_sync
 
             us_property = "{}_{}_us".format('client' if is_client else 'peripheral', et)
-            assert conn_ev[us_property] is None
+            assert conn_ev[us_property] is None or et == 'idle_disconnect'
 
             # Does this work?
             db(db.conn_info.id == conn_ev).update(**{
