@@ -380,13 +380,13 @@ def handle_bundles(db, run):
         db.commit()
 
     num_receptions = 0
+    received_stored_bundle_cache = set()
+
     for bt in db(db.bundle_transmission.run == run).iterselect(orderby=~db.bundle_transmission.start_us):
         conn_info = db.conn_info[bt.conn_info]
         stored_bundle = db.stored_bundle[bt.source_stored_bundle]
-        bundle = db.bundle[stored_bundle.bundle]
-        device = db.device[stored_bundle.device]
 
-        is_client = conn_info.client.id == device.id
+        is_client = conn_info.client == stored_bundle.device
 
         other_device = conn_info.peripheral if is_client else conn_info.client
 
@@ -396,17 +396,16 @@ def handle_bundles(db, run):
         # we now search for the stored bundle on the receiver side
         potential_stored_bundles = list(db(
             (db.stored_bundle.run == run) &
-            (db.stored_bundle.bundle == bundle) &
+            (db.stored_bundle.bundle == stored_bundle.bundle) &
             (db.stored_bundle.device == other_device) &
             (db.stored_bundle.created_us >= min_rx_us) &
-            (db.stored_bundle.created_us <= max_rx_us+1000)
-        ).select(orderby=~db.stored_bundle.created_us))
+            (db.stored_bundle.created_us <= max_rx_us+500000)
+        ).select(orderby=(~db.stored_bundle.created_us) & (~db.stored_bundle.id)))
 
         received_stored_bundle = None
 
         for sb in potential_stored_bundles:
-            # check if this stored_bundle was already assigned (as we go backwards!)
-            if db(db.bundle_transmission.received_stored_bundle == sb.id).count() == 0:
+            if sb.id not in received_stored_bundle_cache:
                 received_stored_bundle = sb
                 break
 
@@ -419,6 +418,7 @@ def handle_bundles(db, run):
                 end_us=end_us
             )
             db.commit()
+            received_stored_bundle_cache.add(received_stored_bundle.id)
 
     if num_reception_events != db((db.bundle_transmission.run==run) & (db.bundle_transmission.received_stored_bundle != None)).count():
         print("Checking reception events manually...")
