@@ -301,6 +301,8 @@ def handle_connections(db, run):
 
 def handle_bundles(db, run):
 
+    commit_counter = 0
+    limit = 100
     # first handle bundle generation, those are created locally and are thus not the result of a reception
     for et in ['generate_fake_bundle', 'sv_bundle']:
         for e in iter_events(db, run, et):
@@ -328,7 +330,13 @@ def handle_bundles(db, run):
                 remaining_hops=0 #e.data['hop_count']
             )
 
-            db.commit()
+            commit_counter += 1
+            if commit_counter > limit:
+                commit_counter = 0
+                db.commit()
+
+    commit_counter = 0
+    db.commit()
 
     # we no handle all received bundles as we need to reference them in the following transmissions
     # "bundle_receive", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d"
@@ -344,14 +352,27 @@ def handle_bundles(db, run):
             local_id=e.data['local_id']
         )
         num_reception_events += 1
-        db.commit()
+        commit_counter += 1
+        if commit_counter > limit:
+            commit_counter = 0
+            db.commit()
+
+    commit_counter = 0
+    db.commit()
 
     # now handle expiration of bundles
     #"bundle_delete", "\"local_id\": %d, \"source\": \"%s\", \"destination\": \"%s\", \"creation_timestamp_ms\": %d"
     for e in iter_events_with_devices(db, run, 'bundle_delete'):
         stored_bundle = find_stored_bundle(db, run, e.device, e.data['local_id'], e.us)
         db(db.stored_bundle.id == stored_bundle).update(deleted_us=e.us)
-        db.commit()
+
+        commit_counter += 1
+        if commit_counter > limit:
+            commit_counter = 0
+            db.commit()
+
+    commit_counter = 0
+    db.commit()
 
 
     # we then handle all bundle_transmissions
@@ -377,7 +398,13 @@ def handle_bundles(db, run):
             start_us=e.us,
             #end_us=None
         )
-        db.commit()
+        commit_counter += 1
+        if commit_counter > limit:
+            commit_counter = 0
+            db.commit()
+
+    commit_counter = 0
+    db.commit()
 
     num_receptions = 0
     received_stored_bundle_cache = set()
@@ -417,8 +444,15 @@ def handle_bundles(db, run):
                 received_stored_bundle=received_stored_bundle,
                 end_us=end_us
             )
-            db.commit()
             received_stored_bundle_cache.add(received_stored_bundle.id)
+
+            commit_counter += 1
+            if commit_counter > limit:
+                commit_counter = 0
+                db.commit()
+
+    commit_counter = 0
+    db.commit()
 
     if num_reception_events != db((db.bundle_transmission.run==run) & (db.bundle_transmission.received_stored_bundle != None)).count():
         print("Checking reception events manually...")
@@ -433,7 +467,6 @@ def handle_bundles(db, run):
                 print((sb,transmissions))
             assert len(transmissions) == 1
 
-    db.commit()
     #pprint(list(db(db.device).select()))
 
 
