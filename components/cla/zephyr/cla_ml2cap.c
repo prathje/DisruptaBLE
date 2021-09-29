@@ -91,8 +91,6 @@ struct ml2cap_link {
     struct bt_conn *conn; // the reference to the zephyr connetion
     struct bt_l2cap_le_chan le_chan; // space for our channel
     bool chan_connected; // whether the channel is connected or not
-    bool initialized; // whether the link is initialized or not
-    bool disconnected; // whether the link is now disconnected
     uint64_t bytes_sent; // the amount of bytes sent
     uint64_t bytes_received; // the amount of bytes received
 
@@ -304,7 +302,6 @@ static void chan_connected_cb(struct bt_l2cap_chan *chan) {
 
         if (cla_link_init(&link->base, &ml2cap_config->base) == UD3TN_OK) {
             link->chan_connected = true;
-            link->initialized = true;
             // signal to the router that the connection is up
             struct router_signal rt_signal = {
                     .type = ROUTER_SIGNAL_CONN_UP,
@@ -313,7 +310,6 @@ static void chan_connected_cb(struct bt_l2cap_chan *chan) {
             const struct bundle_agent_interface *const bundle_agent_interface = ml2cap_config->base.bundle_agent_interface;
             hal_queue_push_to_back(bundle_agent_interface->router_signaling_queue, &rt_signal);
         } else {
-            link->initialized = false;
             link->chan_connected = false;
             LOGF("ML2CAP: Error initializing CLA link for \"%s\"", link->cla_addr);
             bt_conn_disconnect(chan->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
@@ -344,8 +340,14 @@ static void chan_disconnected_cb(struct bt_l2cap_chan *chan) {
         on_channel_down(link);
         LOG_EV("channel_down", "\"other_mac_addr\": \"%s\", \"connection\": \"%p\"", link->mac_addr, link->conn);
 
+        link->shutting_down = true;
+
         if (link->chan_connected) {
             link->chan_connected = false;
+
+            // init and wait for cleanup
+            cla_generic_disconnect_handler(&link->base);
+
             struct router_signal rt_signal = {
                     .type = ROUTER_SIGNAL_CONN_DOWN,
                     .data = strdup(link->cla_addr),
@@ -355,9 +357,11 @@ static void chan_disconnected_cb(struct bt_l2cap_chan *chan) {
                     ml2cap_config->base.bundle_agent_interface;
             hal_queue_push_to_back(bundle_agent_interface->router_signaling_queue,
                                    &rt_signal);
-        }
 
-        bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+            cla_link_wait_cleanup(&link->base);
+        }
+        // we issue a disconnect request just to be sure!
+        bt_conn_disconnect(chan->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
     } else {
         LOG("Could not find link in chan_disconnected_cb\n");
     }
@@ -487,9 +491,12 @@ static void disconnected(struct bt_conn *conn, uint8_t reason) {
 
     if (link != NULL) {
         on_disconnect(link);
+        ASSERT(!link->chan_connected);
+        // we need to synchronize deletion to prevent simultaneous access somewhere else
         LOG_EV("disconnect", "\"other_mac_addr\": \"%s\", \"connection\": \"%p\", \"link\":\"%p\"", link->mac_addr, conn, link);
-        link->shutting_down = true;
-        link->disconnected = true;
+        // finally release all resources
+        remove_active_link(link);
+        ml2cap_link_destroy(link);
     } else {
         LOG("Could not find link for connection!\n");
     }
@@ -514,8 +521,6 @@ static struct ml2cap_link *ml2cap_link_create(
 
     ml2cap_link->conn = bt_conn_ref(conn);
     ml2cap_link->chan_connected = false; // will be initialized once available
-    ml2cap_link->initialized = false; // will be initialized if cla_link init has been called
-    ml2cap_link->disconnected = false; // will be true if connection is down
     ml2cap_link->shutting_down = false;
 
     if (!ml2cap_link->conn) {
@@ -682,6 +687,7 @@ static void mtcp_management_task(void *param) {
 
         nb_ble_start_if_enabled(ml2cap_config->num_links < ML2CAP_MAX_CONN); // we now start it again
 
+        hal_semaphore_take_blocking(ml2cap_config->links_sem);
         for(int i = 0; i < ml2cap_config->num_links; ++i) {
             uint64_t now = hal_time_get_timestamp_ms();
             // TODO: we only block the semaphore if we want to delete the link
@@ -730,26 +736,8 @@ static void mtcp_management_task(void *param) {
                 }
             }
             #endif
-
-            if (link->disconnected) {
-                ASSERT(!link->chan_connected);
-                ASSERT(!link->initialized || link->shutting_down);
-
-                // we need to synchronize deletion to prevent simultaneous access somewhere else
-                hal_semaphore_take_blocking(ml2cap_config->links_sem);
-                remove_active_link(link);
-                hal_semaphore_release(ml2cap_config->links_sem);
-
-                if (link->initialized) {
-                    // init and wait for cleanup
-                    cla_generic_disconnect_handler(&link->base);
-                    cla_link_wait_cleanup(&link->base);
-                    link->initialized = false;
-                }
-                // finally release all resources
-                ml2cap_link_destroy(link);
-            }
         }
+        hal_semaphore_release(ml2cap_config->links_sem);
     }
 
     terminate:
