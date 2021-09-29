@@ -427,7 +427,7 @@ def handle_bundles(db, run):
             (db.stored_bundle.device == other_device) &
             (db.stored_bundle.created_us >= min_rx_us) &
             (db.stored_bundle.created_us <= max_rx_us+500000)
-        ).select(orderby=(~db.stored_bundle.created_us) & (~db.stored_bundle.id)))
+        ).select(orderby=((~db.stored_bundle.created_us) | (~db.stored_bundle.id))))
 
         received_stored_bundle = None
 
