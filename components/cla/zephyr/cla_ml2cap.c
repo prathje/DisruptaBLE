@@ -701,7 +701,9 @@ static void mtcp_management_task(void *param) {
             if (!link->shutting_down && link->chan_connected && last_chan_update + IDLE_TIMEOUT_MS < now) {
                 LOGF("ML2CAP: Disconnecting idle connection to \"%s\"", link->cla_addr);
                 LOG_EV("idle_disconnect", "\"other_mac_addr\": \"%s\", \"other_cla_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\"", link->mac_addr, link->cla_addr, link->conn, link);
-                bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+                int res = bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+                ASSERT(res == 0 || res == -ENOTCONN);
+                link->shutting_down = true;
             }
             #endif
 
@@ -920,8 +922,8 @@ static int chan_flush(struct ml2cap_link *ml2cap_link) {
             return 0; // do not even try to send something!
         }
 
-        size_t num_free_bytes = net_buf_tailroom(buf);
-        LOG_EV("chan_flush", "\"num_free_bytes\": %d", num_free_bytes);
+        //size_t num_free_bytes = net_buf_tailroom(buf);
+        //LOG_EV("chan_flush", "\"num_free_bytes\": %d", num_free_bytes);
 
         int ret = bt_l2cap_chan_send(&ml2cap_link->le_chan.chan, buf);
 
