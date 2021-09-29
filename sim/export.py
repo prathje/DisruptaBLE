@@ -1078,42 +1078,39 @@ GROUP BY de
  '''
     pass
 
-def export_fake_bundle_propagation_epidemic(db, base_path):
+def export_bundle_propagation_epidemic(db, base_path):
 
     length_s = 3000
     step = 1.0
 
-
-    runs = db((db.run.status == 'processed') & (db.run.group == RUN_GROUP)).select()
-
-
+    runs = db((db.run.status == 'processed') & (db.run.group == 'app')).select()
     max_step = math.ceil(length_s/step)
 
+    per_area_reception_steps = {
+        100: [],
+        200: [],
+        400: []
+    }
 
     for r in runs:
 
         run_config = json.loads(r.configuration_json)
         name = slugify(("epidemic propagation", str(r.name), str(r.id)))
 
+
+        model_options = json.loads(run_config['SIM_MODEL_OPTIONS'])
+
+        print("Handling run {}".format(name))
+
+        assert 'dimensions' in model_options
+        area = int(model_options['dimensions'][0])
+        assert area > 0
+
         def proc():
             run_reception_steps = []
 
-            # & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))
-            bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://fake')).iterselect()
+            bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://fake') & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))).iterselect()
             for b in bundles:
-                # TODO: this creation time is currently needed due to formatting bugs.. see f602e6d6d909aff4cd89ee371b4d955fb61ce7ef
-                b_creation_time_ms = (db.executesql(
-                    '''
-                        SELECT MIN(created_us) FROM stored_bundle
-                        WHERE device = {} AND bundle = {}
-                        GROUP BY bundle
-                    '''.format(b.source, b.id)
-                )[0][0]) / 1000
-
-                if b_creation_time_ms > ((r.simulation_time/1000)-(length_s*1000)):
-                    continue    # this bundle is too late
-
-
                 receptions_steps = [0]*(max_step+1)
 
                 res = db.executesql(
@@ -1125,74 +1122,88 @@ def export_fake_bundle_propagation_epidemic(db, base_path):
                 )
 
                 for row in res:
-                    ms = (row[0]/1000)-b_creation_time_ms #b.creation_timestamp_ms
-
+                    ms = (row[0]/1000)-b.creation_timestamp_ms
                     ts = round((ms/1000) / step)
-
                     for x in range(ts, max_step+1):
                         receptions_steps[x] += 1
-
                 run_reception_steps.append(receptions_steps)
             return run_reception_steps
 
         run_reception_steps = cached(name, proc)
-        run_reception_steps = np.array(run_reception_steps, dtype=np.float64)
-        run_reception_steps = run_reception_steps / (float(run_config['SIM_PROXY_NUM_NODES']))
+        per_area_reception_steps[area] += run_reception_steps
 
-        print(r.id)
-        print(r.name)
-        run_reception_steps = np.swapaxes(run_reception_steps, 0, 1) # we swap the axes to get all t=0 values at the first position together
+    positions = range(0, max_step + 1)
+    plt.clf()
 
-        # Export one graph per run for now
-        positions = range(0, max_step+1)
-        plt.clf()
-
-        mean = np.mean(run_reception_steps, axis=1)
-        plt.plot(positions, mean, linestyle='-', label="Mean")
-        (lq, uq) = np.percentile(run_reception_steps, [2.5, 97.5], axis=1)
-
-        plt.fill_between(positions, lq, uq, color=CONFIDENCE_FILL_COLOR, label='95% Confidence Interval')
-
-        plt.legend()
-        # plt.title("Chaos Network Size")
-        plt.xlabel("Time")
-        plt.ylabel('Bundle Reception Rate')
-        plt.axis([None, None, None, None])
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(base_path + str(r.name) + str(r.id) + ".pdf", format="pdf")
-        plt.close()
+    mean = {}
+    cis = {}
 
 
+    fig, ax = plt.subplots()
+    fig.set_size_inches(3.0, 3.0)
+
+    for k in per_area_reception_steps:
+        if len(per_area_reception_steps[k]) > 0:
+            per_area_reception_steps[k] = np.array(per_area_reception_steps[k], dtype=np.float64)
+            per_area_reception_steps[k] = np.swapaxes(per_area_reception_steps[k], 0, 1)  # we swap the axes to get all t=0 values at the first position together
+            per_area_reception_steps[k] = (per_area_reception_steps[k] / 24.0) * 100.0
+            mean[k] = np.mean(per_area_reception_steps[k], axis=1)
+            cis[k] = np.percentile(per_area_reception_steps[k], [2.5, 97.5], axis=1)
+
+
+    if 100 in mean:
+        plt.plot(positions, mean[100], linestyle='-', label="100x100", alpha=0.75, color='C1')
+        plt.fill_between(positions, cis[100][0], cis[100][1], color='C1', label='95% CI 100x100', alpha=0.25, linewidth=0.0)
+
+    if 200 in mean:
+        plt.plot(positions, mean[200], linestyle='-', label="200x200", alpha=0.75, color='C2')
+        plt.fill_between(positions, cis[200][0], cis[200][1], color='C2', label='95% CI 200x200', alpha=0.25, linewidth=0.0)
+
+    if 400 in mean:
+        plt.plot(positions, mean[400], linestyle='-', label="400x400", alpha=0.75, color='C4')
+        plt.fill_between(positions, cis[400][0], cis[400][1], color='C4', label='95% CI 400x400', alpha=0.25, linewidth=0.0)
+
+    plt.legend()
+    plt.xlabel("Time [s]")
+    plt.ylabel('Bundle Reception Rate [%]')
+    plt.axis([0, 300, None, None])
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(base_path + "epidemic_propagation" + ".pdf", format="pdf")
+    plt.close()
 
 def export_fake_bundle_propagation_direct(db, base_path):
 
     length_s = 3000
     step = 1.0
 
-    runs = db((db.run.status == 'processed') & (db.run.group == RUN_GROUP)).select()
+    runs = db((db.run.status == 'processed') & (db.run.group == 'app')).select()
 
     max_step = math.ceil(length_s/step)
+
+    per_area_reception_steps = {
+        100: [],
+        200: [],
+        400: []
+    }
 
     for r in runs:
         run_config = json.loads(r.configuration_json)
         name = slugify(("direct propagation", str(r.name), str(r.id)))
 
+        model_options = json.loads(run_config['SIM_MODEL_OPTIONS'])
+        print("Handling run {}".format(name))
+
+        assert 'dimensions' in model_options
+        area = int(model_options['dimensions'][0])
+        assert area > 0
+
         def proc():
             run_reception_steps = []
             # & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))
-            bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://source')).iterselect()
+            bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://source') & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))).iterselect()
             for b in bundles:
-                # TODO: this creation time is currently needed due to formatting bugs.. see f602e6d6d909aff4cd89ee371b4d955fb61ce7ef
-                b_creation_time_ms = (db.executesql(
-                    '''
-                        SELECT MIN(created_us) FROM stored_bundle
-                        WHERE device = {} AND bundle = {}
-                        GROUP BY bundle
-                    '''.format(b.source, b.id)
-                )[0][0]) /  1000
-
-                if b_creation_time_ms > ((r.simulation_time/1000)-(length_s*1000)):
+                if b.creation_timestamp_ms > ((r.simulation_time/1000)-(length_s*1000)):
                     continue    # this bundle is too late
 
                 receptions_steps = [0]*(max_step+1)
@@ -1206,8 +1217,7 @@ def export_fake_bundle_propagation_direct(db, base_path):
                 )
 
                 for row in res:
-                    ms = (row[0]/1000)-b_creation_time_ms #b.creation_timestamp_ms
-
+                    ms = (row[0]/1000)-b.creation_timestamp_ms
                     ts = round((ms/1000) / step)
 
                     for x in range(ts, max_step+1):
@@ -1217,30 +1227,46 @@ def export_fake_bundle_propagation_direct(db, base_path):
             return run_reception_steps
 
         run_reception_steps = cached(name, proc)
-        run_reception_steps = np.array(run_reception_steps, dtype=np.float64)
+        per_area_reception_steps[area] += run_reception_steps
 
-        run_reception_steps = np.swapaxes(run_reception_steps, 0,
-                                          1)  # we swap the axes to get all t=0 values at the first position together
+    positions = range(0, max_step + 1)
+    plt.clf()
 
-        # Export one graph per run for now
-        positions = range(0, max_step + 1)
-        plt.clf()
+    fig, ax = plt.subplots()
+    fig.set_size_inches(3.0, 3.0)
 
-        mean = np.mean(run_reception_steps, axis=1)
-        plt.plot(positions, mean, linestyle='-', label="Mean")
-        (lq, uq) = np.percentile(run_reception_steps, [2.5, 97.5], axis=1)
+    mean = {}
+    cis = {}
 
-        plt.fill_between(positions, lq, uq, color=CONFIDENCE_FILL_COLOR, label='95% Confidence Interval')
 
-        plt.legend()
-        # plt.title("Chaos Network Size")
-        plt.xlabel("Time")
-        plt.ylabel('Bundle Reception Rate')
-        plt.axis([None, None, None, None])
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(base_path + name + ".pdf", format="pdf")
-        plt.close()
+    for k in per_area_reception_steps:
+        if len(per_area_reception_steps[k]) > 0:
+            per_area_reception_steps[k] = np.array(per_area_reception_steps[k], dtype=np.float64)
+            per_area_reception_steps[k] = np.swapaxes(per_area_reception_steps[k], 0, 1)  # we swap the axes to get all t=0 values at the first position together
+            per_area_reception_steps[k] = per_area_reception_steps[k]*100
+            mean[k] = np.mean(per_area_reception_steps[k], axis=1)
+            cis[k] = np.percentile(per_area_reception_steps[k], [2.5, 97.5], axis=1)
+
+    if 100 in mean:
+        plt.plot(positions, mean[100], linestyle='-', label="100x100", alpha=0.75, color='C1')
+        plt.fill_between(positions, cis[100][0], cis[100][1], color='C1', label='95% CI 100x100', alpha=0.25, linewidth=0.0)
+
+    if 200 in mean:
+        plt.plot(positions, mean[200], linestyle='-', label="200x200", alpha=0.75, color='C2')
+        plt.fill_between(positions, cis[200][0], cis[200][1], color='C2', label='95% CI 200x200', alpha=0.25, linewidth=0.0)
+
+    if 400 in mean:
+        plt.plot(positions, mean[400], linestyle='-', label="400x400", alpha=0.75, color='C4')
+        plt.fill_between(positions, cis[400][0], cis[400][1], color='C4', label='95% CI 400x400', alpha=0.25, linewidth=0.0)
+
+    plt.legend()
+    plt.xlabel("Time [s]")
+    plt.ylabel('Bundle Reception Rate [%]')
+    plt.axis([0, 300, None, None])
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(base_path + "spray_and_wait_propagation" + ".pdf", format="pdf")
+    plt.close()
 
 
 def export_ict(db, base_path):
@@ -1290,6 +1316,9 @@ def export_ict(db, base_path):
 
     positions = [t/60.0 for t in range(0, max_s)]
     plt.clf()
+
+    fig, ax = plt.subplots()
+    fig.set_size_inches(3.0, 3.0)
 
     if 100 in xs:
         plt.plot(positions, xs[100], linestyle='-', label="100x100", color='C1')
@@ -1373,6 +1402,8 @@ if __name__ == "__main__":
     db.commit() # we need to commit
 
     exports = [
+        export_fake_bundle_propagation_direct,
+        export_bundle_propagation_epidemic,
         export_ict,
         export_app_connection_distance_histogramm,
         export_testbed_calibration_setup_times,
