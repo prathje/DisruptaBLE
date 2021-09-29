@@ -48,7 +48,7 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_t
         adv_type == BT_GAP_ADV_TYPE_ADV_DIRECT_IND ||
         adv_type == BT_GAP_ADV_TYPE_ADV_SCAN_IND ||
         adv_type == BT_GAP_ADV_TYPE_ADV_NONCONN_IND
-        ) {
+            ) {
 
         // TODO: This is not standard-conform advertisement parsing!
         if (ad->len >= 7) {
@@ -93,105 +93,115 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_t
             }
         }
     } else {
-
     }
 }
 
-static void nb_ble_stop_unsafe() {
-    int err = bt_le_adv_stop();
+
+static void scan_start() {
+    if (nb_ble_config.scanner_is_enabled) {
+        return; // no need to start again
+    }
+
+    struct bt_le_scan_param scan_param = {
+            .type       = BT_LE_SCAN_TYPE_PASSIVE,
+            .options    = BT_LE_ADV_OPT_ONE_TIME,
+            .interval   = 0x0010,    // TODO: Adapt interval and window
+            .window     = 0x0010,
+    };
+
+    int err = bt_le_scan_start(&scan_param, device_found_cb);
+
+
+    if(!err) {
+        nb_ble_config.scanner_is_enabled = true;
+    }
 
 #if CONFIG_NB_BLE_DEBUG
     if (err) {
-                LOGF("NB BLE: advertising failed to stop (err %d)\n", err);
-            }
+            LOGF("NB BLE: Scanning failed to start (err %d)\n", err);
+    }
 #endif
+}
 
-    err = bt_le_scan_stop();
+static void scan_stop() {
+    int err = bt_le_scan_stop();
 
     if (!err) {
         //LOG_EV_NO_DATA("scan_stopped");
     }
 
+    #if CONFIG_NB_BLE_DEBUG
+        if (err) {
+                    LOGF("NB BLE: Scanning failed to stop (err %d)\n", err);
+                }
+    #endif
+    nb_ble_config.scanner_is_enabled = false;
+}
+
+static void adv_start() {
+
+    size_t data_len = strlen(nb_ble_config.eid) + 2; // 2 byte uuid
+    char *data = malloc(data_len);
+
+    // Store the UUID in little endian format
+    *data = NB_BLE_UUID & 0xFF;
+    *(data + 1) = (NB_BLE_UUID >> 8) & 0xFF;
+    memcpy(data + 2, nb_ble_config.eid, data_len - 2);  // this copies the data without the null terminator
+
+
+   struct bt_data ad[] = {
+            BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
+            BT_DATA(BT_DATA_SVC_DATA16, data, data_len)
+    };
+
+   int err =  bt_le_adv_start(
+         BT_LE_ADV_PARAM(
+                 (nb_ble_config.advertising_as_connectable ? (BT_LE_ADV_OPT_CONNECTABLE | BT_LE_ADV_OPT_ONE_TIME) : BT_LE_ADV_OPT_NONE)
+                 | BT_LE_ADV_OPT_USE_IDENTITY,
+                 BT_GAP_ADV_FAST_INT_MIN_2,
+                 BT_GAP_ADV_FAST_INT_MAX_2,
+                 NULL),
+         ad,
+         ARRAY_SIZE(ad), NULL, 0);
+
+
+    if (err) {
+#if CONFIG_NB_BLE_DEBUG
+        LOGF("NB BLE: advertising failed to start (err %d)\n", err);
+#endif
+    }
+
+    free(data);
+}
+
+static void adv_stop() {
+    int err = bt_le_adv_stop();
+
 #if CONFIG_NB_BLE_DEBUG
     if (err) {
-                LOGF("NB BLE: Scanning failed to stop (err %d)\n", err);
-            }
+        LOGF("NB BLE: advertising failed to stop (err %d)\n", err);
+    }
 #endif
 }
 
-void nb_ble_start_if_enabled(bool connectable) {
+
+void nb_ble_set_connectable(bool connectable) {
 
     if (!nb_ble_config.enabled) {
+        nb_ble_config.advertising_as_connectable = connectable; // we save this so we start correctly if we get enabled at some point
         return; // directly return since not enabled right now, no need to take the lock
     }
 
-    hal_semaphore_take_blocking(nb_ble_config.bt_sync_sem);
+    hal_semaphore_take_blocking(nb_ble_config.sem);
 
+    // if this does not match the wanted connectable state, we might need to stop current advertisements before
     if (nb_ble_config.advertising_as_connectable != connectable) {
-        // if this does not match the wanted connectable state, we might need to stop current advertisements before
-        nb_ble_stop_unsafe();
         nb_ble_config.advertising_as_connectable = connectable;
+        adv_stop();
+        scan_stop();
+        // advertisements will be restarted by the management task
     }
-
-    // check again if enabled!
-    if (nb_ble_config.enabled) {
-        struct bt_le_scan_param scan_param = {
-                .type       = BT_LE_SCAN_TYPE_PASSIVE,
-                .options    = BT_LE_ADV_OPT_ONE_TIME,
-                .interval   = BT_GAP_SCAN_FAST_INTERVAL,    // TODO: Adapt interval and window
-                .window     = BT_GAP_SCAN_FAST_WINDOW,
-        };
-
-        int err = bt_le_scan_start(&scan_param, device_found_cb);
-
-        if (!err) {
-            //LOG_EV_NO_DATA("scan_started");
-        }
-
-    #if CONFIG_NB_BLE_DEBUG
-        if (err) {
-            LOGF("NB BLE: Scanning failed to start (err %d)\n", err);
-        }
-    #endif
-
-        size_t data_len = strlen(nb_ble_config.eid) + 2; // 2 byte uuid
-        char *data = malloc(data_len);
-
-        // Store the UUID in little endian format
-        *data = NB_BLE_UUID & 0xFF;
-        *(data + 1) = (NB_BLE_UUID >> 8) & 0xFF;
-        memcpy(data + 2, nb_ble_config.eid, data_len - 2);  // this copies the data without the null terminator
-
-        struct bt_data ad[] = {
-                BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-                BT_DATA(BT_DATA_SVC_DATA16, data, data_len)
-        };
-
-        err = bt_le_adv_start(
-                BT_LE_ADV_PARAM(
-                        (connectable ? (BT_LE_ADV_OPT_CONNECTABLE | BT_LE_ADV_OPT_ONE_TIME) : BT_LE_ADV_OPT_NONE) |
-                        BT_LE_ADV_OPT_USE_IDENTITY,
-                        BT_GAP_ADV_FAST_INT_MIN_2,
-                        BT_GAP_ADV_FAST_INT_MAX_2,
-                        NULL),
-                ad,
-                ARRAY_SIZE(ad), NULL, 0);
-
-
-        if (!err) {
-            //LOG_EV_NO_DATA("adv_started");
-        }
-
-        free(data);
-
-    #if CONFIG_NB_BLE_DEBUG
-        if (err) {
-            LOGF("NB BLE: advertising failed to start (err %d)\n", err);
-        }
-    #endif
-    }
-
-    hal_semaphore_release(nb_ble_config.bt_sync_sem);
+    hal_semaphore_release(nb_ble_config.sem);
 }
 
 void nb_ble_enable() {
@@ -199,26 +209,42 @@ void nb_ble_enable() {
         return; // no need to lock it
     }
 
-    hal_semaphore_take_blocking(nb_ble_config.bt_sync_sem);
+    hal_semaphore_take_blocking(nb_ble_config.sem);
     nb_ble_config.enabled = true;   // TODO: does locking make a difference here at all?
-    hal_semaphore_release(nb_ble_config.bt_sync_sem);
+    hal_semaphore_release(nb_ble_config.sem);
 }
 
 /*
 void nb_ble_stop() {
-    hal_semaphore_take_blocking(nb_ble_config.bt_sync_sem);
+    hal_semaphore_take_blocking(nb_ble_config.sem);
     nb_ble_stop_unsafe();
-    hal_semaphore_release(nb_ble_config.bt_sync_sem);
+    hal_semaphore_release(nb_ble_config.sem);
 }
 */
 
 void nb_ble_disable_and_stop() {
-    hal_semaphore_take_blocking(nb_ble_config.bt_sync_sem);
+    hal_semaphore_take_blocking(nb_ble_config.sem);
     nb_ble_config.enabled = false;
-    nb_ble_stop_unsafe();
-    hal_semaphore_release(nb_ble_config.bt_sync_sem);
+    adv_stop();
+    scan_stop();
+    hal_semaphore_release(nb_ble_config.sem);
 }
 
+
+
+static void nb_ble_management_task(void *param) {
+    (void)param; // unused
+
+    while (true) {
+        hal_semaphore_take_blocking(nb_ble_config.sem);
+        if (nb_ble_config.enabled) {
+            scan_start();
+            adv_start();
+        }
+        hal_semaphore_release(nb_ble_config.sem);
+        hal_task_delay(50);
+    }
+}
 
 /*
  * Launches a new task to handle BLE advertisements
@@ -236,11 +262,24 @@ enum ud3tn_result nb_ble_init(const struct nb_ble_config * const config) {
     memcpy(&nb_ble_config, config, sizeof(struct nb_ble_config));
 
     nb_ble_config.eid = strdup(config->eid);
-    nb_ble_config.bt_sync_sem = hal_semaphore_init_binary();
-    hal_semaphore_release(nb_ble_config.bt_sync_sem);
+    nb_ble_config.sem = hal_semaphore_init_binary();
+    hal_semaphore_release(nb_ble_config.sem);
 
     nb_ble_config.enabled = true; // enabled right from the start
     nb_ble_config.advertising_as_connectable = false; // enabled right from the start
+    nb_ble_config.scanner_is_enabled = false; // enabled right from the start
+
+    nb_ble_config.task = hal_task_create(
+            nb_ble_management_task,
+            "nb_ble_mgmt_t",
+            CONTACT_LISTEN_TASK_PRIORITY, // TODO
+            &nb_ble_config,
+            CONTACT_LISTEN_TASK_STACK_SIZE, // TODO
+            (void *) CLA_SPECIFIC_TASK_TAG
+    );
+
+    if (!nb_ble_config.task)
+        return UD3TN_FAIL;
 
     return UD3TN_OK;
 }

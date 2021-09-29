@@ -167,6 +167,8 @@ void add_active_link(struct ml2cap_link *link) {
     ASSERT(ml2cap_config->num_links < ML2CAP_MAX_CONN);
     ml2cap_config->links[ml2cap_config->num_links] = link;
     ml2cap_config->num_links++;
+
+    nb_ble_set_connectable(ml2cap_config->num_links < ML2CAP_MAX_CONN);
 }
 
 struct ml2cap_link *find_link_by_connection(struct bt_conn *conn) {
@@ -204,6 +206,7 @@ void remove_active_link(struct ml2cap_link *link) {
             break;
         }
     }
+    nb_ble_set_connectable(ml2cap_config->num_links < ML2CAP_MAX_CONN);
 }
 
 static const char *ml2cap_name_get(void) {
@@ -657,6 +660,8 @@ static void mtcp_management_task(void *param) {
         goto terminate;
     }
 
+    nb_ble_set_connectable(ml2cap_config->num_links < ML2CAP_MAX_CONN);
+
 
     // initialize local address
     size_t count = 1;
@@ -684,8 +689,6 @@ static void mtcp_management_task(void *param) {
 
         // we need to periodically try to activate advertisements again.
         hal_task_delay(100); // add short delay
-
-        nb_ble_start_if_enabled(ml2cap_config->num_links < ML2CAP_MAX_CONN); // we now start it again
 
         hal_semaphore_take_blocking(ml2cap_config->links_sem);
         for(int i = 0; i < ml2cap_config->num_links; ++i) {
