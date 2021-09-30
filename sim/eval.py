@@ -639,9 +639,4 @@ if __name__ == "__main__":
             status='processed'
         )
         db.commit()
-
-    # TODO: Group them by something?!
-    runs = list(db(db.run.status == 'finished').iterselect())
-
-    eval_connections(db, runs)
-    eval_transmission(db, runs)
+    print("Finished! \\o/")
