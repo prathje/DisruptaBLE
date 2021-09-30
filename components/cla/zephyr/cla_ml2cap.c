@@ -705,7 +705,7 @@ static void mtcp_management_task(void *param) {
                 LOGF("ML2CAP: Disconnecting idle connection to \"%s\"", link->cla_addr);
                 LOG_EV("idle_disconnect", "\"other_mac_addr\": \"%s\", \"other_cla_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\"", link->mac_addr, link->cla_addr, link->conn, link);
                 int res = bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-                ASSERT(res == 0 || res == -ENOTCONN);
+                //ASSERT(res == 0 || res == -ENOTCONN);
                 link->shutting_down = true;
             }
             #endif
@@ -737,7 +737,7 @@ static void mtcp_management_task(void *param) {
                     int res = bt_conn_disconnect(link->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
                     link->shutting_down = true;
                     LOGF("ML2CAP: Trying to disconnect possibly broken connection to \"%s\" got res %d", link->cla_addr, res);
-                    ASSERT(res == 0 || res == -ENOTCONN);
+                    //ASSERT(res == 0 || res == -ENOTCONN);
                 }
             }
             #endif
