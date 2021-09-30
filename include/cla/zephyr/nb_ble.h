@@ -23,9 +23,11 @@ struct nb_ble_config {
     nb_ble_discovered_cb discover_cb;
     void * discover_cb_context;
     char *eid;
-    Semaphore_t bt_sync_sem;
+    Semaphore_t sem;
     bool enabled;
+    uint64_t scanner_enabled_ms;
     bool advertising_as_connectable;
+    Task_t task;
 };
 
 /*
@@ -35,8 +37,10 @@ enum ud3tn_result nb_ble_init(const struct nb_ble_config * const config);
 
 void nb_ble_enable();
 void nb_ble_disable_and_stop();
+void nb_ble_set_connectable(bool connectable);
+
 void nb_ble_stop();
-void nb_ble_start_if_enabled(bool connectable);
+void nb_ble_start_if_enabled();
 
 
 char* bt_addr_le_to_mac_addr(const bt_addr_le_t *addr);
