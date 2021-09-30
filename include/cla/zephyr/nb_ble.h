@@ -25,7 +25,7 @@ struct nb_ble_config {
     char *eid;
     Semaphore_t sem;
     bool enabled;
-    uint64_t scanner_enabled_ms;
+    bool scanner_is_enabled;
     bool advertising_as_connectable;
     Task_t task;
 };
