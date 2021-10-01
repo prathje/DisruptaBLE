@@ -109,18 +109,22 @@ static struct summary_vector *create_known_sv() {
     //TODO: We need to be careful that this is not the real one :)
     struct summary_vector *known_sv = router_create_known_sv();
 
-    known_bundle_list_lock(routing_agent_config.known_bundle_list);
+    if (known_sv) {
+        known_bundle_list_lock(routing_agent_config.known_bundle_list);
 
-    KNOWN_BUNDLE_LIST_FOREACH(routing_agent_config.known_bundle_list, bundle_entry) {
-        struct summary_vector_entry sv_entry;
-        summary_vector_entry_from_bundle_unique_identifier(&sv_entry, &bundle_entry->unique_identifier);
-        if (summary_vector_add_entry_by_copy(known_sv, &sv_entry) != UD3TN_OK) {
-            summary_vector_destroy(known_sv);
-            known_sv = NULL;
-            break;
+        KNOWN_BUNDLE_LIST_FOREACH(routing_agent_config.known_bundle_list, bundle_entry) {
+            struct summary_vector_entry sv_entry;
+            summary_vector_entry_from_bundle_unique_identifier(&sv_entry, &bundle_entry->unique_identifier);
+            if (summary_vector_add_entry_by_copy(known_sv, &sv_entry) != UD3TN_OK) {
+                summary_vector_destroy(known_sv);
+                known_sv = NULL;
+                break;
+            }
         }
+        known_bundle_list_unlock(routing_agent_config.known_bundle_list);
+    } else {
+        LOG("Routing Agent: Could not create known sv");
     }
-    known_bundle_list_unlock(routing_agent_config.known_bundle_list);
 
     return known_sv;
 }
