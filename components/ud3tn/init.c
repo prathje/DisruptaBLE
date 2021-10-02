@@ -27,6 +27,7 @@ static struct bundle_agent_interface bundle_agent_interface;
 
 void init(int argc, char *argv[])
 {
+    hal_task_delay(1000);
 	hal_platform_init(argc, argv);
 	LOG("INIT: uD3TN starting up...");
 }
@@ -91,7 +92,7 @@ void start_tasks(const struct ud3tn_cmdline_options *const opt)
 			"router_t",
 			ROUTER_TASK_PRIORITY,
 			router_task_params,
-			DEFAULT_TASK_STACK_SIZE,
+            CONTACT_ROUTER_TASK_STACK_SIZE,
 			(void *)ROUTER_TASK_TAG);
 
 	hal_task_create(bundle_processor_task,
