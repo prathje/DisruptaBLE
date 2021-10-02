@@ -158,8 +158,8 @@ static void adv_start() {
          BT_LE_ADV_PARAM(
                  (nb_ble_config.advertising_as_connectable ? (BT_LE_ADV_OPT_CONNECTABLE | BT_LE_ADV_OPT_ONE_TIME) : BT_LE_ADV_OPT_NONE)
                  | BT_LE_ADV_OPT_USE_IDENTITY,
-                 BT_GAP_ADV_FAST_INT_MIN_2,
-                 BT_GAP_ADV_FAST_INT_MAX_2,
+                 BT_GAP_ADV_SLOW_INT_MIN,
+                 BT_GAP_ADV_SLOW_INT_MAX,
                  NULL),
          ad,
          ARRAY_SIZE(ad), NULL, 0);
