@@ -62,7 +62,9 @@ if __name__ == "__main__":
         global rseed
         run_env = os.environ.copy()
         run_env["SIM_NAME"] = re.sub('[^0-9a-zA-Z]+', '-', group_name + "-" + "-".join(args))
-        run_env["SIM_GROUP"] = group_name
+        
+        if len(group_name) > 0:
+            run_env["SIM_GROUP"] = group_name
 
         if rseed is not None:
             rseed_lock.acquire()
