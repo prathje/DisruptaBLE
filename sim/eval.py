@@ -185,9 +185,6 @@ def handle_connections(db, run):
 
     us_sync = 0
 
-    if run.group == 'testbed':
-        us_sync = 0
-
     for e in iter_events_with_devices(db, run, 'conn_init'):
         db.conn_info.insert(**{
             "run": run,
@@ -415,8 +412,11 @@ def handle_bundles(db, run):
         stored_bundle = db.stored_bundle[bt.source_stored_bundle]
 
         is_client = conn_info.client == stored_bundle.device
-
         other_device = conn_info.peripheral if is_client else conn_info.client
+
+        if None in [conn_info.client_channel_up_us, conn_info.peripheral_channel_up_us]:
+            # this connection was not able to transport a single bundle -> skip it!
+            continue
 
         min_rx_us = max(bt.start_us, conn_info.peripheral_channel_up_us if is_client else conn_info.client_channel_up_us)
         max_rx_us = (conn_info.peripheral_disconnect_us if is_client else conn_info.client_disconnect_us) or run.simulation_time
@@ -642,7 +642,6 @@ if __name__ == "__main__":
             )
             db.commit()
         except KeyboardInterrupt as e:
-            traceback.print_exc()
             raise e
         except Exception as e:
             traceback.print_exc()
