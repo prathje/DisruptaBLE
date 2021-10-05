@@ -628,15 +628,20 @@ if __name__ == "__main__":
     runs = db((db.run.status == 'finished') & (db.run.group.belongs(groups))).iterselect()
 
     for run in runs:
-        print("Handling run {} ({})".format(run.name, run.id))
-        tables.reset_eval_tables(db, run)
+        try:
+            print("Handling run {} ({})".format(run.name, run.id))
+            tables.reset_eval_tables(db, run)
 
-        for h in handlers:
-            print(h.__name__)
-            h(db, run)
+            for h in handlers:
+                print(h.__name__)
+                h(db, run)
 
-        db(db.run.id == run).update(
-            status='processed'
-        )
-        db.commit()
+            db(db.run.id == run).update(
+                status='processed'
+            )
+            db.commit()
+        except KeyboardInterrupt as e:
+            raise e
+        except Exception as e:
+            print(e)
     print("Finished! \\o/")
