@@ -4,6 +4,7 @@ import dotenv
 import os
 import random
 import dist_writer
+import traceback
 
 from pprint import pprint
 import sqlite3
@@ -641,7 +642,9 @@ if __name__ == "__main__":
             )
             db.commit()
         except KeyboardInterrupt as e:
+            traceback.print_exc()
             raise e
         except Exception as e:
+            traceback.print_exc()
             print(e)
     print("Finished! \\o/")
