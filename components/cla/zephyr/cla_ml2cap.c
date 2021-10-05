@@ -361,6 +361,10 @@ static void chan_disconnected_cb(struct bt_l2cap_chan *chan) {
             hal_queue_push_to_back(bundle_agent_interface->router_signaling_queue,
                                    &rt_signal);
 
+            uint8_t buf;
+            // we now clear the rx queue (this would release a locked bt rx callback)
+            while (hal_queue_receive(link->rx_queue, &buf, 0) == UD3TN_OK) {};
+
             cla_link_wait_cleanup(&link->base);
         }
         // we issue a disconnect request just to be sure!
