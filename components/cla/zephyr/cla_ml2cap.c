@@ -86,6 +86,7 @@ struct ml2cap_link {
     //size_t tx_data_sent;
 
     bool shutting_down; // will be set to true to cancel rx / tx tasks
+    bool eid_received; // will be set to true when the first bytes have been received TODO: we only support eids within one l2cap packet right now!
 
     // basic link properties
     struct bt_conn *conn; // the reference to the zephyr connetion
@@ -110,6 +111,9 @@ static struct ml2cap_link *ml2cap_link_create(
         struct bt_conn *conn
 );
 static void ml2cap_link_destroy(struct ml2cap_link *ml2cap_link);
+
+
+static void send_eid(struct ml2cap_link *link);
 
 /*
  * Some Event Handling
@@ -303,6 +307,14 @@ static void chan_connected_cb(struct bt_l2cap_chan *chan) {
         on_channel_up(link);
         LOG_EV("channel_up", "\"other_mac_addr\": \"%s\", \"connection\": \"%p\"", link->mac_addr, link->conn);
 
+        struct bt_conn_info info;
+        if (!bt_conn_get_info(link->conn, &info)) {
+            if (info.role == BT_CONN_ROLE_MASTER) {
+                send_eid(link); // the client needs to send the eid to the peripheral
+            }
+        }
+
+
         if (cla_link_init(&link->base, &ml2cap_config->base) == UD3TN_OK) {
             link->chan_connected = true;
             // signal to the router that the connection is up
@@ -381,18 +393,63 @@ static int chan_recv_cb(struct bt_l2cap_chan *chan, struct net_buf *buf) {
     hal_semaphore_take_blocking(ml2cap_config->links_sem);
     struct ml2cap_link *link = find_link_by_connection(chan->conn);
     if (link != NULL) {
-        link->bytes_received += num_bytes_received;
-        //LOG("Received %d bytes\n", num_bytes_received);
-        on_rx(link);
-
-        //LOG_EV("rx", "\"from_mac_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\", \"num_bytes\": %d", link->mac_addr, chan->conn, link, num_bytes_received);
-
         size_t num_elements = net_buf_frags_len(buf);
-        for (int i = 0; i < num_elements; i++) {
-            // TODO: This message queue abuse is quite inefficient!
-            // TODO: Check that this conversion is correct!
-            size_t b = (size_t) net_buf_pull_u8(buf);
-            hal_queue_push_to_back(link->rx_queue, (void *) &b);
+        if (!link->eid_received) {
+            link->eid_received = true;
+
+            struct bt_conn_info info;
+            // first message is the other service's eid
+            if (!bt_conn_get_info(chan->conn, &info)) {
+
+                char *mac_addr = bt_addr_le_to_mac_addr(info.le.remote);
+                char *cla_addr = mac_addr ? cla_get_cla_addr(ml2cap_name_get(), mac_addr) : NULL;
+                free(mac_addr);
+
+                char *eid = net_buf_pull_mem(buf, num_elements);
+
+                if (eid && cla_addr) {
+                    ASSERT(eid[num_elements-1] == '\0'); // check that the eid is null terminated!
+                    struct node* node = node_create(eid); // node is freed by the router
+
+                    if (node != NULL) {
+                        // eid is copied while cla_addr reused
+                        node->cla_addr = cla_addr;
+
+                        struct router_signal rt_signal = {
+                                .type = ROUTER_SIGNAL_NEIGHBOR_DISCOVERED,
+                                .data = node,
+                        };
+
+                        LOGF("ML2CAP: received eid info %s, %s", node->eid, node->cla_addr);
+
+                        const struct bundle_agent_interface *const bundle_agent_interface =
+                                ml2cap_config->base.bundle_agent_interface;
+                        hal_queue_push_to_back(bundle_agent_interface->router_signaling_queue,
+                                               &rt_signal);
+                    } else {
+                        LOG("ML2CAP: Failed to allocate node");
+                        free(cla_addr);
+                    }
+                } else {
+                    LOG("ML2CAP: Failed to get eid, mac_addr or cla_addr");
+                    free(cla_addr);
+                }
+            } else {
+                LOG("ML2CAP: Failed to get conn info in gatt_eid_client_read_cb");
+            }
+        } else {
+            link->bytes_received += num_bytes_received;
+            //LOG("Received %d bytes\n", num_bytes_received);
+            on_rx(link);
+
+            //LOG_EV("rx", "\"from_mac_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\", \"num_bytes\": %d", link->mac_addr, chan->conn, link, num_bytes_received);
+
+            for (int i = 0; i < num_elements; i++) {
+                // TODO: This message queue abuse is quite inefficient!
+                // TODO: Check that this conversion is correct!
+                size_t b = (size_t) net_buf_pull_u8(buf);
+                hal_queue_push_to_back(link->rx_queue, (void *) &b);
+            }
         }
     } else {
         LOG("Could not find link in chan_recv_cb\n");
@@ -436,6 +493,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
             struct bt_conn_info info;
             if (!bt_conn_get_info(link->conn, &info)) {
                 if (info.role == BT_CONN_ROLE_MASTER) {
+                    link->eid_received = true; // we do not need that as a client
                     int err = bt_l2cap_chan_connect(link->conn, &link->le_chan.chan, ML2CAP_PSM);
                     if (err) {
                         // we disconnect, this will eventually also clear this link
@@ -451,14 +509,12 @@ static void connected(struct bt_conn *conn, uint8_t err)
                     }
                 } else {
                     // NOOP, we simply await a connection...
+                    link->eid_received = false;
                     hal_semaphore_take_blocking(ml2cap_config->links_sem);
                     add_active_link(link);
                     LOG_EV("connection_success", "\"other_mac_addr\": \"%s\", \"other_cla_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\", \"role\": \"peripheral\"", link->mac_addr, link->cla_addr, conn, link);
                     on_connect(link);
                     hal_semaphore_release(ml2cap_config->links_sem);
-
-                    // we now also request contact information again (client has this information already)
-                    // TODO:!
                 }
             } else {
                 // disconnect handler will free link
@@ -532,6 +588,7 @@ static struct ml2cap_link *ml2cap_link_create(
     ml2cap_link->conn = bt_conn_ref(conn);
     ml2cap_link->chan_connected = false; // will be initialized once available
     ml2cap_link->shutting_down = false;
+    ml2cap_link->eid_received = false;
 
     if (!ml2cap_link->conn) {
         LOG("ML2CAP: Failed to ref connection!");
@@ -1034,6 +1091,24 @@ static void ml2cap_end_packet(struct cla_link *link) {
 void ml2cap_send_packet_data(struct cla_link *link, const void *data, const size_t length) {
     // TODO: Add some extra delay for simulations to match serialization?
     l2cap_transmit_bytes(link, data, length);
+}
+
+
+// this should only be called before the TX thread is active!
+static void send_eid(struct ml2cap_link *link) {
+    while (!link->shutting_down) {
+        size_t len = strlen(ml2cap_config->base.bundle_agent_interface->local_eid)+1;
+        int send_res = chan_queue_and_flush(link, ml2cap_config->base.bundle_agent_interface->local_eid, len, COMM_RX_TIMEOUT);
+        if (send_res < 0) {
+            LOGF("ml2cap: error send_eid result %d", send_res);
+            break;
+        } else if (len == send_res) {
+            break; // successful queuing
+        }
+        ASSERT(send_res == 0);
+    }
+
+    chan_flush(link); // directly flush the EID, this also releases the tx_buf in case the link was shut down
 }
 
 static struct cla_tx_queue ml2cap_get_tx_queue(
