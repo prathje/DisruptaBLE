@@ -30,6 +30,9 @@
 #include <bluetooth/addr.h>
 #include <net/buf.h>
 
+#include <bluetooth/gatt.h>
+#include <bluetooth/att.h>
+
 #include "cla/zephyr/nb_ble.h"
 #include "routing/router_task.h"
 
@@ -42,6 +45,12 @@
 #define IDLE_TIMEOUT_MS 4000
 
 #define TIMEOUT_WARNING_MS 6000
+
+
+struct bt_uuid_128 ml2cap_service_uuid = BT_UUID_INIT_128(0x26, 0x45, 0x29, 0x48, 0x40, 0x4D, 0x63, 0x51, 0x66, 0x54, 0x6A, 0x57, 0x6E, 0x5A, 0x71, 0x34);
+struct bt_uuid_128 ml2cap_eid_uuid     = BT_UUID_INIT_128(0x35, 0x75, 0x38, 0x78, 0x2F, 0x41, 0x3F, 0x44, 0x28, 0x47, 0x2B, 0x4B, 0x62, 0x50, 0x65, 0x53);
+
+
 
 struct ml2cap_link;
 
@@ -59,12 +68,35 @@ struct ml2cap_config {
 // it is initialized during the launch task
 static struct ml2cap_config *ml2cap_config;
 
+static ssize_t read_eid_cb(struct bt_conn *conn, const struct bt_gatt_attr *attr, void *buf, uint16_t len, uint16_t offset)
+{
+    if (offset != 0)
+    {
+        LOGF("error: unsupported offset %u\n", offset);
+        return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
+    }
+
+    size_t eid_len = strlen(ml2cap_config->base.bundle_agent_interface->local_eid);
+
+    if (len < eid_len) {
+        LOGF("error: unsupported offset %u\n", offset);
+        return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
+    }
+
+    // copy the next block into the buffer
+    return bt_gatt_attr_read(conn, attr, buf, len, offset, ml2cap_config->base.bundle_agent_interface->local_eid, eid_len);
+}
+
+BT_GATT_SERVICE_DEFINE(ml2cap_service,
+        BT_GATT_PRIMARY_SERVICE(&ml2cap_service_uuid),
+        BT_GATT_CHARACTERISTIC(&ml2cap_eid_uuid.uuid, BT_GATT_CHRC_READ, BT_GATT_PERM_READ, read_eid_cb, NULL, NULL)
+);
+
 struct ml2cap_link {
     struct cla_link base;
 
     // Note that we use the MTCP data format!
     struct parser mtcp_parser;
-
 
     /* RX queue to handle zephyr's asynchronous recv callbacks */
     // it contains a net_buf reference
@@ -86,6 +118,8 @@ struct ml2cap_link {
     //size_t tx_data_sent;
 
     bool shutting_down; // will be set to true to cancel rx / tx tasks
+
+    bool eid_known; // blocks bundle RX until eid is known
 
     // basic link properties
     struct bt_conn *conn; // the reference to the zephyr connetion
@@ -417,6 +451,75 @@ int chan_accept(struct bt_conn *conn, struct bt_l2cap_chan **chan) {
 }
 
 
+uint8_t gatt_eid_client_read_cb(struct bt_conn *conn, uint8_t err, struct bt_gatt_read_params *params, const void *data, uint16_t length) {
+
+    if(length == 0) {
+        LOG("ML2CAP: gatt_eid_client_read_cb received length 0\n");
+        return BT_GATT_ITER_STOP;
+    }
+
+    hal_semaphore_take_blocking(ml2cap_config->links_sem);
+    struct ml2cap_link *link = find_link_by_connection(conn);
+    if (link != NULL) {
+        struct bt_conn_info info;
+
+        if (!bt_conn_get_info(conn, &info)) {
+
+            char *eid = malloc(length+1);
+            char *mac_addr = bt_addr_le_to_mac_addr(info.le.remote);
+            
+            char *cla_addr = mac_addr ? cla_get_cla_addr(ml2cap_name_get(), mac_addr) : NULL;
+            free(mac_addr);
+
+            if (eid && cla_addr) {
+                memcpy(eid, data, length);
+                eid[length] = '\0';
+
+                struct node* node = node_create(eid); // node is freed by the router
+
+                if (node != NULL) {
+
+                    // eid is copied while cla_addr reused
+                    node->cla_addr = cla_addr;
+                    free(eid);
+
+                    struct router_signal rt_signal = {
+                            .type = ROUTER_SIGNAL_NEIGHBOR_DISCOVERED,
+                            .data = node,
+                    };
+
+                    LOGF("ML2CAP: received eid info %s, %s", node->eid, node->cla_addr);
+
+                    const struct bundle_agent_interface *const bundle_agent_interface =
+                            ml2cap_config->base.bundle_agent_interface;
+                    hal_queue_push_to_back(bundle_agent_interface->router_signaling_queue,
+                                           &rt_signal);
+
+                    // we are now sure that the eid is processed before any received bundle!
+                    link->eid_known = true;
+                } else {
+                    LOG("ML2CAP: Failed to allocate node");
+                    free(cla_addr);
+                    free(eid);
+                }
+            } else {
+                LOG("ML2CAP: Failed to get eid, mac_addr or cla_addr");
+                free(cla_addr);
+                free(eid);
+            }
+
+        } else {
+            LOG("ML2CAP: Failed to get conn info in gatt_eid_client_read_cb");
+        }
+    } else {
+        LOG("Could not find link in gatt_eid_client_read_cb\n");
+    }
+
+    hal_semaphore_release(ml2cap_config->links_sem);
+    return BT_GATT_ITER_STOP;
+}
+
+
 static void connected(struct bt_conn *conn, uint8_t err)
 {
     struct ml2cap_link *link = NULL;
@@ -436,6 +539,10 @@ static void connected(struct bt_conn *conn, uint8_t err)
             struct bt_conn_info info;
             if (!bt_conn_get_info(link->conn, &info)) {
                 if (info.role == BT_CONN_ROLE_MASTER) {
+
+                    // we know the eid as we received the advertisement
+                    link->eid_known = true;
+
                     int err = bt_l2cap_chan_connect(link->conn, &link->le_chan.chan, ML2CAP_PSM);
                     if (err) {
                         // we disconnect, this will eventually also clear this link
@@ -450,6 +557,8 @@ static void connected(struct bt_conn *conn, uint8_t err)
                         hal_semaphore_release(ml2cap_config->links_sem);
                     }
                 } else {
+                    // we might not know the eid as we might have not received the advertisement -> we simply wait to read the read attribute!
+                    link->eid_known = false;
                     // NOOP, we simply await a connection...
                     hal_semaphore_take_blocking(ml2cap_config->links_sem);
                     add_active_link(link);
@@ -458,7 +567,20 @@ static void connected(struct bt_conn *conn, uint8_t err)
                     hal_semaphore_release(ml2cap_config->links_sem);
 
                     // we now also request contact information again (client has this information already)
-                    // TODO:!
+                    // static since parameters need to stay valid for the asynchronous read request
+                    static struct bt_gatt_read_params params = {
+                            .func = gatt_eid_client_read_cb,
+                            .handle_count = 0, // use uuid
+                            .by_uuid = {
+                                    .start_handle = 1,
+                                    .end_handle = 0xffff,
+                                    .uuid = &ml2cap_eid_uuid.uuid
+                            }
+
+                    };
+
+                    bt_gatt_read(conn, &params);
+
                 }
             } else {
                 // disconnect handler will free link
@@ -532,6 +654,7 @@ static struct ml2cap_link *ml2cap_link_create(
     ml2cap_link->conn = bt_conn_ref(conn);
     ml2cap_link->chan_connected = false; // will be initialized once available
     ml2cap_link->shutting_down = false;
+    ml2cap_link->eid_known = false;
 
     if (!ml2cap_link->conn) {
         LOG("ML2CAP: Failed to ref connection!");
@@ -852,6 +975,16 @@ static enum ud3tn_result ml2cap_read(struct cla_link *link,
     if (length == 0) {
         *bytes_read = 0;
         return UD3TN_OK;
+    }
+
+
+    while (!ml2cap_link->eid_known) {
+        if (ml2cap_link->shutting_down) {
+            *bytes_read = 0;
+            return UD3TN_FAIL;
+        }
+        hal_task_delay(COMM_RX_TIMEOUT); // we wait until the eid is also know -> this prevents that we deliver bundles from unknown sources
+        // TODO: This is kind of a hack to prevent that we receive bundles before we know the EID
     }
 
     // Write-pointer to the current buffer position
