@@ -1,4 +1,5 @@
 #include "cla/zephyr/nb_ble.h"
+#include "cla/zephyr/nb_sv_ch_filter.h"
 
 
 #include "ud3tn/common.h"
@@ -34,6 +35,11 @@
 // TODO: Not the best to define them statically...
 static struct nb_ble_config nb_ble_config;
 
+static struct bt_data ad[] = {
+        BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)), // 3 bytes for flags etc
+        BT_DATA(BT_DATA_SVC_DATA16, NULL /*data*/, 0 /*data_len*/) // the rest for our advertisement data
+};
+
 
 static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_type,
                             struct net_buf_simple *ad) {
@@ -51,22 +57,24 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_t
             ) {
 
         // TODO: This is not standard-conform advertisement parsing!
-        if (ad->len >= 7) {
+        if (ad->len >= 7+sizeof(struct summary_vector_characteristic)) {
+
             /*uint8_t _flags_len = */ net_buf_simple_pull_u8(ad);
             /*uint8_t _flags_type = */ net_buf_simple_pull_u8(ad);
             /*uint8_t _flags = */ net_buf_simple_pull_u8(ad);
             uint8_t entry_len = net_buf_simple_pull_u8(ad);
             uint8_t type = net_buf_simple_pull_u8(ad);
 
-
-            if (type == BT_DATA_SVC_DATA16 && entry_len >= 4) {
+            if (type == BT_DATA_SVC_DATA16 && entry_len >= 4+sizeof(struct summary_vector_characteristic)) {
 
                 uint8_t uuid_low = net_buf_simple_pull_u8(ad);
                 uint8_t uuid_high = net_buf_simple_pull_u8(ad);
 
                 if (((uuid_high<<8)|uuid_low) == NB_BLE_UUID) {
 
-                    size_t eid_len = entry_len-3;
+                    struct summary_vector_characteristic *sv_ch = net_buf_simple_pull_mem(ad, sizeof(struct summary_vector_characteristic));
+
+                    size_t eid_len = entry_len-(3+sizeof(struct summary_vector_characteristic));
                     void *eid_buf = net_buf_simple_pull_mem(ad, eid_len);
 
                     // This will be freed later!
@@ -80,10 +88,15 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_t
                     };
 
                     bool connectable = adv_type == BT_GAP_ADV_TYPE_ADV_IND || adv_type == BT_GAP_ADV_TYPE_ADV_DIRECT_IND;
-                    LOG_EV("adv_received", "\"other_mac_addr\": \"%s\", \"rssi\": %d, \"other_eid\": \"%s\", \"connectable\": %d",
-                           node_info.mac_addr, rssi, eid, connectable);
 
-                    if (rssi >= CONFIG_NB_BLE_MIN_RSSI) {
+                    bool rssi_ok = rssi >= CONFIG_NB_BLE_MIN_RSSI;
+                    // TODO: Pull correct memory amount !
+                    bool sv_ch_ok = !nb_sv_ch_filter_contains(sv_ch);
+
+                    LOG_EV("adv_received", "\"other_mac_addr\": \"%s\", \"rssi\": %d, \"other_eid\": \"%s\", \"connectable\": %d, \"rssi_ok\": %d, \"sv_ch_ok\": %d",
+                           node_info.mac_addr, rssi, eid, connectable, rssi_ok, sv_ch_ok);
+
+                    if (rssi_ok && sv_ch_ok) {
                         nb_ble_config.discover_cb(nb_ble_config.discover_cb_context, &node_info, connectable);
                     }
 
@@ -94,6 +107,38 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_t
         }
     } else {
     }
+}
+
+
+static void adv_data_update() {
+
+    size_t data_len = 2 + sizeof(struct summary_vector_characteristic) + strlen(nb_ble_config.eid); // 2 byte uuid
+    ASSERT(data_len <= (31-(3+2))); // we have 31 bytes in total, 3 are used for adv flags and 2 more to encode type and length of our data
+
+    static char *data = NULL;
+
+    if (data != NULL) {
+        data = realloc(data, data_len);
+    } else {
+        data = malloc(data_len);
+    }
+
+    ASSERT(data != NULL);
+
+    // Store the UUID in little endian format
+    *data = NB_BLE_UUID & 0xFF;
+    *(data + 1) = (NB_BLE_UUID >> 8) & 0xFF;
+
+    memcpy(data + 2, &nb_ble_config.own_sv_characteristic, sizeof(struct summary_vector_characteristic));  // this copies the data without the null terminator
+
+    memcpy(data + 2 + sizeof(struct summary_vector_characteristic), nb_ble_config.eid, strlen(nb_ble_config.eid));  // this copies the data without the null terminator
+
+    struct bt_data new_ad[] = {
+            BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)), // 3 bytes for flags etc
+            BT_DATA(BT_DATA_SVC_DATA16, data, data_len) // the rest for our advertisement data
+    };
+
+    memcpy(&ad, &new_ad, sizeof(new_ad));
 }
 
 
@@ -138,23 +183,33 @@ static void scan_stop() {
     nb_ble_config.scanner_is_enabled = false;
 }
 
+
+// TODO: This uses the same code as adv_start...
+static void adv_update() {
+    adv_data_update();
+
+    int err = bt_le_adv_update_data(ad, ARRAY_SIZE(ad), NULL, 0);
+
+    if (err) {
+        #if CONFIG_NB_BLE_DEBUG
+            LOGF("NB BLE: advertising failed to start (err %d)\n", err);
+        #endif
+    }
+}
+
 static void adv_start() {
 
-    size_t data_len = strlen(nb_ble_config.eid) + 2; // 2 byte uuid
-    char *data = malloc(data_len);
+    adv_data_update();
 
-    // Store the UUID in little endian format
-    *data = NB_BLE_UUID & 0xFF;
-    *(data + 1) = (NB_BLE_UUID >> 8) & 0xFF;
-    memcpy(data + 2, nb_ble_config.eid, data_len - 2);  // this copies the data without the null terminator
+   // our standard advertisement has a length of 31 bytes
+   // 3 bytes are used for flags
+   // 1 bytes for service data type
+   // 1 byte for service data length
+   // 2 bytes for service data id
+   // 8 bytes for sv_characteristic
+   // this leaves us with 31-(3+1+2+1+8)=16 bytes for the actual node EID, e.g.: dtn://b6a5fff057
 
-
-   struct bt_data ad[] = {
-            BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-            BT_DATA(BT_DATA_SVC_DATA16, data, data_len)
-    };
-
-   int err =  bt_le_adv_start(
+   int err = bt_le_adv_start(
          BT_LE_ADV_PARAM(
                  (nb_ble_config.advertising_as_connectable ? (BT_LE_ADV_OPT_CONNECTABLE | BT_LE_ADV_OPT_ONE_TIME) : BT_LE_ADV_OPT_NONE)
                  | BT_LE_ADV_OPT_USE_IDENTITY,
@@ -170,8 +225,6 @@ static void adv_start() {
         LOGF("NB BLE: advertising failed to start (err %d)\n", err);
 #endif
     }
-
-    free(data);
 }
 
 static void adv_stop() {
@@ -246,6 +299,8 @@ static void nb_ble_management_task(void *param) {
     }
 }
 
+
+
 /*
  * Launches a new task to handle BLE advertisements
  */
@@ -269,6 +324,12 @@ enum ud3tn_result nb_ble_init(const struct nb_ble_config * const config) {
     nb_ble_config.advertising_as_connectable = false; // enabled right from the start
     nb_ble_config.scanner_is_enabled = false; // enabled right from the start
 
+    summary_vector_characteristic_init(&nb_ble_config.own_sv_characteristic);
+
+    // TODO: This is not the best place to init this!
+    nb_sv_ch_filter_init();
+
+
     nb_ble_config.task = hal_task_create(
             nb_ble_management_task,
             "nb_ble_mgmt_t",
@@ -282,6 +343,17 @@ enum ud3tn_result nb_ble_init(const struct nb_ble_config * const config) {
         return UD3TN_FAIL;
 
     return UD3TN_OK;
+}
+
+void nb_ble_set_own_sv_characteristic(struct summary_vector_characteristic *sv_ch) {
+    hal_semaphore_take_blocking(nb_ble_config.sem);
+    if (!summary_vector_characteristic_equals(sv_ch, &nb_ble_config.own_sv_characteristic)) {
+        // if they differ, we need to copy them!
+        memcpy(&nb_ble_config.own_sv_characteristic, sv_ch, sizeof(nb_ble_config.own_sv_characteristic));
+        // we also update our advertisements
+        adv_update();
+    }
+    hal_semaphore_release(nb_ble_config.sem);
 }
 
 /**

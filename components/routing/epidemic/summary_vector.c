@@ -114,7 +114,7 @@ void summary_vector_entry_from_bundle_unique_identifier(struct summary_vector_en
 
     // we now hash the source address
     char *source = id->source ? id->source : EID_NONE;
-    hal_hash(source, strlen(source), hashable.source_hash);
+    hal_hash((uint8_t *)source, strlen(source), hashable.source_hash);
 
     uint8_t hash_result[UD3TN_HASH_LENGTH];
     hal_hash((uint8_t *)&hashable, sizeof(struct summary_vector_entry_hashable), hash_result);
@@ -185,4 +185,34 @@ struct summary_vector *summary_vector_create_diff(struct summary_vector *a, stru
     }
 
     return diff;
+}
+
+void summary_vector_characteristic_init(struct summary_vector_characteristic *characteristic) {
+    memset(characteristic, 0, sizeof(struct summary_vector_characteristic));
+}
+
+void summary_vector_characteristic_calculate(struct summary_vector *sv, struct summary_vector_characteristic *characteristic) {
+
+    memset(characteristic, 0, sizeof(struct summary_vector_characteristic));
+
+#if SUMMARY_VECTOR_CHARACTERISTIC_HASH_LENGTH > 0
+    for (int i = 0; i < sv->length; i++) {
+        struct summary_vector_entry *entry = &sv->entries[i];
+
+        // k is the index keeping for the characteristic hash
+        // we initialize it here so that the order of the bundles does not impact the overall hash
+        // TODO: this does also mean that: SUMMARY_VECTOR_CHARACTERISTIC_HASH_LENGTH <= SUMMARY_VECTOR_ENTRY_HASH_LENGTH
+        uint32_t k = 0;
+
+        for(int j = 0; j < SUMMARY_VECTOR_ENTRY_HASH_LENGTH; j++) {
+            characteristic->hash[k] ^= entry->hash[j];
+            // we wrap k around to support different lengths of the sv entry and the characteristic
+            k = (k+1) % SUMMARY_VECTOR_CHARACTERISTIC_HASH_LENGTH;
+        }
+    }
+#endif
+}
+
+bool summary_vector_characteristic_equals(struct summary_vector_characteristic *a, struct summary_vector_characteristic *b) {
+    return memcmp(a->hash, b->hash, sizeof(a->hash)) == 0;
 }

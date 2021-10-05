@@ -268,10 +268,10 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
     }
 
     // we do not have a connection yet -> we try to initialize it, IF we are the one with the bigger mac address!
-    if(bt_addr_le_cmp(&ml2cap_config->own_addr, &other_addr) <= 0) {
-        return; // our addr is smaller :( -> await connection from the other node
-    }
-
+    // TODO: we disabled this comparison as
+    //if(bt_addr_le_cmp(&ml2cap_config->own_addr, &other_addr) <= 0) {
+    //    return; // our addr is smaller :( -> await connection from the other node
+    //}
     // but in this case, our addr is actually "bigger" -> initialize connection
 
     // We now try to connect as soon as we received that advertisement
@@ -452,6 +452,9 @@ static void connected(struct bt_conn *conn, uint8_t err)
                     LOG_EV("connection_success", "\"other_mac_addr\": \"%s\", \"other_cla_addr\": \"%s\", \"connection\": \"%p\", \"link\": \"%p\", \"role\": \"peripheral\"", link->mac_addr, link->cla_addr, conn, link);
                     on_connect(link);
                     hal_semaphore_release(ml2cap_config->links_sem);
+
+                    // we now also request contact information again (client has this information already)
+                    // TODO:!
                 }
             } else {
                 // disconnect handler will free link

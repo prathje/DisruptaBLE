@@ -7,11 +7,14 @@
 #include "ud3tn/result.h"
 
 #include "platform/hal_semaphore.h"
+#include "routing/epidemic/summary_vector.h"
 
 struct nb_ble_node_info {
     char *eid;
     char *mac_addr;
 };
+
+
 
 /**
  * Callback is invoked everytime a node was discovered.
@@ -28,6 +31,7 @@ struct nb_ble_config {
     bool scanner_is_enabled;
     bool advertising_as_connectable;
     Task_t task;
+    struct summary_vector_characteristic own_sv_characteristic;
 };
 
 /*
@@ -42,6 +46,8 @@ void nb_ble_set_connectable(bool connectable);
 void nb_ble_stop();
 void nb_ble_start_if_enabled();
 
+// sv ownership is not transferred, sv_ch is thus copied
+void nb_ble_set_own_sv_characteristic(struct summary_vector_characteristic *sv_ch);
 
 char* bt_addr_le_to_mac_addr(const bt_addr_le_t *addr);
 int bt_addr_le_from_mac_addr(const char *str, bt_addr_le_t *addr);

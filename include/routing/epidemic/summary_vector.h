@@ -11,6 +11,7 @@
 // if changed, please update function summary_vector_entry_print
 #define SUMMARY_VECTOR_ENTRY_HASH_LENGTH 8
 
+
 // this is 64 bytes just for 8
 #define SUMMARY_VECTOR_DEFAULT_CAPACITY 8
 
@@ -18,6 +19,10 @@
 struct __attribute__((__packed__)) summary_vector_entry {
     uint8_t hash[SUMMARY_VECTOR_ENTRY_HASH_LENGTH];
 };
+
+
+
+
 
 struct summary_vector {
     uint32_t length; // the number of filled entries
@@ -36,6 +41,8 @@ void summary_vector_entry_from_bundle(struct summary_vector_entry *dest, struct 
 struct summary_vector* summary_vector_create();
 struct summary_vector* summary_vector_create_with_capacity(uint32_t capacity);
 void summary_vector_destroy(struct summary_vector* sv);
+
+
 
 /**
  * entry is not freed!
@@ -92,5 +99,20 @@ static inline void summary_vector_print(const char *msg, struct summary_vector *
     }
     LOGF("========== End summary of vector %p ", sv);
 };
+
+#ifdef CONFIG_SUMMARY_VECTOR_CHARACTERISTIC_LENGTH
+#define SUMMARY_VECTOR_CHARACTERISTIC_HASH_LENGTH CONFIG_SUMMARY_VECTOR_CHARACTERISTIC_LENGTH
+#else
+#define SUMMARY_VECTOR_CHARACTERISTIC_HASH_LENGTH 8
+#endif
+
+struct __attribute__((__packed__)) summary_vector_characteristic {
+    uint8_t hash[SUMMARY_VECTOR_CHARACTERISTIC_HASH_LENGTH];
+};
+
+void summary_vector_characteristic_init(struct summary_vector_characteristic *characteristic);
+void summary_vector_characteristic_calculate(struct summary_vector *sv, struct summary_vector_characteristic *characteristic);
+
+bool summary_vector_characteristic_equals(struct summary_vector_characteristic *a, struct summary_vector_characteristic *b);
 
 #endif //SUMMARYVECTOR_H_INCLUDED

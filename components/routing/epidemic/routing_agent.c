@@ -30,6 +30,8 @@
 #include "platform/hal_io.h"
 #include "platform/hal_task.h"
 #include "platform/hal_semaphore.h"
+#include "cla/zephyr/nb_ble.h"
+#include "cla/zephyr/nb_sv_ch_filter.h"
 
 #define ROUTING_AGENT_SINK_PREFIX "routing/epidemic"
 #define ROUTING_AGENT_SINK_OFFER (ROUTING_AGENT_SINK_PREFIX "/offer")
@@ -203,7 +205,6 @@ enum ud3tn_result send_sv(const char* sink, const char *destination_eid, struct 
 // the routing agent registers a special endpoint to match the underlying cla address
 
 
-
 static void on_offer_msg(struct bundle_adu data, void *param) {
     LOGF("Routing Agent: Got offer from \"%s\"", data.source);
 
@@ -229,6 +230,14 @@ static void on_offer_msg(struct bundle_adu data, void *param) {
                 //LOG("REQUEST SV");
                 //summary_vector_print(request_sv);
                 LOG_EV("send_request_sv", "\"to_eid\": \"%s\", \"sv_length\": %d", source, request_sv->length);
+
+                if (request_sv->length == 0) {
+                    // this means that we know all offered bundles -> we can therefore ignore this offer_ch
+                    struct summary_vector_characteristic offer_sv_ch;
+                    summary_vector_characteristic_calculate(offer_sv, &offer_sv_ch);
+                    nb_sv_ch_filter_add(&offer_sv_ch);
+                }
+
                 send_sv(ROUTING_AGENT_SINK_REQUEST, source,  request_sv);
                 summary_vector_destroy(request_sv);
             } else {
@@ -502,6 +511,30 @@ void routing_agent_update() {
 #if CONFIG_FAKE_BUNDLE_INTERVAL > 0
     generate_fake_bundles();
 #endif
+
+    static uint64_t last_sv_update_ms = 0;
+    uint64_t now = hal_time_get_timestamp_ms();
+    if (last_sv_update_ms + 1000 < now) {
+
+        struct summary_vector *own_sv = create_known_sv();
+
+        if (own_sv) {
+            // we set our own sv_characteristic
+            struct summary_vector_characteristic own_sv_ch;
+            summary_vector_characteristic_calculate(own_sv, &own_sv_ch);
+            nb_ble_set_own_sv_characteristic(&own_sv_ch);
+
+            // and we also ignore it
+            nb_sv_ch_filter_add(&own_sv_ch);
+
+            summary_vector_destroy(own_sv);
+            last_sv_update_ms = now;
+        } else {
+            LOG("Could not init own summary vector!");
+        }
+    }
+
+
 
     // TODO: resend sv to contacts every X seconds?
     /*
