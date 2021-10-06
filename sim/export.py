@@ -31,6 +31,10 @@ def load_plot_defaults():
     plt.rc('font', size=8, family="serif", serif=['Times New Roman'] + plt.rcParams['font.serif'])
 
 
+def rssi_from_d(d, n, rssi_0):
+    ad = -10*n*np.log10(d)+rssi_0
+    return ad
+
 def export_testbed_calibration_setup_times(db, base_path):
     groups = ['testbed', 'calibration']
     labels = ['Testbed', 'Simulation']
@@ -286,16 +290,41 @@ def export_testbed_calibration_bundle_rssi_per_distance(db, base_path):
         run_data = cached(name, proc)
         overall_data[r.group] += run_data
 
-
     plt.clf()
-    #plt.legend()
+
+    #plt.plot([2],[-50], 'o', label='ADS', alpha=1.0, markersize=5)
 
     for (i, g) in enumerate(groups):
         distances = [x[0] for x in overall_data[g]]
         rssi_vals = [x[1] for x in overall_data[g]]
-        plt.plot(distances,rssi_vals, markers[i], label=labels[i], alpha=0.1, markersize=2)
 
-    fig.set_size_inches(1.9, 1.9)
+
+        #plt.plot(distances,rssi_vals, markers[i], label=labels[i], alpha=0.2, markersize=2)
+
+        mean_dist = []
+        mean_rssi_vals = []
+        for d in sorted(set(distances)):
+            mean_dist.append(d)
+
+            rs = []
+            for (d2, r2) in zip(distances, rssi_vals):
+                if d2 == d:
+                    rs.append(r2)
+
+            mean_rssi_vals.append(np.mean(np.array(rs)))
+
+        plt.plot(mean_dist,mean_rssi_vals, 'o', label=labels[i], alpha=1.0, markersize=2)
+
+        finiteYmask = np.isfinite(mean_rssi_vals)
+        ((n, rssi_0), _) = curve_fit(rssi_from_d, np.array(mean_dist)[finiteYmask], np.array(mean_rssi_vals)[finiteYmask], bounds=([0,-100], [10,0]))
+
+        plt.plot(mean_dist, rssi_from_d(np.array(mean_dist), n, rssi_0), linestyle='--', label="Base n={}, rssi_0={}".format(round(n, 2), round(rssi_0,2)), color='C2')
+        print("{}: Base n={}, rssi_0={}".format(g, round(n, 2), round(rssi_0,2)))
+
+
+    plt.legend()
+    #fig, ax = plt.subplots()
+    #fig.set_size_inches(1.9, 1.9)
     plt.tight_layout()
 
     plt.xlabel("Distance [m]")
@@ -405,10 +434,6 @@ def export_testbed_rssi_per_distance(db, export_dir):
         per_dist_mean = [np.nanmean(vals) for vals in per_dist]
         per_dist_lq = [np.nanpercentile(vals, 2.5) for vals in per_dist]
         per_dist_uq = [np.nanpercentile(vals, 97.5) for vals in per_dist]
-
-        def rssi_from_d(d, n, rssi_0):
-            ad = -10*n*np.log10(d)+rssi_0
-            return ad
 
         finiteYmask = np.isfinite(per_dist_mean)
         ((n, rssi_0), _) = curve_fit(rssi_from_d, np.array(xs)[finiteYmask], np.array(per_dist_mean)[finiteYmask], bounds=([0,-100], [10,0]))
@@ -1416,6 +1441,7 @@ if __name__ == "__main__":
     db.commit() # we need to commit
 
     exports = [
+        export_testbed_calibration_bundle_rssi_per_distance,
         export_fake_bundle_propagation_direct,
         export_bundle_propagation_epidemic,
         export_ict,
@@ -1424,7 +1450,6 @@ if __name__ == "__main__":
         export_testbed_calibration_bundle_transmission_time,
         export_testbed_calibration_bundle_transmission_success,
         export_testbed_calibration_bundle_rssi_bars,
-        #export_testbed_calibration_bundle_rssi_per_distance,
         #export_testbed_rssi_per_distance,
         #export_pre_calibration_connection_times,
         #export_testbed_connection_times,
