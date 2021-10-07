@@ -117,6 +117,8 @@ if __name__ == "__main__":
     db.commit()
 
     offset_us = None
+    
+    max_us = 0
 
     with open(import_file_path, encoding='ISO-8859-1') as file:
         events = lines_to_event_iter(file)
@@ -138,8 +140,13 @@ if __name__ == "__main__":
             e['us'] -= offset_us
             e['run'] = run.id
 
+            if e['us'] > int(float(config['SIM_LENGTH'])):
+                continue # we ignore entries beyond our experiment length
+                
             assert e['us'] >= 0
             batch.append(e)
+
+            max_us = max(max_us, e['us'])
 
             if len(batch) >= batch_size:
                 db['event'].bulk_insert(batch)
@@ -149,8 +156,12 @@ if __name__ == "__main__":
         if len(batch) > 0:
             db['event'].bulk_insert(batch)
             db.commit()
+
+    print("Ignored {} overflow seconds".format(max(0, int((max_us-run.simulation_time)/1000000)))
+
     db(db.run.id == run).update(
         status='finished',
+        #simulation_time= int(float(config['SIM_LENGTH'])),
         end_ts=datetime.now()
     )
     db.commit()
