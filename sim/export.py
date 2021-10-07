@@ -318,7 +318,7 @@ def export_testbed_calibration_bundle_rssi_per_distance(db, base_path):
         finiteYmask = np.isfinite(mean_rssi_vals)
         ((n, rssi_0), _) = curve_fit(rssi_from_d, np.array(mean_dist)[finiteYmask], np.array(mean_rssi_vals)[finiteYmask], bounds=([0,-100], [10,0]))
 
-        plt.plot(mean_dist, rssi_from_d(np.array(mean_dist), n, rssi_0), linestyle='--', label="Base n={}, rssi_0={}".format(round(n, 2), round(rssi_0,2)), color='C2')
+        plt.plot(mean_dist, rssi_from_d(np.array(mean_dist), n, rssi_0), linestyle='--', label="{} Base n={}, rssi_0={}".format(labels[i], round(n, 2), round(rssi_0,2)), color='C{}'.format(i+1))
         print("{}: Base n={}, rssi_0={}".format(g, round(n, 2), round(rssi_0,2)))
 
 
