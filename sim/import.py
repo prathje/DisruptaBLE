@@ -157,7 +157,7 @@ if __name__ == "__main__":
             db['event'].bulk_insert(batch)
             db.commit()
 
-    print("Ignored {} overflow seconds".format(max(0, int((max_us-run.simulation_time)/1000000)))
+    print("Ignored {} overflow seconds".format(max(0, int((max_us-run.simulation_time)/1000000))))
 
     db(db.run.id == run).update(
         status='finished',
