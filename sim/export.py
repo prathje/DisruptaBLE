@@ -59,8 +59,8 @@ def rssi_from_d(d, n, rssi_0):
     return ad
 
 def export_testbed_calibration_setup_times_at_distances(db, base_path):
-
     distance_groups = [5, 10, 15, 20]
+    #distance_groups = [5, 10, 15, 20]
     range = 0.5 # the +- range for each distance
 
     types = ['testbed', 'calibration']
@@ -74,7 +74,7 @@ def export_testbed_calibration_setup_times_at_distances(db, base_path):
         overall_distances[g] = []
 
     for r in runs:
-        name = slugify(("export_testbed_calibration_setup_times_with_dist", str(r.name), str(r.id)))
+        name = slugify(("export_testbed_calibration_setup_times_with_dist_2", str(r.name), str(r.id)))
         print("Handling {}".format(name))
 
         def proc():
@@ -92,19 +92,12 @@ def export_testbed_calibration_setup_times_at_distances(db, base_path):
         overall_data[r.group] += run_data
         overall_distances[r.group] += run_distances
 
-    conn_setup_means = []
-    conn_setup_means_stds = []
-
-    channel_setup_means = []
-    channel_setup_stds = []
-
-
     setup_means = {}
     setup_stds = {}
 
     for g in types:
-        setup_means[g] = [[] for dg in distance_groups]
-        setup_stds[g] =  [[] for dg in distance_groups]
+        setup_means[g] = [0.0 for dg in distance_groups]
+        setup_stds[g] =  [0.0 for dg in distance_groups]
 
         for (i, dg) in enumerate(distance_groups):
             xs = []
@@ -144,99 +137,146 @@ def export_testbed_calibration_setup_times_at_distances(db, base_path):
 
 
 def export_testbed_calibration_bundle_transmission_time(db, base_path):
-    groups = ['testbed', 'calibration']
-    labels = ['Testbed', 'Simulation']
-    runs = db((db.run.status == 'processed') & (db.run.group.belongs(groups))).select()
+    distance_groups = [5, 10, 15, 20]
+    range = 0.5 # the +- range for each distance
+    types = ['testbed', 'calibration']
+    runs = db((db.run.status == 'processed') & (db.run.group.belongs(types))).select()
 
     overall_data = {}
-    for g in groups:
+    overall_distances = {}
+
+    for g in types:
         overall_data[g] = []
+        overall_distances[g] = []
 
     for r in runs:
-        name = slugify(("export_testbed_calibration_bundle_transmission_time_3", str(r.name), str(r.id)))
+        name = slugify(("export_testbed_calibration_bundle_transmission_time_with_dist_2", str(r.name), str(r.id)))
         print("Handling {}".format(name))
 
         def proc():
+            distances = []
             times = []
             for t in db((db.bundle_transmission.run == r) & (db.bundle_transmission.end_us != None )).iterselect():
 
+                ci = db.conn_info[t.conn_info]
                 sb = db.stored_bundle[t.source_stored_bundle]
                 b = db.bundle[sb.bundle]
 
                 if not b.is_sv:
                     times.append(t.end_us - t.start_us)
-
-            return times
-        run_data = cached(name, proc)
+                    distances.append(get_dist_by_device_id(db, ci.client, ci.peripheral))
+            return times, distances
+        run_data, run_distances = cached(name, proc)
         overall_data[r.group] += run_data
+        overall_distances[r.group] += run_distances
 
-    bt_means = []
-    bt_std = []
+    bt_means = {}
+    bt_std = {}
 
-    for g in groups:
-        times = np.array(overall_data[g]) / 1000000.0
-        bt_means.append(np.mean(times))
-        bt_std.append(np.std(times))
+    print(overall_data)
 
-    width = 0.6       # the width of the bars: can also be len(x) sequence
+    for g in types:
+        bt_means[g] = [0.0 for dg in distance_groups]
+        bt_std[g] =  [0.0 for dg in distance_groups]
+
+        for (i, dg) in enumerate(distance_groups):
+            xs = []
+            for (d, x) in zip(overall_distances[g], overall_data[g]):
+                if dg-range <= d < dg+range:
+                    xs.append(x)
+            print(xs)
+            times = np.array(xs) / 1000000.0
+            bt_means[g][i] = np.mean(times)
+            bt_std[g][i] = np.std(times)
+
 
     fig, ax = plt.subplots()
 
-    ax.bar(labels, bt_means, width, yerr=bt_std, color=['C1', 'C2'], capsize=0)
+    x = np.arange(len(distance_groups))
+    width = 0.4  # the width of the bars
+
+    fig, ax = plt.subplots()
+    rects1 = ax.bar(x - width/2, bt_means['testbed'],  width, yerr= bt_std['testbed'], label='Testbed', capsize=0)
+    rects2 = ax.bar(x + width/2, bt_means['calibration'], width,yerr= bt_std['calibration'], label='Simulation', capsize=0)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(distance_groups)
+
+    ax.set_ylabel('Link Setup Time [s]')
+    ax.set_xlabel('Distance [m]')
 
     ax.set_ylabel('Bundle Tx Time [s]')
     #ax.set_title('')
     #ax.legend()
 
     # Adapt the figure size as needed
-    fig.set_size_inches(1.75, 1.5)
+    fig.set_size_inches(1.75, 3.0)
     plt.tight_layout()
     plt.savefig(export_dir + slugify(("testbed_calibration_bundle_transmission_time")) + ".pdf", format="pdf")
     plt.close()
 
 def export_testbed_calibration_bundle_transmission_success(db, base_path):
-    groups = ['testbed', 'calibration']
-    labels = ['Testbed', 'Simulation']
-    runs = db((db.run.status == 'processed') & (db.run.group.belongs(groups))).select()
+    distance_groups = [5, 10, 15, 20]
+    #distance_groups = [5, 10, 15, 20]
+    range = 0.5 # the +- range for each distance
+
+    types = ['testbed', 'calibration']
+    runs = db((db.run.status == 'processed') & (db.run.group.belongs(types))).select()
 
     overall_data = {}
-    for g in groups:
-        overall_data[g] = (0,0)
+    overall_distances = {}
+
+    for g in types:
+        overall_data[g] = []
+        overall_distances[g] = []
 
     for r in runs:
-        name = slugify(("export_testbed_calibration_bundle_transmission_success", str(r.name), str(r.id)))
+        name = slugify(("export_testbed_calibration_bundle_transmission_success_with_dist_2", str(r.name), str(r.id)))
         print("Handling {}".format(name))
 
         def proc():
-            success = 0
-            total = 0
-            for t in db((db.bundle_transmission.run == r)).iterselect():
+            distances = []
+            successes = []
 
+            for t in db((db.bundle_transmission.run == r)).iterselect():
+                ci = db.conn_info[t.conn_info]
                 sb = db.stored_bundle[t.source_stored_bundle]
                 b = db.bundle[sb.bundle]
                 if not b.is_sv:
-                    total += 1
-                    if t.end_us is not None:
-                        success += 1
-            return success, total
+                    distances.append(get_dist_by_device_id(db, ci.client, ci.peripheral))
+                    successes.append(t.end_us is not None)
+            return successes, distances
+        run_data, run_distances = cached(name, proc)
+        overall_data[r.group] += run_data
+        overall_distances[r.group] += run_distances
 
-        run_data = cached(name, proc)
-        overall_data[r.group] = (overall_data[r.group][0]+run_data[0], overall_data[r.group][1]+run_data[1])
+    bt_success_mean = {}
+    for g in types:
+        bt_success_mean[g] =  [0.0 for dg in distance_groups]
 
-    bt_success = []
-    for g in groups:
-        if overall_data[g][1] == 0:
-            bt_success.append(None)
-        else:
-            bt_success.append((overall_data[g][0] / overall_data[g][1])*100.0)
-
-    width = 0.6       # the width of the bars: can also be len(x) sequence
+        for (i, dg) in enumerate(distance_groups):
+            xs = []
+            for (d, x) in zip(overall_distances[g], overall_data[g]):
+                if dg-range <= d < dg+range:
+                    xs.append(1.0 if x else 0.0)
+            xs = np.array(xs)
+            bt_success_mean[g][i] = np.mean(xs)*100.0
 
     fig, ax = plt.subplots()
 
-    ax.bar(labels, bt_success, width, color=['C1', 'C2'], capsize=0)
+    x = np.arange(len(distance_groups))
+    width = 0.4  # the width of the bars
+
+    fig, ax = plt.subplots()
+    rects1 = ax.bar(x - width/2, bt_success_mean['testbed'],  width, label='Testbed', capsize=0)
+    rects2 = ax.bar(x + width/2, bt_success_mean['calibration'], width,label='Simulation', capsize=0)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(distance_groups)
 
     ax.set_ylabel('Bundle Tx Success [%]')
+    ax.set_xlabel('Distance [m]')
+    ax.legend() # (loc='upper center', bbox_to_anchor=(0.5, -0.5), ncol=2)
     #ax.set_title('')
     #ax.legend()
     plt.axis([None, None, 0, 100])
@@ -248,39 +288,66 @@ def export_testbed_calibration_bundle_transmission_success(db, base_path):
     plt.close()
 
 def export_testbed_calibration_bundle_rssi_bars(db, base_path):
-    groups = ['testbed', 'calibration']
-    labels = ['Testbed', 'Simulation']
-    runs = db((db.run.status == 'processed') & (db.run.group.belongs(groups))).select()
+    distance_groups = [5, 10, 15, 20]
+    #distance_groups = [5, 10, 15, 20]
+    range = 0.5 # the +- range for each distance
+
+    types = ['testbed', 'calibration']
+    runs = db((db.run.status == 'processed') & (db.run.group.belongs(types))).select()
 
     overall_data = {}
-    for g in groups:
+    overall_distances = {}
+
+    for g in types:
         overall_data[g] = []
+        overall_distances[g] = []
 
     for r in runs:
-        name = slugify(("export_testbed_calibration_bundle_rssi_bars", str(r.name), str(r.id)))
+        name = slugify(("export_testbed_calibration_bundle_rssi_bars_with_dist_2", str(r.name), str(r.id)))
         print("Handling {}".format(name))
 
         def proc():
+            distances = []
             rssi_values = []
             for adv_received in db((db.advertisements.run == r)).iterselect():
                 rssi_values.append(adv_received.rssi)
-            return rssi_values
+                distances.append(get_dist_by_device_id(db, adv_received.sender, adv_received.receiver))
+            return rssi_values, distances
 
-        run_data = cached(name, proc)
+        run_data, run_distances = cached(name, proc)
         overall_data[r.group] += run_data
+        overall_distances[r.group] += run_distances
 
-    rssi_means = []
-    rssi_std = []
+    rssi_means = {}
+    rssi_std = {}
 
-    for g in groups:
-        times = np.array(overall_data[g])
-        rssi_means.append(np.mean(times))
-        rssi_std.append(np.std(times))
+    for g in types:
+        rssi_means[g] = [0.0 for dg in distance_groups]
+        rssi_std[g] =  [0.0 for dg in distance_groups]
 
-    width = 0.6
+
+        for (i, dg) in enumerate(distance_groups):
+            xs = []
+            for (d, x) in zip(overall_distances[g], overall_data[g]):
+                if dg-range <= d < dg+range:
+                    xs.append(x)
+            xs = np.array(xs)
+            rssi_means[g][i] = np.mean(xs)
+            rssi_std[g][i] = np.std(xs)
+
     fig, ax = plt.subplots()
-    ax.bar(labels, rssi_means, width, yerr=rssi_std, color=['C1', 'C2'], capsize=0)
+
+    x = np.arange(len(distance_groups))
+    width = 0.4  # the width of the bars
+
+    fig, ax = plt.subplots()
+    rects1 = ax.bar(x - width/2, rssi_means['testbed'],  width, yerr= rssi_std['testbed'], label='Testbed', capsize=0)
+    rects2 = ax.bar(x + width/2, rssi_means['calibration'], width,yerr= rssi_std['calibration'], label='Simulation', capsize=0)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(distance_groups)
     ax.set_ylabel('Mean RSSI [dBm]')
+    ax.legend()
     #ax.set_title('')
 
     plt.axis([None, None, -100, 0])
@@ -1460,15 +1527,15 @@ if __name__ == "__main__":
     db.commit() # we need to commit
 
     exports = [
-        export_testbed_calibration_setup_times_at_distances,
-        export_testbed_calibration_bundle_rssi_bars,
-        export_testbed_calibration_bundle_rssi_per_distance,
-        export_fake_bundle_propagation_direct,
-        export_bundle_propagation_epidemic,
-        export_ict,
-        export_app_connection_distance_histogramm,
         export_testbed_calibration_bundle_transmission_time,
+        export_testbed_calibration_bundle_rssi_bars,
         export_testbed_calibration_bundle_transmission_success,
+        export_testbed_calibration_setup_times_at_distances,
+        #export_testbed_calibration_bundle_rssi_per_distance,
+        #export_fake_bundle_propagation_direct,
+        #export_bundle_propagation_epidemic,
+        #export_ict,
+        #export_app_connection_distance_histogramm,
         #export_testbed_rssi_per_distance,
         #export_pre_calibration_connection_times,
         #export_testbed_connection_times,
