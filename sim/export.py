@@ -31,6 +31,19 @@ def get_dist(a,b):
 
     assert(False)
 
+
+device_dist_cache = {}
+
+def get_dist_by_device_id(db, id_a, id_b):
+    a = db.device[id_a]
+    b = db.device[id_b]
+
+    assert a and b
+
+    return get_dist(a.number, b.number)
+
+
+
 def load_plot_defaults():
     # Configure as needed
     plt.rc('lines', linewidth=2.0)
@@ -45,20 +58,27 @@ def rssi_from_d(d, n, rssi_0):
     ad = -10*n*np.log10(d)+rssi_0
     return ad
 
-def export_testbed_calibration_setup_times(db, base_path):
-    groups = ['testbed', 'calibration']
-    labels = ['Testbed', 'Simulation']
-    runs = db((db.run.status == 'processed') & (db.run.group.belongs(groups))).select()
+def export_testbed_calibration_setup_times_at_distances(db, base_path):
+
+    distance_groups = [5, 10, 15, 20]
+    range = 0.5 # the +- range for each distance
+
+    types = ['testbed', 'calibration']
+    runs = db((db.run.status == 'processed') & (db.run.group.belongs(types))).select()
 
     overall_data = {}
-    for g in groups:
+    overall_distances = {}
+
+    for g in types:
         overall_data[g] = []
+        overall_distances[g] = []
 
     for r in runs:
-        name = slugify(("export_testbed_calibration_setup_times", str(r.name), str(r.id)))
+        name = slugify(("export_testbed_calibration_setup_times_with_dist", str(r.name), str(r.id)))
         print("Handling {}".format(name))
 
         def proc():
+            distances = []
             data = []
             for ci in db((db.conn_info.run == r)).iterselect():
                 if None in [ci.client_channel_up_us, ci.client_channel_down_us]:
@@ -66,10 +86,11 @@ def export_testbed_calibration_setup_times(db, base_path):
                 data.append(
                     (ci.client_connection_success_us - ci.client_conn_init_us, ci.client_channel_up_us - ci.client_connection_success_us)
                 )
-            return data
-        run_data = cached(name, proc)
+                distances.append(get_dist_by_device_id(db, ci.client, ci.peripheral))
+            return data, distances
+        run_data, run_distances = cached(name, proc)
         overall_data[r.group] += run_data
-
+        overall_distances[r.group] += run_distances
 
     conn_setup_means = []
     conn_setup_means_stds = []
@@ -78,37 +99,45 @@ def export_testbed_calibration_setup_times(db, base_path):
     channel_setup_stds = []
 
 
-    for g in groups:
+    setup_means = {}
+    setup_stds = {}
 
-        con_setup_times = []
-        chan_setup_times = []
-        for x in overall_data[g]:
-            con_setup_times.append(x[0])
-            chan_setup_times.append(x[1])
+    for g in types:
+        setup_means[g] = [[] for dg in distance_groups]
+        setup_stds[g] =  [[] for dg in distance_groups]
 
-        conn_setup_times = np.array(con_setup_times) / 1000000.0
-        chan_setup_times = np.array(chan_setup_times) / 1000000.0
+        for (i, dg) in enumerate(distance_groups):
+            xs = []
+            for (d, (con_set, chan_set)) in zip(overall_distances[g], overall_data[g]):
+                if dg-range <= d < dg+range:
+                    xs.append(con_set+chan_set)
 
-        conn_setup_means.append(np.mean(conn_setup_times))
-        conn_setup_means_stds.append(np.std(conn_setup_times))
+            xs = np.array(xs) / 1000000.0
+            setup_means[g][i] = np.mean(xs)
+            setup_stds[g][i] = np.std(xs)
 
-        channel_setup_means.append(np.mean(chan_setup_times))
-        channel_setup_stds.append(np.std(chan_setup_times))
 
     width = 0.6       # the width of the bars: can also be len(x) sequence
 
     fig, ax = plt.subplots()
 
-    ax.bar(labels, conn_setup_means, width, yerr=conn_setup_means, label='Connection', capsize=0)
-    ax.bar(labels, channel_setup_means, width, yerr=channel_setup_stds, bottom=conn_setup_means,
-           label='Channel', capsize=0)
+    x = np.arange(len(distance_groups))
+    width = 0.4  # the width of the bars
 
-    ax.set_ylabel('Time [s]')
+    fig, ax = plt.subplots()
+    rects1 = ax.bar(x - width/2, setup_means['testbed'],  width, yerr= setup_stds['testbed'], label='Testbed', capsize=0)
+    rects2 = ax.bar(x + width/2, setup_means['calibration'], width,yerr= setup_stds['calibration'], label='Simulation', capsize=0)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(distance_groups)
+
+    ax.set_ylabel('Link Setup Time [s]')
+    ax.set_xlabel('Distance [m]')
     #ax.set_title('')
-    #ax.legend()
+    ax.legend() # (loc='upper center', bbox_to_anchor=(0.5, -0.5), ncol=2)
 
     # Adapt the figure size as needed
-    fig.set_size_inches(1.75, 1.5)
+    fig.set_size_inches(1.75, 2.0)
     plt.tight_layout()
     plt.savefig(export_dir + slugify(("testbed_calibration_setup_times")) + ".pdf", format="pdf")
     plt.close()
@@ -1431,13 +1460,13 @@ if __name__ == "__main__":
     db.commit() # we need to commit
 
     exports = [
+        export_testbed_calibration_setup_times_at_distances,
         export_testbed_calibration_bundle_rssi_bars,
         export_testbed_calibration_bundle_rssi_per_distance,
         export_fake_bundle_propagation_direct,
         export_bundle_propagation_epidemic,
         export_ict,
         export_app_connection_distance_histogramm,
-        export_testbed_calibration_setup_times,
         export_testbed_calibration_bundle_transmission_time,
         export_testbed_calibration_bundle_transmission_success,
         #export_testbed_rssi_per_distance,
