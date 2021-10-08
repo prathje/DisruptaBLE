@@ -139,14 +139,14 @@ if __name__ == "__main__":
 
             e['us'] -= offset_us
             e['run'] = run.id
+            max_us = max(max_us, e['us'])
 
             if e['us'] > int(float(config['SIM_LENGTH'])):
                 continue # we ignore entries beyond our experiment length
-                
+
             assert e['us'] >= 0
             batch.append(e)
 
-            max_us = max(max_us, e['us'])
 
             if len(batch) >= batch_size:
                 db['event'].bulk_insert(batch)
