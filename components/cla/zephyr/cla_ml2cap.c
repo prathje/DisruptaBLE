@@ -973,17 +973,18 @@ static enum ud3tn_result ml2cap_read(struct cla_link *link,
 
     // Special case: empty buffer
     if (length == 0) {
+        hal_task_delay(1); // we delay to prevent endless loops
         *bytes_read = 0;
         return UD3TN_OK;
     }
 
 
     while (!ml2cap_link->eid_known) {
+        hal_task_delay(COMM_RX_TIMEOUT); // we wait until the eid is also know -> this prevents that we deliver bundles from unknown sources
         if (ml2cap_link->shutting_down) {
             *bytes_read = 0;
             return UD3TN_FAIL;
         }
-        hal_task_delay(COMM_RX_TIMEOUT); // we wait until the eid is also know -> this prevents that we deliver bundles from unknown sources
         // TODO: This is kind of a hack to prevent that we receive bundles before we know the EID
     }
 
