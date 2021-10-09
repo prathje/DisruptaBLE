@@ -329,7 +329,10 @@ if __name__ == "__main__":
 
     commit_thread_running = True
 
+    erroneous = False
+
     def commit_thread():
+        global erroneous
         last_event_s = None
 
         while commit_thread_running:
@@ -360,19 +363,27 @@ if __name__ == "__main__":
             if event_queue.qsize() == 0:
                 if last_event_s and last_event_s < int(time.time()) - TIMEOUT_S:
                     phy_process.kill()  # this should kill everything at once!
+                    erroneous = True
                 # seems like there are not really many events for us to process atm
                 time.sleep(0.5)  # sleep 5 secs
 
     commit_thread = threading.Thread(target= commit_thread, args=(), daemon=True)
     commit_thread.start()
 
+
     done = False
-    while not done:
+    while not done and not erroneous:
         done = True
         for p in [phy_process]+node_processes:
             if p.poll() is None:
                 done = False
+            elif p.returncode != 0:
+                erroneous = True
         time.sleep(5.0)  # sleep 5 secs
+
+    if erroneous:
+        for p in [phy_process]+node_processes+wifi_interference_processes+noise_processes:
+            p.kill() # kill everything
 
     for t in log_threads:
         t.join()
@@ -385,7 +396,7 @@ if __name__ == "__main__":
     commit_thread_running = False
     commit_thread.join()
 
-    success = True
+    success = not erroneous
     i = 0
     for p in [phy_process]+node_processes:
         if p.returncode != 0:
