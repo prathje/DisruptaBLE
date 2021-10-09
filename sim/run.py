@@ -372,14 +372,17 @@ if __name__ == "__main__":
 
 
     done = False
-    while not done and not erroneous:
-        done = True
-        for p in [phy_process]+node_processes:
-            if p.poll() is None:
-                done = False
-            elif p.returncode != 0:
-                erroneous = True
-        time.sleep(5.0)  # sleep 5 secs
+    try:
+        while not done and not erroneous:
+            done = True
+            for p in [phy_process]+node_processes:
+                if p.poll() is None:
+                    done = False
+                elif p.returncode != 0:
+                    erroneous = True
+            time.sleep(5.0)  # sleep 5 secs
+    except KeyboardInterrupt:
+        erroneous = True
 
     if erroneous:
         for p in [phy_process]+node_processes+wifi_interference_processes+noise_processes:
