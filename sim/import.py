@@ -75,6 +75,7 @@ if __name__ == "__main__":
     group_name = sys.argv[1]
     config['IMPORTED'] = True
     config['SIM_RANDOM_SEED'] = "0"
+    config['SIM_LENGTH'] = "900e6"
 
     import_file_path = sys.argv[2]
 
