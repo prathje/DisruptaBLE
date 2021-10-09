@@ -106,6 +106,11 @@ docker run --rm -it -v ${PWD}/ud3tn-ble:/app -v ${PWD}/zephyr:/zephyr/zephyr pra
 ```
 
 ```
+sudo apt-get remove cmake
+sudo -H pip3 install cmake
+```
+
+```
 west build -b nrf52840dk_nrf52840 --pristine auto  /app/zephyr/
 west build -b native_posix --pristine auto  /app/zephyr/
 west build -b nrf52_bsim --pristine auto  /app/zephyr/
