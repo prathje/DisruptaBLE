@@ -58,7 +58,7 @@ def rssi_from_d(d, n, rssi_0):
     ad = -10*n*np.log10(d)+rssi_0
     return ad
 
-def export_testbed_calibration_setup_times_at_distances(db, base_path):
+def export_testbed_calibration_setup_times(db, base_path):
     distance_groups = [5, 10, 15, 20]
     #distance_groups = [5, 10, 15, 20]
     range = 0.5 # the +- range for each distance
@@ -130,7 +130,7 @@ def export_testbed_calibration_setup_times_at_distances(db, base_path):
     ax.legend() # (loc='upper center', bbox_to_anchor=(0.5, -0.5), ncol=2)
 
     # Adapt the figure size as needed
-    fig.set_size_inches(1.75, 2.0)
+    fig.set_size_inches(1.75, 2.5)
     plt.tight_layout()
     plt.savefig(export_dir + slugify(("testbed_calibration_setup_times")) + ".pdf", format="pdf")
     plt.close()
@@ -207,10 +207,10 @@ def export_testbed_calibration_bundle_transmission_time(db, base_path):
 
     ax.set_ylabel('Bundle Tx Time [s]')
     #ax.set_title('')
-    #ax.legend()
+    ax.legend()
 
     # Adapt the figure size as needed
-    fig.set_size_inches(1.75, 3.0)
+    fig.set_size_inches(1.75, 2.5)
     plt.tight_layout()
     plt.savefig(export_dir + slugify(("testbed_calibration_bundle_transmission_time")) + ".pdf", format="pdf")
     plt.close()
@@ -231,7 +231,7 @@ def export_testbed_calibration_bundle_transmission_success(db, base_path):
         overall_distances[g] = []
 
     for r in runs:
-        name = slugify(("export_testbed_calibration_bundle_transmission_success_with_dist_2", str(r.name), str(r.id)))
+        name = slugify(("export_testbed_calibration_bundle_transmission_success_with_dist_3", str(r.name), str(r.id)))
         print("Handling {}".format(name))
 
         def proc():
@@ -276,13 +276,13 @@ def export_testbed_calibration_bundle_transmission_success(db, base_path):
 
     ax.set_ylabel('Bundle Tx Success [%]')
     ax.set_xlabel('Distance [m]')
-    ax.legend() # (loc='upper center', bbox_to_anchor=(0.5, -0.5), ncol=2)
+    ax.legend(loc='lower center') # (loc='upper center', bbox_to_anchor=(0.5, -0.5), ncol=2)
     #ax.set_title('')
     #ax.legend()
     plt.axis([None, None, 0, 100])
 
     # Adapt the figure size as needed
-    fig.set_size_inches(1.75, 1.5)
+    fig.set_size_inches(1.75, 2.5)
     plt.tight_layout()
     plt.savefig(export_dir + slugify(("testbed_calibration_bundle_transmission_success")) + ".pdf", format="pdf")
     plt.close()
@@ -347,13 +347,14 @@ def export_testbed_calibration_bundle_rssi_bars(db, base_path):
     ax.set_xticks(x)
     ax.set_xticklabels(distance_groups)
     ax.set_ylabel('Mean RSSI [dBm]')
-    ax.legend()
+    ax.set_xlabel('Distance [m]')
+    ax.legend(loc='upper center')
     #ax.set_title('')
 
     plt.axis([None, None, -100, 0])
 
     # Adapt the figure size as needed
-    fig.set_size_inches(1.8, 1.5)
+    fig.set_size_inches(1.8, 2.5)
     plt.tight_layout()
     plt.savefig(export_dir + slugify(("testbed_calibration_bundle_rssi_bars")) + ".pdf", format="pdf")
     plt.close()
@@ -666,6 +667,8 @@ def export_pre_calibration_connection_times(db, base_path):
 
     # we now export the whole thing
     handle_conn_times("testbed_connection_times", overall_data)
+
+
 
 
 def export_pair_packets(db, base_path):
@@ -1530,7 +1533,7 @@ if __name__ == "__main__":
         export_testbed_calibration_bundle_transmission_time,
         export_testbed_calibration_bundle_rssi_bars,
         export_testbed_calibration_bundle_transmission_success,
-        export_testbed_calibration_setup_times_at_distances,
+        export_testbed_calibration_setup_times,
         #export_testbed_calibration_bundle_rssi_per_distance,
         #export_fake_bundle_propagation_direct,
         #export_bundle_propagation_epidemic,

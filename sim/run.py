@@ -15,6 +15,7 @@ import uuid
 from pprint import pprint
 
 import tables
+import uuid
 
 config = {
     **dotenv.dotenv_values(".env"),  # load shared development variables
@@ -23,6 +24,7 @@ config = {
 }
 
 TIMEOUT_S = 60
+
 
 def compile_and_move(rdir, exec_name, overlay_config):
     # TODO allow to skip compilation?
@@ -117,6 +119,35 @@ def output_to_event_iter(o):
                     "data_json": json.dumps({"msg": error_str})
                 }
 
+def merge_overlay_config(config, keys, base_file_name):
+    base_file = os.path.join(config['SIM_SOURCE_DIR'], base_file_name)
+
+    content = None
+
+    with open(base_file) as f:
+        content = f.read()
+
+    assert content is not None
+
+    content += "\n" # append new line either just to be sure
+
+    for x in config:
+        for kx in keys:
+            if x.startswith(kx):
+                nx = "CONFIG_" + x[len(kx):]
+                content += "{}={}\n".format(nx, str(config[x]))
+
+    print(content)
+    new_name = "tmp-{}-".format(config['SIM_NAME']) + str(uuid.uuid4()) + base_file_name
+    with open(os.path.join(config['SIM_SOURCE_DIR'], new_name), "w") as f:
+        f.write(content)
+
+    return new_name
+
+
+def remove_overlay_config(config, new_file):
+    os.remove(os.path.join(config['SIM_SOURCE_DIR'], new_file))
+
 if __name__ == "__main__":
 
     now = datetime.now()
@@ -193,8 +224,11 @@ if __name__ == "__main__":
 
     os.makedirs(rdir, exist_ok=True)
 
-    compile_and_move(rdir, run_name+"_source", config['SIM_OVERLAY_CONFIG_SOURCE'])
-    compile_and_move(rdir, run_name+"_proxy", config['SIM_OVERLAY_CONFIG_PROXY'])
+    new_source_overlay_config = merge_overlay_config(config, ["CONFIG_", "SOURCE_CONFIG_"], "source.conf")
+    new_proxy_overlay_config = merge_overlay_config(config, ["CONFIG_", "PROXY_CONFIG_"], "proxy.conf")
+
+    compile_and_move(rdir, run_name+"_source", new_source_overlay_config)
+    compile_and_move(rdir, run_name+"_proxy", new_proxy_overlay_config)
 
     subprocess.run("${BSIM_COMPONENTS_PATH}/common/stop_bsim.sh || 1", shell=True, check=True)
 
@@ -424,6 +458,9 @@ if __name__ == "__main__":
     subprocess.run("${{BSIM_COMPONENTS_PATH}}/common/stop_bsim.sh {} || 1".format(config['SIM_NAME']), shell=True, check=True)
 
     results_dir = os.path.join(config['BSIM_COMPONENTS_PATH'], "..", "results", config['SIM_NAME'])
+
+    remove_overlay_config(config, new_source_overlay_config)
+    remove_overlay_config(config, new_proxy_overlay_config)
 
     print("Removing results_dir {}".format(results_dir))
     subprocess.run("rm -rf {} || 1".format(results_dir), shell=True, check=True)

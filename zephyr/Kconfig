@@ -58,3 +58,8 @@ config NB_SV_FILTER_SIZE
     int "The amount of filtered summary vector characteristics"
     range 0 1024
     default 0
+
+
+config CONNECTION_CONGESTION_CONTROL
+    bool "Try to congest connection initialization, i.e. too many simultaneous requests"
+    default n
