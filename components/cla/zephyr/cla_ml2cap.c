@@ -50,6 +50,26 @@
 struct bt_uuid_128 ml2cap_service_uuid = BT_UUID_INIT_128(0x26, 0x45, 0x29, 0x48, 0x40, 0x4D, 0x63, 0x51, 0x66, 0x54, 0x6A, 0x57, 0x6E, 0x5A, 0x71, 0x34);
 struct bt_uuid_128 ml2cap_eid_uuid     = BT_UUID_INIT_128(0x35, 0x75, 0x38, 0x78, 0x2F, 0x41, 0x3F, 0x44, 0x28, 0x47, 0x2B, 0x4B, 0x62, 0x50, 0x65, 0x53);
 
+uint32_t conn_prob = 0xFF;   // we start at maximum probability
+
+void increase_conn_prob() {
+    // increase but prevent overflows
+    uint8_t inc = 13; // ~ 5% of 256;
+    if (conn_prob <= 0xFF-inc) {
+        conn_prob += inc; // really simple for now
+    } else {
+        conn_prob = 0xFF;
+    }
+}
+
+void decrease_conn_prob() {
+    conn_prob = conn_prob / 2;
+}
+
+bool should_connect() {
+    uint32_t r = hal_random_get();
+    return (r&0xFF) <= conn_prob;
+}
 
 
 struct ml2cap_link;
@@ -287,6 +307,16 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
     if (ml2cap_config->num_links == ML2CAP_MAX_CONN) {
         return;
     }
+
+#if CONFIG_CONNECTION_CONGESTION_CONTROL
+    bool sc = should_connect();
+
+    LOG_EV("conn_prob", "\"should_connect\": %d, \"other_mac_addr\": \"%s\", \"conn_prob\": %u", sc, ble_node_info->mac_addr, (uint32_t)(conn_prob&0xFF));
+
+    if(!sc) {
+        return;
+    }
+#endif CONFIG_CONNECTION_CONGESTION_CONTROL
 
 
     bt_addr_le_t other_addr;
@@ -539,6 +569,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
             struct bt_conn_info info;
             if (!bt_conn_get_info(link->conn, &info)) {
                 if (info.role == BT_CONN_ROLE_MASTER) {
+                    increase_conn_prob(); // increase conn_prob again as our conn init was successful this time!
 
                     // we know the eid as we received the advertisement
                     link->eid_known = true;
@@ -597,6 +628,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
     } else {
         LOGF("BLE Connection failed (err 0x%02x)\n", err);
         reason = "failure";
+        decrease_conn_prob(); // we decrease it here as our connection was not successful (as we should be the client)
         goto fail;
     }
 
@@ -609,7 +641,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
         link = NULL;
     }
 
-    LOG_EV("connection_failure", "\"connection\": \"%p\", \"reason\": \"%s\"", conn, reason);
+    LOG_EV("connection_failure", "\"connection\": \"%p\", \"reason\": \"%s\", \"conn_prob\": %u", conn, reason, (uint32_t)(conn_prob&0xFF));
 
     bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
 
