@@ -220,7 +220,7 @@ static void on_offer_msg(struct bundle_adu data, void *param) {
 
         //summary_vector_print("INCOMING OFFER SV ", offer_sv);
         // TODO: This is probably the least efficient variant possible... ;)
-        struct summary_vector *known_sv = create_known_sv(source);
+        struct summary_vector *known_sv = create_known_sv();
         //summary_vector_print("KNOWN SV ", known_sv);
 
         if (known_sv) {
@@ -516,7 +516,7 @@ void routing_agent_update() {
     uint64_t now = hal_time_get_timestamp_ms();
     if (last_sv_update_ms + 1000 < now) {
 
-        struct summary_vector *own_sv = create_known_sv();
+        struct summary_vector *own_sv = router_create_known_sv();
 
         if (own_sv) {
             // we set our own sv_characteristic
