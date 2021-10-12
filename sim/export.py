@@ -124,7 +124,7 @@ def export_testbed_calibration_setup_times(db, base_path):
     ax.set_xticks(x)
     ax.set_xticklabels(distance_groups)
 
-    ax.set_ylabel('Link Setup Time [s]')
+    ax.set_ylabel('Mean Link Setup Time [s]')
     ax.set_xlabel('Distance [m]')
     #ax.set_title('')
     ax.legend() # (loc='upper center', bbox_to_anchor=(0.5, -0.5), ncol=2)
@@ -274,7 +274,7 @@ def export_testbed_calibration_bundle_transmission_success(db, base_path):
     ax.set_xticks(x)
     ax.set_xticklabels(distance_groups)
 
-    ax.set_ylabel('Bundle Tx Success [%]')
+    ax.set_ylabel('Bundle TX Success [%]')
     ax.set_xlabel('Distance [m]')
     ax.legend(loc='lower center') # (loc='upper center', bbox_to_anchor=(0.5, -0.5), ncol=2)
     #ax.set_title('')
@@ -968,227 +968,6 @@ def export_advertisement_reception_rate(db, export_dir):
 
         handle_adv_data(slugify("Adv reception rate per Distance (overall) {}".format(r.id)), overall_data)
 
-def export_bundle_transmission_success_per_distance(db, base_path):
-    '''
-SELECT ROUND(d/5)*5 as de, AVG(end_us IS NOT NULL) FROM (
-
-
-
-FROM bundle_transmission bt
-JOIN stored_bundle ssb ON ssb.id = bt.source_stored_bundle
-JOIN conn_info ci ON ci.id = bt.conn_info
-JOIN bundle b ON b.id = ssb.bundle AND b.destination_eid = 'dtn://fake' AND b.is_sv = 'F'
-JOIN run r ON r.id = bt.run
-
-WHERE r.status = 'finished' LIMIT 10000)
- '''
-    pass
-
-def export_bundle_transmission_time_per_distance(db, base_path):
-
-    runs = db((db.run.status == 'processed') & (db.run.group == RUN_GROUP) & (db.run.group != 'testbed') & (db.run.group != 'virtual_testbed')).select()
-
-    MIN_SAMPLES = 10
-
-    def handle_transmission_success(name, data):
-        max_dist = 501
-        step = 10
-
-        xs = range(1, max_dist+1, step)
-
-        per_dist = [[] for x in xs]
-
-        for d in data:
-            dist = round(d[-1])
-            if 1 <= dist <= max_dist:
-                index = math.ceil(((dist-1)/step))
-                per_dist[index].append(1 if  d[1] is not None else 0)
-
-        if MIN_SAMPLES > 0:
-            for i in range(len(per_dist)):
-                if len(per_dist[i]) < MIN_SAMPLES:
-                    per_dist[i] = []
-
-
-        per_success_mean = [np.nanmean(vals)*100 for vals in per_dist]
-
-        plt.clf()
-        plt.plot(xs, per_success_mean, linestyle='-', label="Mean", color='C1')
-        #plt.fill_between(xs, per_success_lq, per_success_uq, color=CONFIDENCE_FILL_COLOR, label='95% Confidence Interval')
-        plt.legend()
-        plt.xlabel("Distance [m]")
-        plt.ylabel("Bundle Tx Success Rate [%]")
-        plt.axis([0, max_dist, 0, 100])
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(export_dir + slugify((name, "Bundle Transmission Success Rate")) + ".pdf", format="pdf")
-        plt.close()
-
-    def handle_transmission_times(name, data):
-        max_dist = 501
-        step = 10
-
-        xs = range(1, max_dist+1, step)
-
-        per_dist = [[] for x in xs]
-
-        for d in data:
-            dist = round(d[-1])
-            if 1 <= dist <= max_dist and d[1] is not None:
-                index = math.ceil(((dist-1)/step))
-                per_dist[index].append((d[1]-d[0])/1000000)
-
-        if MIN_SAMPLES > 0:
-            for i in range(len(per_dist)):
-                if len(per_dist[i]) < MIN_SAMPLES:
-                    per_dist[i] = []
-
-        per_dist_mean = [np.nanmean(vals) for vals in per_dist]
-        per_dist_lq = [np.nanpercentile(vals, 2.5) for vals in per_dist]
-        per_dist_uq = [np.nanpercentile(vals, 97.5) for vals in per_dist]
-
-        plt.clf()
-        plt.plot(xs, per_dist_mean, linestyle='-', label="Mean", color='C1')
-        plt.fill_between(xs, per_dist_lq, per_dist_uq, color=CONFIDENCE_FILL_COLOR, label='95% Confidence Interval')
-        plt.legend()
-        plt.xlabel("Distance [m]")
-        plt.ylabel("Bundle Transmission Time [s]")
-        plt.axis([0, max_dist, 0, 60])
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(export_dir + slugify((name, "Bundle Transmission By Distance")) + ".pdf", format="pdf")
-        plt.close()
-
-    overall_data = []
-
-    for r in runs:
-
-        run_config = json.loads(r.configuration_json)
-        name = slugify(("transmission time per distance", str(r.name), str(r.id)))
-
-
-
-        def proc():
-            bundle_transmission_times = []
-            bundle_transmission_success = [] # TODO?
-
-            data = []
-
-            for ci in db((db.conn_info.run == r)).iterselect():
-
-                if None in [ci.client_channel_up_us, ci.peripheral_channel_up_us, ci.client_channel_down_us, ci.peripheral_channel_down_us]:
-                    continue
-
-                exact_start_us = min(ci.client_channel_up_us, ci.peripheral_channel_up_us)
-                exact_end_us = max(ci.client_channel_down_us, ci.peripheral_channel_down_us)
-
-                start_s = math.floor(exact_start_us/1000000)
-                end_s = math.ceil(exact_end_us/1000000)
-
-                distances = []
-                for s in range(start_s, end_s+1):
-                    dist = (db.executesql(
-                        '''
-                            SELECT dp.us, dp.d + (dp.d_next-dp.d) * (({us}-dp.us)/(dp.us_next-dp.us)) as d
-                            FROM distance_pair dp WHERE dp.device_a = {device_a} AND dp.device_b = {device_b} AND dp.us = FLOOR({us}/1000000)*1000000
-                        '''.format(device_a=ci.client, device_b=ci.peripheral, us=s*1000000)
-                    ))
-                    distances.append(dist[0][1])
-
-                bt_rows = (db.executesql(
-                    '''
-                        SELECT bt.start_us, bt.end_us
-                        FROM bundle_transmission bt
-                        JOIN stored_bundle sb ON sb.id = bt.source_stored_bundle
-                        JOIN bundle b ON b.id = sb.bundle AND b.is_sv = 'F'
-                        WHERE bt.conn_info = {ci_id}
-                        GROUP BY bt.id
-                    '''.format(ci_id=ci.id)
-                ))
-                for bt in bt_rows:
-                    transmission_start_s = math.floor(bt[0]/1000000)
-
-                    if bt[1] is None:
-                        transmission_end_s = transmission_start_s
-                    else:
-                        transmission_end_s = math.floor(bt[1]/1000000)
-
-                    transmission_distances = []
-                    for s in range(transmission_start_s, transmission_end_s+1):
-                        transmission_distances.append(distances[transmission_start_s-start_s])
-                    data.append((bt[0], bt[1], sum(transmission_distances) / len(transmission_distances)))
-
-            return data
-
-        data = cached(name, proc)
-        handle_transmission_times(name, data)
-        handle_transmission_success(name, data)
-
-        overall_data += data
-
-    handle_transmission_times(slugify("Bundle Transmission times (overall)"), overall_data)
-    handle_transmission_success(slugify("Bundle Transmission times (overall) {}"), overall_data)
-
-
-
-            # t_rows = (db.executesql(
-                #     '''
-                #         SELECT bt.start_us, bt.end_us, MAX(dp.d), MIN(dp.d), AVG(dp.d)
-                #         FROM bundle_transmission bt
-                #         JOIN stored_bundle sb ON sb.id = bt.source_stored_bundle
-                #         JOIN bundle b ON b.id = sb.bundle AND b.is_sv = 'F'
-                #         JOIN distance_pair dp ON dp.device_a = {device_a} AND dp.device_b = {device_b} AND dp.us BETWEEN FLOOR(bt.start_us/1000000)*1000000 AND FLOOR(bt.end_us/1000000)*1000000
-                #         WHERE bt.conn_info = {ci_id} AND bt.end_us IS NOT NULL
-                #         GROUP BY bt.id
-                #     '''.format(ci_id=ci.id, device_a=ci.client, device_b=ci.peripheral)
-                # ))
-
-
-
-                # t_rows = (db.executesql(
-                #         '''
-                #             SELECT bt.start_us, bt.end_us, dp.d + (dp.d_next-dp.d) * ((bt.start_us-dp.us)/(dp.us_next-dp.us)) as d
-                #             FROM bundle_transmission bt ON bt.conn_info = ci.id
-                #             JOIN stored_bundle sb ON sb.id = bt.source_stored_bundle
-                #             JOIN bundle b ON b.id = sb.bundle AND b.is_sv = 'F'
-                #             JOIN distance_pair dp ON dp.device_a = ci.client AND dp.device_b = ci.peripheral AND dp.us = FLOOR(bt.start_us/1000000)*1000000
-                #             WHERE ci.id = {}
-                #         '''.format(ci.id, ci.client, ci.peripheral)
-                # ))
-
-    '''
-SELECT ROUND(d/5)*5 as de, AVG(end_us-start_us)/1000000 FROM (
-
-SELECT bt.*, dp.d + (dp.d_next-dp.d)* ((bt.start_us-dp.us)/(dp.us_next-dp.us)) as d
-
-FROM bundle_transmission bt
-JOIN stored_bundle ssb ON ssb.id = bt.source_stored_bundle
-JOIN conn_info ci ON ci.id = bt.conn_info
-JOIN bundle b ON b.id = ssb.bundle AND b.b.destination_eid = 'dtn://fake' AND b.is_sv = 'F'
-JOIN run r ON r.id = bt.run
-JOIN distance_pair dp ON dp.device_a = ci.client AND dp.device_b = ci.peripheral AND dp.us = FLOOR(bt.start_us/1000000)*1000000
-WHERE r.status = 'finished') as a
-GROUP BY de
- '''
-    pass
-
-def export_bundle_transmission_time_per_neighbors(db, base_path):
-    '''
-SELECT ROUND(d/5)*5 as de, AVG(end_us-start_us)/1000000 FROM (
-
-SELECT bt.*, dp.d + (dp.d_next-dp.d)* ((bt.start_us-dp.us)/(dp.us_next-dp.us)) as d
-
-FROM bundle_transmission bt
-JOIN stored_bundle ssb ON ssb.id = bt.source_stored_bundle
-JOIN conn_info ci ON ci.id = bt.conn_info
-JOIN bundle b ON b.id = ssb.bundle AND b.b.destination_eid = 'dtn://fake' AND b.is_sv = 'F'
-JOIN run r ON r.id = bt.run
-JOIN distance_pair dp ON dp.device_a = ci.client AND dp.device_b = ci.peripheral AND dp.us = FLOOR(bt.start_us/1000000)*1000000
-WHERE r.status = 'finished') as a
-GROUP BY de
- '''
-    pass
-
 def export_bundle_propagation_epidemic(db, base_path):
 
     length_s = 250 #3000 TODO: use 3000 again!
@@ -1483,6 +1262,271 @@ def export_connection_times(db, base_path):
     print("export_connection_times overall")
     print("Mean: {}, LQ: {}, UQ: {}".format(mean, lq, uq))
 
+def export_filter_connection_impact(db, base_path):
+
+    groups = ['filter_off', 'filter_cc', 'filter_rssi', 'filter_both']
+    runs = db((db.run.status == 'processed') & (db.run.group.belongs(groups))).select()
+
+    overall_data = {}
+    overall_distances = {}
+
+    for g in groups:
+        overall_data[g] = []
+
+    for r in runs:
+        name = slugify(("filter_connection_impact_2", str(r.name), str(r.id)))
+        print("Handling {}".format(name))
+
+        def proc():
+            res = (db.executesql(
+                '''
+                    SELECT  COALESCE(SUM(NOT(ISNULL(ci.client_channel_up_us))), 0), COUNT(*)
+                    FROM conn_info ci
+                    WHERE ci.run={run}
+                '''.format(run=r.id)
+            ))[0]
+
+            return (int(res[0]), int(res[1]))
+
+        run_data  = cached(name, proc)
+        overall_data[r.group].append(run_data)
+
+    failure_means = []
+    failure_stds = []
+    successful_means = []
+    successful_stds = []
+
+    for g in groups:
+        successful_means.append(np.mean(np.array([x[0] for x in overall_data[g]])))
+        successful_stds.append(np.std(np.array([x[0] for x in overall_data[g]])))
+        failure_means.append(np.mean(np.array([x[1]-x[0] for x in overall_data[g]])))
+        failure_stds.append(np.std(np.array([x[1]-x[0] for x in overall_data[g]])))
+
+    fig, ax = plt.subplots()
+
+    x = np.arange(len(groups))
+    width = 0.7  # the width of the bars
+
+    fig, ax = plt.subplots()
+    rects1 = ax.bar(x, failure_means,  width, label='Failed', yerr=failure_stds, capsize=0, bottom=successful_means)
+    rects2 = ax.bar(x, successful_means, width,yerr=successful_stds, label='Successful', capsize=0)
+
+    for (i, rect) in enumerate(rects2):
+        plt.text(rect.get_x()+ rect.get_width() / 2.0, 25, "{}%".format(round((successful_means[i] / (successful_means[i]+failure_means[i])*100))), fontsize='small', ha='center', va='bottom')
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(["None", "Prob", "RSSI", "Both"])
+
+    ax.set_ylabel('Mean # Conn. per Run')
+    ax.set_xlabel('Active Filters')
+    #ax.legend(loc='lower center') # (loc='upper center', bbox_to_anchor=(0.5, -0.5), ncol=2)
+    #ax.set_title('')
+    ax.legend()
+    #plt.axis([None, None, 0, 100])
+
+    # Adapt the figure size as needed
+    fig.set_size_inches(2.25, 2.0)
+    plt.tight_layout()
+    plt.savefig(export_dir + slugify(("filter_connection_impact")) + ".pdf", format="pdf")
+    plt.close()
+
+
+
+def export_filter_bundle_hash_impact(db, base_path):
+
+    groups = ['broadcast_sv_ch_filter_off', 'broadcast_sv_ch_filter_on', 'unicast_sv_ch_filter_off', 'unicast_sv_ch_filter_on']
+    runs = db((db.run.status == 'processed') & (db.run.group.belongs(groups))).select()
+
+    overall_data = {}
+    overall_distances = {}
+
+    for g in groups:
+        overall_data[g] = []
+
+    for r in runs:
+        name = slugify(("export_filter_bundle_hash_impact_2", str(r.name), str(r.id)))
+        print("Handling {}".format(name))
+
+        def proc():
+            overall_succ_conns = (db.executesql(
+                '''
+                    SELECT COUNT(*) 
+                    FROM conn_info ci
+                    WHERE ci.run = {run} AND ci.client_channel_up_us IS NOT NULL AND ci.peripheral_channel_up_us IS NOT NULL
+                '''.format(run=r.id)))[0][0]
+
+            idle_conns = (db.executesql(
+                '''
+                    SELECT COUNT(*)
+                    FROM conn_info ci
+                    JOIN (
+                        SELECT bt.conn_info as conn_info, MAX(bt.end_us)
+                        FROM bundle_transmission bt
+                        JOIN stored_bundle sb ON sb.id = bt.source_stored_bundle
+                        JOIN bundle b ON b.id = sb.bundle
+                        GROUP BY bt.conn_info
+                        HAVING COUNT(*) = 4 AND COUNT(CASE WHEN b.is_sv = 'T' THEN 1 END) = 4 AND COUNT(CASE WHEN b.destination_eid LIKE '%/request' AND b.payload_length = 8 THEN 1 END) = 2
+                    ) as a ON a.conn_info = ci.id
+                    WHERE ci.run = {run}
+                '''.format(run=r.id)
+            ))[0][0]
+
+            return idle_conns, overall_succ_conns
+
+        run_data  = cached(name, proc)
+        overall_data[r.group].append(run_data)
+
+
+    means = {}
+    stds = {}
+
+    for g in groups:
+        means[g] = np.mean(np.array([x[0]/x[1] for x in overall_data[g]])*100.0)
+        stds[g] = np.std(np.array([x[0]/x[1] for x in overall_data[g]])*100.0)
+
+    fig, ax = plt.subplots()
+
+    x = np.arange(2)
+    width = 0.25  # the width of the bars
+
+    fig, ax = plt.subplots()
+    rects1 = ax.bar(x - width/2, [means['broadcast_sv_ch_filter_off'], means['unicast_sv_ch_filter_off']],  width, label='Hash Disabled', yerr=[stds['broadcast_sv_ch_filter_off'], stds['unicast_sv_ch_filter_off']], capsize=0)
+    rects2 = ax.bar(x + width/2, [max(means['broadcast_sv_ch_filter_on'], 1.0), max(means['unicast_sv_ch_filter_on'], 1.0)],  width, label='Hash Enabled', yerr=[stds['broadcast_sv_ch_filter_on'], stds['unicast_sv_ch_filter_on']], capsize=0)
+
+
+    for (mean, rect) in zip([means['broadcast_sv_ch_filter_off'], means['unicast_sv_ch_filter_off'], means['broadcast_sv_ch_filter_on'], means['unicast_sv_ch_filter_on']], (rects1 + rects2)):
+        plt.text(rect.get_x()+ rect.get_width() / 2.0, rect.get_height()+3, "{}%".format(round(mean)), fontsize='small', ha='center', va='bottom')
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(["Broadcast", "Unicast"])
+    ax.set_ylabel('Mean Idle Conn. % per Run')
+    ax.set_xlabel('Scenario')
+    #ax.legend(loc='lower center') # (loc='upper center', bbox_to_anchor=(0.5, -0.5), ncol=2)
+    #ax.set_title('')
+    ax.legend()
+    plt.axis([None, None, 0.0, 100])
+
+    # Adapt the figure size as needed
+    fig.set_size_inches(2.5, 2.0)
+    plt.tight_layout()
+    plt.savefig(export_dir + slugify(("bundle_hash_impact")) + ".pdf", format="pdf")
+    plt.close()
+
+
+def export_forwarding(db, base_path):
+
+    length_s = 1795 #3000 TODO: use 3000 again!
+    step = 1.0
+
+    groups = ['broadcast_dense', 'unicast_dense']
+    max_step = math.ceil(length_s/step)
+
+
+    overall_reception_steps = {}
+
+    for g in groups:
+        overall_reception_steps[g] = []
+
+    for r in db((db.run.status == 'processed') & (db.run.group == 'broadcast_dense')).iterselect():
+        name = slugify(("forwarding comparison", str(r.name), str(r.id), str(length_s), str(step)))
+        print("Handling run {}".format(name))
+
+        def proc():
+            run_reception_steps = []
+
+            bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://fake') & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))).iterselect()
+            for b in bundles:
+                receptions_steps = [0]*(max_step+1)
+
+                res = db.executesql(
+                    '''
+                        SELECT us, receiver_eid = destination_eid FROM bundle_reception
+                        WHERE bundle = {}
+                        ORDER BY us ASC
+                    '''.format(b.id)
+                )
+
+                for row in res:
+                    ms = (row[0]/1000)-b.creation_timestamp_ms
+                    ts = round((ms/1000) / step)
+                    for x in range(ts, max_step+1):
+                        receptions_steps[x] += 1
+                for x in range(0, max_step+1):
+                    receptions_steps[x] /= 24.0 # we scale all values down to percentages
+                run_reception_steps.append(receptions_steps)
+            return run_reception_steps
+
+        run_reception_steps = cached(name, proc)
+        overall_reception_steps[r.group] += run_reception_steps
+
+    for r in db((db.run.status == 'processed') & (db.run.group == 'unicast_dense')).iterselect():
+        name = slugify(("forwarding 2", str(r.name), str(r.id), str(length_s), str(step)))
+
+        def proc():
+            run_reception_steps = []
+            # & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))
+            bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://source') & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))).iterselect()
+            for b in bundles:
+                if b.creation_timestamp_ms > ((r.simulation_time/1000)-(length_s*1000)):
+                    continue    # this bundle is too late
+
+                receptions_steps = [0.0]*(max_step+1)
+
+                res = db.executesql(
+                    '''
+                        SELECT us FROM bundle_reception
+                        WHERE bundle = {} AND receiver_eid = destination_eid
+                        ORDER BY us ASC
+                    '''.format(b.id)
+                )
+
+                for row in res:
+                    ms = (row[0]/1000)-b.creation_timestamp_ms
+                    ts = round((ms/1000) / step)
+
+                    for x in range(ts, max_step+1):
+                        receptions_steps[x] += 1
+
+                run_reception_steps.append(receptions_steps)
+            return run_reception_steps
+
+        run_reception_steps = cached(name, proc)
+        overall_reception_steps[r.group] += run_reception_steps
+
+    positions = range(0, max_step + 1)
+    plt.clf()
+
+    mean = {}
+    cis = {}
+
+    fig, ax = plt.subplots()
+    fig.set_size_inches(3.8, 2.5)
+
+    for g in groups:
+        steps = np.array(overall_reception_steps[g], dtype=np.float64)
+        steps = np.swapaxes(steps, 0, 1)  # we swap the axes to get all t=0 values at the first position together
+        steps = steps * 100.0
+        mean[g] = np.mean(steps, axis=1)
+        cis[g] = np.percentile(steps, [2.5, 97.5], axis=1)
+
+
+    plt.plot(positions, mean['broadcast_dense'], linestyle='-', label="Broadcast", alpha=0.75, color='C0')
+    plt.fill_between(positions, cis['broadcast_dense'][0], cis['broadcast_dense'][1], color='C0', label='95% CI Broadcast', alpha=0.25, linewidth=0.0)
+
+    plt.plot(positions, mean['unicast_dense'], linestyle='-', label="Unicast", alpha=0.75, color='C1')
+    plt.fill_between(positions, cis['unicast_dense'][0], cis['unicast_dense'][1], color='C1', label='95% CI Unicast', alpha=0.25, linewidth=0.0)
+
+
+    plt.legend()
+    plt.xlabel("Time [s]")
+    plt.ylabel('Bundle Reception Rate [%]')
+    plt.axis([0, 1800, None, None])
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(base_path + "forwarding_comparison" + ".pdf", format="pdf")
+    plt.close()
+
+
 def get_density(run):
     run_config = json.loads(run.configuration_json)
     model_options = json.loads(run_config['SIM_MODEL_OPTIONS'])
@@ -1530,10 +1574,13 @@ if __name__ == "__main__":
     db.commit() # we need to commit
 
     exports = [
-        export_testbed_calibration_bundle_transmission_time,
-        export_testbed_calibration_bundle_rssi_bars,
-        export_testbed_calibration_bundle_transmission_success,
-        export_testbed_calibration_setup_times,
+        export_forwarding,
+        export_filter_bundle_hash_impact,
+        export_filter_connection_impact,
+        #export_testbed_calibration_bundle_transmission_time,
+        #export_testbed_calibration_bundle_rssi_bars,
+        #export_testbed_calibration_bundle_transmission_success,
+        #export_testbed_calibration_setup_times,
         #export_testbed_calibration_bundle_rssi_per_distance,
         #export_fake_bundle_propagation_direct,
         #export_bundle_propagation_epidemic,
