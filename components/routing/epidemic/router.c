@@ -358,7 +358,10 @@ bool route_epidemic_bundle(struct bundle *bundle) {
         if (rc->current_bundle == NULL && rc->next_bundle_candidate == NULL) {
             // OOOPS! It seems like we don't have any bundles to send for this contact -> let's offer some :)
             // TODO: We are currently sending our whole offer sv everytime, we might want to sent individual entries ;)
+
+#if CONFIG_CONTINUOUS_SV_EXCHANGE
             send_offer_sv(rc);
+#endif
         }
     }
     return true; //routing is otherwise always successfull!
@@ -467,7 +470,9 @@ void router_signal_bundle_transmission(struct routed_bundle *routed_bundle, bool
                         // TODO: We are currently sending our whole offer sv everytime, we might want to sent individual entries ;)
                         // TODO: We might have scheduled two offers as soon as another bundle is available
                         //       But the other offer would be more up-to-date anyway
+#if CONFIG_CONTINUOUS_SV_EXCHANGE
                         send_offer_sv(rc);
+#endif
                     }
                 } else {
                     LOGF("Router: error router_signal_bundle_transmission wrong bundle %d for contact %s", routed_bundle->id, eid);

@@ -63,3 +63,7 @@ config NB_SV_FILTER_SIZE
 config CONNECTION_CONGESTION_CONTROL
     bool "Try to congest connection initialization, i.e. too many simultaneous requests"
     default n
+
+config CONTINUOUS_SV_EXCHANGE
+    bool "Resend SV for new bundles that arrived and after all have been transmitted"
+    default n
