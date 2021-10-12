@@ -132,7 +132,7 @@ static struct summary_vector *create_known_sv() {
 }
 
 
-enum ud3tn_result send_sv(const char* sink, const char *destination_eid, struct summary_vector *sv) {
+enum ud3tn_result send_sv(const char* sink, const char *destination_eid, struct summary_vector *sv, struct summary_vector_characteristic *original_ch) {
 
     char *dest_with_sink = create_endpoint(destination_eid, sink);
 
@@ -143,10 +143,16 @@ enum ud3tn_result send_sv(const char* sink, const char *destination_eid, struct 
 
     LOGF("Routing Agent: Sending SV with length %d to %s", sv->length, dest_with_sink);
 
-    size_t payload_size = summary_vector_memory_size(sv);
+    size_t payload_size = summary_vector_memory_size(sv)+sizeof(struct summary_vector_characteristic);
     uint8_t *payload = malloc(payload_size);
 
     summary_vector_copy_to_memory(sv, payload);
+
+    if (original_ch) {
+        memcpy(payload+summary_vector_memory_size(sv), original_ch, sizeof(struct summary_vector_characteristic));
+    } else {
+        memset(payload+summary_vector_memory_size(sv), 0, sizeof(struct summary_vector_characteristic));
+    }
 
     if (!payload) {
         LOGF("Routing Agent: Could not allocate memory to send SV with length %d to %s", sv->length, destination_eid);
@@ -211,8 +217,10 @@ static void on_offer_msg(struct bundle_adu data, void *param) {
     // extract real source id
     char *source = routing_agent_create_eid_from_info_bundle_eid(data.source);
 
+    size_t sv_length = data.length-sizeof(struct summary_vector_characteristic);
     // create summary_vector from this message
-    struct summary_vector *offer_sv = summary_vector_create_from_memory(data.payload, data.length);
+    struct summary_vector *offer_sv = summary_vector_create_from_memory(data.payload, sv_length);
+    struct summary_vector_characteristic *offer_ch = (struct summary_vector_characteristic *) data.payload+sv_length;
 
     if (offer_sv) {
 
@@ -233,12 +241,10 @@ static void on_offer_msg(struct bundle_adu data, void *param) {
 
                 if (request_sv->length == 0) {
                     // this means that we know all offered bundles -> we can therefore ignore this offer_ch
-                    struct summary_vector_characteristic offer_sv_ch;
-                    summary_vector_characteristic_calculate(offer_sv, &offer_sv_ch);
-                    nb_sv_ch_filter_add(&offer_sv_ch);
+                    nb_sv_ch_filter_add(offer_ch);
                 }
 
-                send_sv(ROUTING_AGENT_SINK_REQUEST, source,  request_sv);
+                send_sv(ROUTING_AGENT_SINK_REQUEST, source,  request_sv, NULL);
                 summary_vector_destroy(request_sv);
             } else {
                 LOG("RoutingAgent: Could not create request_sv");
@@ -264,7 +270,9 @@ static void on_request_msg(struct bundle_adu data, void *param) {
     char *source = routing_agent_create_eid_from_info_bundle_eid(data.source);
 
     // create summary_vector from this message
-    struct summary_vector *request_sv = summary_vector_create_from_memory(data.payload, data.length);
+    size_t sv_length = data.length-sizeof(struct summary_vector_characteristic);
+    struct summary_vector *request_sv = summary_vector_create_from_memory(data.payload, sv_length);
+    // we ignore the sv_characteristic
 
     if (source && request_sv) {
 
@@ -357,11 +365,11 @@ enum ud3tn_result routing_agent_init(const struct bundle_agent_interface *bundle
     return UD3TN_OK;
 }
 
-void routing_agent_send_offer_sv(const char *eid, struct summary_vector *offer_sv) {
+void routing_agent_send_offer_sv(const char *eid, struct summary_vector *offer_sv, struct summary_vector_characteristic *original_ch) {
     //hal_semaphore_take_blocking(routing_agent_config.routing_agent_contact_htab_sem);
     //LOG_EV("send_offer_sv", "\"to_eid\": \"%s\", \"sv_length\": %d", eid, offer_sv->length);
 
-    if (send_sv(ROUTING_AGENT_SINK_OFFER, eid,  offer_sv) != UD3TN_OK) {
+    if (send_sv(ROUTING_AGENT_SINK_OFFER, eid,  offer_sv, original_ch) != UD3TN_OK) {
         LOGF("Routing Agent: Could not send offer SV to %s", eid);
     }
     //hal_semaphore_release(routing_agent_config.routing_agent_contact_htab_sem);

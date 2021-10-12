@@ -28,6 +28,6 @@ char * routing_agent_create_eid_from_info_bundle_eid(const char* source_or_desti
  * @param eid to send the sv to (ownership is not transferred)
  * @return
  */
-void routing_agent_send_offer_sv(const char *eid, struct summary_vector *offer_sv);
+void routing_agent_send_offer_sv(const char *eid, struct summary_vector *offer_sv, struct summary_vector_characteristic *original_sv);
 
 #endif /* ROUTING_AGENT_H_INCLUDED */

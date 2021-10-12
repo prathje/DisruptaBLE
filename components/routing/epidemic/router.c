@@ -42,9 +42,13 @@ bool bundle_should_be_offered(struct router_contact *rc, struct bundle_info_list
  * This sv contains all bundles that our router has to offer for the contact, used by the router agent
  * @return pointer to summary_vector if successfull, null otherwise
  */
-static struct summary_vector *create_offer_sv(struct router_contact *rc) {
+static struct summary_vector *create_offer_sv(struct router_contact *rc, struct summary_vector_characteristic *original_ch) {
 
     struct summary_vector *offer_sv = summary_vector_create();
+
+    if (original_ch) {
+        summary_vector_characteristic_calculate(offer_sv, original_ch);
+    }
 
     if (offer_sv) {
         struct bundle_info_list_entry *current = router_config.bundle_info_list.head;
@@ -65,11 +69,13 @@ static struct summary_vector *create_offer_sv(struct router_contact *rc) {
 
 
 static void send_offer_sv(struct router_contact *rc) {
-    struct summary_vector *offer_sv = create_offer_sv(rc);
+
+    struct summary_vector_characteristic overall_ch;
+    struct summary_vector *offer_sv = create_offer_sv(rc, &overall_ch);
 
     if (offer_sv) {
         LOG_EV("send_offer_sv", "\"to_eid\": \"%s\", \"to_cla_addr\": \"%s\", \"sv_length\": %d", rc->contact->node->eid, rc->contact->node->cla_addr, offer_sv->length);
-        routing_agent_send_offer_sv(rc->contact->node->eid, offer_sv);
+        routing_agent_send_offer_sv(rc->contact->node->eid, offer_sv, &overall_ch);
         summary_vector_destroy(offer_sv);
     } else {
         LOGF("Router: Could not create offer sv for %s", rc->contact->node->eid);
