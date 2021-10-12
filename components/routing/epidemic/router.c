@@ -15,8 +15,9 @@
 #define CONFIG_EPIDEMIC_ROUTING_FORWARDING -1
 
 
-
 static struct router_config router_config;
+
+static struct summary_vector *create_known_sv();
 
 bool bundle_should_be_offered(struct router_contact *rc, struct bundle_info_list_entry *candidate) {
     uint64_t cur_time = hal_time_get_timestamp_s();
@@ -67,7 +68,7 @@ static struct summary_vector *create_offer_sv(struct router_contact *rc) {
 static void send_offer_sv(struct router_contact *rc) {
 
     // we create the offer sv characteristic based on all dtn bundles we know
-    struct summary_vector *known_sv = router_create_known_sv();
+    struct summary_vector *known_sv = create_known_sv();
     if (known_sv) {
 
         struct summary_vector_characteristic known_sv_ch;
@@ -664,12 +665,11 @@ void router_update_request_sv(const char* eid, struct summary_vector *request_sv
 }
 
 
-struct summary_vector *router_create_known_sv() {
+struct summary_vector *create_known_sv() {
 
     struct summary_vector *known_sv = summary_vector_create();
 
     if (known_sv) {
-        hal_semaphore_take_blocking(router_config.router_contact_htab_sem);
         struct bundle_info_list_entry *current = router_config.bundle_info_list.head;
 
         while (current != NULL) {
@@ -679,8 +679,14 @@ struct summary_vector *router_create_known_sv() {
             }
             current = current->next;
         }
-        hal_semaphore_release(router_config.router_contact_htab_sem);
     }
-
     return known_sv;
+}
+
+struct summary_vector *router_create_known_sv() {
+
+    hal_semaphore_take_blocking(router_config.router_contact_htab_sem);
+    struct summary_vector * res = create_known_sv();
+    hal_semaphore_release(router_config.router_contact_htab_sem);
+    return res;
 }
