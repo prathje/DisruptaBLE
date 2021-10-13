@@ -1526,6 +1526,85 @@ def export_forwarding(db, base_path):
     plt.savefig(base_path + "forwarding_comparison" + ".pdf", format="pdf")
     plt.close()
 
+def export_throughput(db, base_path):
+    length_s = 595 #3000 TODO: use 3000 again!
+    step = 1.0
+
+    groups = ['throughput_dense']
+    max_step = math.ceil(length_s/step)
+
+    overall_reception_steps = {}
+
+    max_sn = 10
+
+    for g in groups:
+        overall_reception_steps[g] = []
+
+    for r in db((db.run.status == 'processed') & (db.run.group.belongs(groups))).iterselect():
+        name = slugify(("throughput_6", str(r.name), str(r.id), str(length_s), str(step), str(max_sn)))
+        print("Handling run {}".format(name))
+
+        def proc():
+            run_reception_steps = []
+
+            bundles = db((db.bundle.run == r) & (db.bundle.sequence_number <= max_sn) &(db.bundle.destination_eid == 'dtn://fake') & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))).iterselect(orderby=~db.bundle.sequence_number, limitby=(0,1))
+            for b in bundles:
+                receptions_steps = [0]*(max_step+1)
+
+                res = db.executesql(
+                    '''
+                        SELECT us, receiver_eid = destination_eid FROM bundle_reception
+                        WHERE bundle = {}
+                        ORDER BY us ASC
+                    '''.format(b.id)
+                )
+
+                print(res)
+
+                for row in res:
+                    ms = (row[0]/1000)-b.creation_timestamp_ms
+                    ts = round((ms/1000) / step)
+                    for x in range(ts, max_step+1):
+                        receptions_steps[x] += 1
+                for x in range(0, max_step+1):
+                    receptions_steps[x] /= 24.0 # we scale all values down to percentages
+                if receptions_steps[max_step] == 0.0:
+                    print("IGNORING bundle {} from {}".format(b.id, r.id))
+                else:
+                    run_reception_steps.append(receptions_steps)
+            return run_reception_steps
+
+        run_reception_steps = cached(name, proc)
+        overall_reception_steps[r.group] += run_reception_steps
+
+    positions = range(0, max_step + 1)
+    plt.clf()
+
+    mean = {}
+    cis = {}
+
+    fig, ax = plt.subplots()
+    fig.set_size_inches(3.8, 2.5)
+
+    for g in groups:
+        steps = np.array(overall_reception_steps[g], dtype=np.float64)
+        steps = np.swapaxes(steps, 0, 1)  # we swap the axes to get all t=0 values at the first position together
+        steps = steps * 100.0
+        mean[g] = np.mean(steps, axis=1)
+        cis[g] = np.percentile(steps, [2.5, 97.5], axis=1)
+
+
+    plt.plot(positions, mean['throughput_dense'], linestyle='-', label="Broadcast", alpha=0.75, color='C0')
+    plt.fill_between(positions, cis['throughput_dense'][0], cis['throughput_dense'][1], color='C0', label='95% CI Broadcast', alpha=0.25, linewidth=0.0)
+
+    plt.legend()
+    plt.xlabel("Time [s]")
+    plt.ylabel('Bundle Reception Rate [%]')
+    plt.axis([0, 1800, None, None])
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(base_path + "throughput_comparison" + ".pdf", format="pdf")
+    plt.close()
 
 def get_density(run):
     run_config = json.loads(run.configuration_json)
@@ -1574,13 +1653,14 @@ if __name__ == "__main__":
     db.commit() # we need to commit
 
     exports = [
+        export_testbed_calibration_bundle_rssi_bars,
+        export_testbed_calibration_bundle_transmission_time,
+        export_testbed_calibration_bundle_transmission_success,
+        export_testbed_calibration_setup_times,
         export_forwarding,
         export_filter_bundle_hash_impact,
         export_filter_connection_impact,
-        #export_testbed_calibration_bundle_transmission_time,
-        #export_testbed_calibration_bundle_rssi_bars,
-        #export_testbed_calibration_bundle_transmission_success,
-        #export_testbed_calibration_setup_times,
+        export_throughput,
         #export_testbed_calibration_bundle_rssi_per_distance,
         #export_fake_bundle_propagation_direct,
         #export_bundle_propagation_epidemic,
