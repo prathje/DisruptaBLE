@@ -342,7 +342,7 @@ static void handle_discovered_neighbor_info(void *context, const struct nb_ble_n
 
     nb_ble_disable_and_stop(); // we disable and stop advertising and scanning for now
 
-    int err = bt_conn_le_create(&other_addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM_DEFAULT, &conn);
+    int err = bt_conn_le_create(&other_addr, BT_CONN_LE_CREATE_CONN, BT_LE_CONN_PARAM(6, 6, 0, 400), &conn);
 
     if (err) {
         // we get EINVAL in case the connection already exists...
