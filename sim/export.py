@@ -15,11 +15,24 @@ from export_utility import slugify, cached, init_cache, load_env_config
 
 from scipy.optimize import curve_fit
 import matplotlib.ticker as ticker
+from matplotlib.ticker import PercentFormatter
+from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
+import matplotlib as mpl
 
 METHOD_PREFIX = 'export_'
 
 CONFIDENCE_FILL_COLOR = '0.8'
-COLOR_MAP = 'tab10'
+
+def load_plot_defaults():
+    # Configure as needed
+    plt.rc('lines', linewidth=2.0)
+    plt.rc('legend', framealpha=1.0, fancybox=True)
+    plt.rc('errorbar', capsize=3)
+    plt.rc('pdf', fonttype=42)
+    plt.rc('ps', fonttype=42)
+    plt.rc('font', size=8, family="serif", serif=['Times New Roman'] + plt.rcParams['font.serif'])
+    #mpl.style.use('tableau-colorblind10')
+
 
 NODE_DISTANCES = {'0-1': 1000000, '0-2': 1000000, '0-3': 1000000, '0-4': 1000000, '0-5': 1000000, '0-6': 1000000, '0-7': 1000000, '0-8': 1000000, '0-9': 1000000, '0-10': 1000000, '0-11': 1000000, '0-12': 1000000, '0-13': 1000000, '0-14': 1000000, '0-15': 1000000, '0-16': 1000000, '0-17': 1000000, '0-18': 1000000, '0-19': 1000000, '0-20': 1000000, '0-21': 1000000, '1-0': 1000000, '1-2': 3.456703910614525, '1-3': 7.182262569832403, '1-4': 8.756983240223464, '1-5': 9.99592336986849, '1-6': 12.67458100558659, '1-7': 14.5827188921466, '1-8': 16.38973014454004, '1-9': 19.25956340155856, '1-10': 23.618426986987057, '1-11': 1000000, '1-12': 10.956123613253236, '1-13': 16.06376138335258, '1-14': 20.00102499495382, '1-15': 14.643533714122508, '1-16': 7.259078212290502, '1-17': 19.11281115990325, '1-18': 22.483824607018203, '1-19': 20.029326606019676, '1-20': 12.003398037000936, '1-21': 21.10717485593909, '2-0': 1000000, '2-1': 3.456703910614525, '2-3': 3.725558659217878, '2-4': 5.300279329608939, '2-5': 11.548815065110565, '2-6': 9.217877094972065, '2-7': 11.703843161893602, '2-8': 13.890554657092665, '2-9': 17.18298684424475, '2-10': 21.958013293794885, '2-11': 1000000, '2-12': 8.213520326631636, '2-13': 16.78322092748957, '2-14': 20.583320329052885, '2-15': 16.630299144936114, '2-16': 10.715782122905027, '2-17': 20.674460584197654, '2-18': 21.10717485593909, '2-19': 19.98287321104847, '2-20': 13.324346506546563, '2-21': 20.23365749662015, '3-0': 1000000, '3-1': 7.182262569832403, '3-2': 3.725558659217878, '3-4': 1.574720670391061, '3-5': 14.006851853298748, '3-6': 5.492318435754187, '3-7': 9.065111605486074, '3-8': 11.753459590409685, '3-9': 15.506493496313173, '3-10': 20.672461185649556, '3-11': 1000000, '3-12': 6.128293616090922, '3-13': 18.273055858336907, '3-14': 21.815158524965582, '3-15': 19.24295161169144, '3-16': 14.441340782122905, '3-17': 22.828877710640477, '3-18': 20.188953013823387, '3-19': 20.59295738851494, '3-20': 15.503386057847282, '3-21': 19.93083529255105, '4-0': 1000000, '4-1': 8.756983240223464, '4-2': 5.300279329608939, '4-3': 1.574720670391061, '4-5': 15.20163728901716, '4-6': 3.9175977653631264, '4-7': 8.207207739016427, '4-8': 11.105216017477835, '4-9': 15.021096864165932, '4-10': 20.310900076649492, '4-11': 1000000, '4-12': 5.767303508177958, '4-13': 19.087346860392042, '4-14': 22.501630635053893, '4-15': 20.451236823116485, '4-16': 16.016061452513966, '4-17': 23.85622682640059, '4-18': 19.997816427428308, '4-19': 21.044706424498962, '4-20': 16.590746115989838, '4-21': 20.011089918554763, '5-0': 1000000, '5-1': 9.99592336986849, '5-2': 11.548815065110565, '5-3': 14.006851853298748, '5-4': 15.20163728901716, '5-6': 18.4235061916238, '5-7': 15.950513056858117, '5-8': 15.810784615771896, '5-9': 16.559083709354567, '5-10': 18.92012652422499, '5-11': 1000000, '5-12': 13.000065690858015, '5-13': 6.6292578810434435, '5-14': 10.526398092314913, '5-15': 5.250048593808522, '5-16': 10.36562729551123, '5-17': 9.172673371836899, '5-18': 17.075241639283604, '5-19': 11.61377113331385, '5-20': 2.093761015156856, '5-21': 14.492980887787395, '6-0': 1000000, '6-1': 12.67458100558659, '6-2': 9.217877094972065, '6-3': 5.492318435754187, '6-4': 3.9175977653631264, '6-5': 18.4235061916238, '6-7': 7.211843496651391, '6-8': 10.39125837151921, '6-9': 14.501233697567853, '6-10': 19.92950299612266, '6-11': 1000000, '6-12': 6.640434486390038, '6-13': 21.48320509358523, '6-14': 24.566739143820538, '6-15': 23.64507629420866, '6-16': 19.933659217877093, '6-17': 26.645001477883763, '6-18': 20.057919238521023, '6-19': 22.609542490960596, '6-20': 19.585419597527018, '6-21': 20.734877213860837, '7-0': 1000000, '7-1': 14.5827188921466, '7-2': 11.703843161893602, '7-3': 9.065111605486074, '7-4': 8.207207739016427, '7-5': 15.950513056858117, '7-6': 7.211843496651391, '7-8': 3.1794148748678186, '7-9': 7.289390200916461, '7-10': 12.71765949947127, '7-11': 1000000, '7-12': 3.6518984038161557, '7-13': 16.82634403068106, '7-14': 19.185370614938716, '7-15': 20.680057535494523, '7-16': 21.198147476481275, '7-17': 22.515475778433444, '7-18': 12.917968015561176, '7-19': 16.60557692832689, '7-20': 16.38237448216814, '7-21': 13.945927955712198, '8-0': 1000000, '8-1': 16.38973014454004, '8-2': 13.890554657092665, '8-3': 11.753459590409685, '8-4': 11.105216017477835, '8-5': 15.810784615771896, '8-6': 10.39125837151921, '8-7': 3.1794148748678186, '8-9': 4.109975326048643, '8-10': 9.538244624603452, '8-11': 1000000, '8-12': 5.728355820804471, '8-13': 15.4114737000369, '8-14': 17.242902685071293, '8-15': 20.068953934437964, '8-16': 22.479524469128, '8-17': 21.22465498696441, '8-18': 9.803731178757726, '8-19': 14.317277412164199, '8-20': 15.83130971307509, '8-21': 11.123315779038181, '9-0': 1000000, '9-1': 19.25956340155856, '9-2': 17.18298684424475, '9-3': 15.506493496313173, '9-4': 15.021096864165932, '9-5': 16.559083709354567, '9-6': 14.501233697567853, '9-7': 7.289390200916461, '9-8': 4.109975326048643, '9-10': 5.4282692985548096, '9-11': 1000000, '9-12': 9.378260101317938, '9-13': 14.439891026689196, '9-14': 15.355965943752768, '9-15': 20.013293250601517, '9-16': 24.650284959122356, '9-17': 20.185624804820563, '9-18': 5.882273547209652, '9-19': 11.977997727321677, '9-20': 16.05123353940481, '9-21': 7.887721532803746, '10-0': 1000000, '10-1': 23.618426986987057, '10-2': 21.958013293794885, '10-3': 20.672461185649556, '10-4': 20.310900076649492, '10-5': 18.92012652422499, '10-6': 19.92950299612266, '10-7': 12.71765949947127, '10-8': 9.538244624603452, '10-9': 5.4282692985548096, '10-11': 1000000, '10-12': 14.579139314169467, '10-13': 14.899015855739497, '10-14': 14.364525139664803, '10-15': 21.19814747648127, '10-16': 28.187512474266306, '10-17': 20.060112562829577, '10-18': 2.2660614525139664, '10-19': 10.677374301675975, '10-20': 17.851583550531593, '10-21': 5.72276536312849, '11-0': 1000000, '11-1': 1000000, '11-2': 1000000, '11-3': 1000000, '11-4': 1000000, '11-5': 1000000, '11-6': 1000000, '11-7': 1000000, '11-8': 1000000, '11-9': 1000000, '11-10': 1000000, '11-12': 1000000, '11-13': 1000000, '11-14': 1000000, '11-15': 1000000, '11-16': 1000000, '11-17': 1000000, '11-18': 1000000, '11-19': 1000000, '11-20': 1000000, '11-21': 1000000, '12-0': 1000000, '12-1': 10.956123613253236, '12-2': 8.213520326631636, '12-3': 6.128293616090922, '12-4': 5.767303508177958, '12-5': 13.000065690858015, '12-6': 6.640434486390038, '12-7': 3.6518984038161557, '12-8': 5.728355820804471, '12-9': 9.378260101317938, '12-10': 14.579139314169467, '12-11': 1000000, '12-13': 15.042825115237225, '12-14': 17.96923275665521, '12-15': 18.000268782448337, '12-16': 17.556488115736435, '12-17': 20.443002642539987, '12-18': 14.231736983878987, '12-19': 15.975016438580028, '12-20': 13.75263163837714, '12-21': 14.389452019340096, '13-0': 1000000, '13-1': 16.06376138335258, '13-2': 16.78322092748957, '13-3': 18.273055858336907, '13-4': 19.087346860392042, '13-5': 6.6292578810434435, '13-6': 21.48320509358523, '13-7': 16.82634403068106, '13-8': 15.4114737000369, '13-9': 14.439891026689196, '13-10': 14.899015855739497, '13-11': 1000000, '13-12': 15.042825115237225, '13-14': 3.954881917518506, '13-15': 6.451593067534036, '13-16': 16.917558127167457, '13-17': 5.8245844650768435, '13-18': 12.728468665586693, '13-19': 5.4070483892412655, '13-20': 4.606089749364724, '13-21': 9.50374152725524, '14-0': 1000000, '14-1': 20.00102499495382, '14-2': 20.583320329052885, '14-3': 21.815158524965582, '14-4': 22.501630635053893, '14-5': 10.526398092314913, '14-6': 24.566739143820538, '14-7': 19.185370614938716, '14-8': 17.242902685071293, '14-9': 15.355965943752768, '14-10': 14.364525139664803, '14-11': 1000000, '14-12': 17.96923275665521, '14-13': 3.954881917518506, '14-15': 9.11185716532576, '14-16': 20.693002296756447, '14-17': 6.0060470028165795, '14-18': 12.098463687150836, '14-19': 3.6871508379888267, '14-20': 8.456530279424248, '14-21': 8.641759776536311, '15-0': 1000000, '15-1': 14.643533714122508, '15-2': 16.630299144936114, '15-3': 19.24295161169144, '15-4': 20.451236823116485, '15-5': 5.250048593808522, '15-6': 23.64507629420866, '15-7': 20.680057535494523, '15-8': 20.068953934437964, '15-9': 20.013293250601517, '15-10': 21.19814747648127, '15-11': 1000000, '15-12': 18.000268782448337, '15-13': 6.451593067534036, '15-14': 9.11185716532576, '15-16': 12.717659499471273, '15-17': 4.9629890729643975, '15-18': 19.082837771643323, '15-19': 11.73411679974617, '15-20': 4.297744911890573, '15-21': 15.936128474981762, '16-0': 1000000, '16-1': 7.259078212290502, '16-2': 10.715782122905027, '16-3': 14.441340782122905, '16-4': 16.016061452513966, '16-5': 10.36562729551123, '16-6': 19.933659217877093, '16-7': 21.198147476481275, '16-8': 22.479524469128, '16-9': 24.650284959122356, '16-10': 28.187512474266306, '16-11': 1000000, '16-12': 17.556488115736435, '16-13': 16.917558127167457, '16-14': 20.693002296756447, '16-15': 12.717659499471273, '16-17': 17.68064857243567, '16-18': 26.633233008238527, '16-19': 21.974164378250073, '16-20': 12.312973225336044, '16-21': 24.477226023865402, '17-0': 1000000, '17-1': 19.11281115990325, '17-2': 20.674460584197654, '17-3': 22.828877710640477, '17-4': 23.85622682640059, '17-5': 9.172673371836899, '17-6': 26.645001477883763, '17-7': 22.515475778433444, '17-8': 21.22465498696441, '17-9': 20.185624804820563, '17-10': 20.060112562829577, '17-11': 1000000, '17-12': 20.443002642539987, '17-13': 5.8245844650768435, '17-14': 6.0060470028165795, '17-15': 4.9629890729643975, '17-16': 17.68064857243567, '17-18': 17.81014758550868, '17-19': 9.525552827465127, '17-20': 7.366336389107649, '17-21': 14.387732634778425, '18-0': 1000000, '18-1': 22.483824607018203, '18-2': 21.10717485593909, '18-3': 20.188953013823387, '18-4': 19.997816427428308, '18-5': 17.075241639283604, '18-6': 20.057919238521023, '18-7': 12.917968015561176, '18-8': 9.803731178757726, '18-9': 5.882273547209652, '18-10': 2.2660614525139664, '18-11': 1000000, '18-12': 14.231736983878987, '18-13': 12.728468665586693, '18-14': 12.098463687150836, '18-15': 19.082837771643323, '18-16': 26.633233008238527, '18-17': 17.81014758550868, '18-19': 8.411312849162009, '18-20': 15.883064081242408, '18-21': 3.4567039106145234, '19-0': 1000000, '19-1': 20.029326606019676, '19-2': 19.98287321104847, '19-3': 20.59295738851494, '19-4': 21.044706424498962, '19-5': 11.61377113331385, '19-6': 22.609542490960596, '19-7': 16.60557692832689, '19-8': 14.317277412164199, '19-9': 11.977997727321677, '19-10': 10.677374301675975, '19-11': 1000000, '19-12': 15.975016438580028, '19-13': 5.4070483892412655, '19-14': 3.6871508379888267, '19-15': 11.73411679974617, '19-16': 21.974164378250073, '19-17': 9.525552827465127, '19-18': 8.411312849162009, '19-20': 9.776887413994404, '19-21': 4.954608938547485, '20-0': 1000000, '20-1': 12.003398037000936, '20-2': 13.324346506546563, '20-3': 15.503386057847282, '20-4': 16.590746115989838, '20-5': 2.093761015156856, '20-6': 19.585419597527018, '20-7': 16.38237448216814, '20-8': 15.83130971307509, '20-9': 16.05123353940481, '20-10': 17.851583550531593, '20-11': 1000000, '20-12': 13.75263163837714, '20-13': 4.606089749364724, '20-14': 8.456530279424248, '20-15': 4.297744911890573, '20-16': 12.312973225336044, '20-17': 7.366336389107649, '20-18': 15.883064081242408, '20-19': 9.776887413994404, '20-21': 13.067300508624527, '21-0': 1000000, '21-1': 21.10717485593909, '21-2': 20.23365749662015, '21-3': 19.93083529255105, '21-4': 20.011089918554763, '21-5': 14.492980887787395, '21-6': 20.734877213860837, '21-7': 13.945927955712198, '21-8': 11.123315779038181, '21-9': 7.887721532803746, '21-10': 5.72276536312849, '21-11': 1000000, '21-12': 14.389452019340096, '21-13': 9.50374152725524, '21-14': 8.641759776536311, '21-15': 15.936128474981762, '21-16': 24.477226023865402, '21-17': 14.387732634778425, '21-18': 3.4567039106145234, '21-19': 4.954608938547485, '21-20': 13.067300508624527}
 
@@ -44,14 +57,6 @@ def get_dist_by_device_id(db, id_a, id_b):
 
 
 
-def load_plot_defaults():
-    # Configure as needed
-    plt.rc('lines', linewidth=2.0)
-    plt.rc('legend', framealpha=1.0, fancybox=True)
-    plt.rc('errorbar', capsize=3)
-    plt.rc('pdf', fonttype=42)
-    plt.rc('ps', fonttype=42)
-    plt.rc('font', size=8, family="serif", serif=['Times New Roman'] + plt.rcParams['font.serif'])
 
 
 def rssi_from_d(d, n, rssi_0):
@@ -108,6 +113,8 @@ def export_testbed_calibration_setup_times(db, base_path):
             xs = np.array(xs) / 1000000.0
             setup_means[g][i] = np.mean(xs)
             setup_stds[g][i] = np.std(xs)
+
+            print("{} at dist {} mean {}".format(g, dg, setup_means[g][i]))
 
 
     width = 0.6       # the width of the bars: can also be len(x) sequence
@@ -184,11 +191,11 @@ def export_testbed_calibration_bundle_transmission_time(db, base_path):
             for (d, x) in zip(overall_distances[g], overall_data[g]):
                 if dg-range <= d < dg+range:
                     xs.append(x)
-            print(xs)
             times = np.array(xs) / 1000000.0
             bt_means[g][i] = np.mean(times)
             bt_std[g][i] = np.std(times)
 
+            print("{} at dist {} mean {}".format(g, dg, bt_means[g][i]))
 
     fig, ax = plt.subplots()
 
@@ -205,9 +212,10 @@ def export_testbed_calibration_bundle_transmission_time(db, base_path):
     ax.set_ylabel('Link Setup Time [s]')
     ax.set_xlabel('Distance [m]')
 
-    ax.set_ylabel('Bundle Tx Time [s]')
+    ax.set_ylabel('Bundle TX Time [s]')
     #ax.set_title('')
     #ax.legend()
+    plt.axis([None, None, 0, None])
 
     # Adapt the figure size as needed
     fig.set_size_inches(1.75, 2.1)
@@ -438,21 +446,16 @@ def export_testbed_calibration_bundle_rssi_per_distance(db, base_path):
     plt.close()
 
 
-def export_app_connection_distance_histogramm(db, export_dir):
-    runs = db((db.run.status == 'processed') & ((db.run.group == 'broadcast') | (db.run.group == 'unicast')) ).select()
+def export_connection_distance_histogramm(db, export_dir):
+    runs = db((db.run.status == 'processed') & ((db.run.group == 'broadcast_populated') | (db.run.group == 'unicast_populated')) ).select()
 
     overall_data = []
 
     for r in runs:
-        name = slugify(("export_app_connection_distance_histogramm", str(r.name), str(r.id)))
+        name = slugify(("export_connection_distance_histogramm_per_s_5", str(r.name), str(r.id)))
         print("Handling {}".format(name))
 
         config = json.loads(r.configuration_json)
-
-        density = get_density(r)
-
-        if density != 'sparse':
-            continue    # for now, we only evaluate the largest area
 
         def proc():
             data = []
@@ -462,18 +465,20 @@ def export_app_connection_distance_histogramm(db, export_dir):
                     continue # this was not a successful connection
 
                 exact_start_us = min(ci.client_channel_up_us, ci.peripheral_channel_up_us)
+                exact_end_us = max(ci.client_disconnect_us or 0, ci.peripheral_disconnect_us or 0) or r.simulation_time
 
                 start_s = math.floor(exact_start_us/1000000)
-                #exact_end_us = max(ci.client_disconnect_us or 0, ci.peripheral_disconnect_us or 0) or r.simulation_time
-                #end_s = math.ceil(exact_end_us/1000000)
+                end_s = math.ceil(exact_end_us/1000000)
 
-                for s in range(start_s, start_s+1):
+                for s in range(start_s, end_s):
                     dist = (db.executesql(
                         '''
                             SELECT dp.us, dp.d + (dp.d_next-dp.d) * (({us}-dp.us)/(dp.us_next-dp.us)) as d
                             FROM distance_pair dp WHERE dp.device_a = {device_a} AND dp.device_b = {device_b} AND dp.us = FLOOR({us}/1000000)*1000000
-                        '''.format(device_a=ci.client, device_b=ci.peripheral, us=start_s*1000000)
+                            LIMIT 1
+                        '''.format(device_a=ci.client, device_b=ci.peripheral, us=s*1000000)
                     ))
+
                     data.append(dist[0][1])
             return data
 
@@ -484,23 +489,32 @@ def export_app_connection_distance_histogramm(db, export_dir):
     #plt.legend()
 
     fig, ax = plt.subplots()
-
+    print(overall_data)
     mean = np.mean(np.array(overall_data))
+    cis = np.percentile(np.array(overall_data), [2.5, 97.5])
 
-    n, bins, patches = ax.hist(overall_data, 50, density=False)
+    # plt.gca().yaxis.set_major_formatter(PercentFormatter(1))
+
+    n, bins, patches = ax.hist(overall_data, 50, density=True)
 
     plt.axvline(mean, color='k', linestyle='dashed', linewidth=1)
-    plt.text(mean+12, .925, "mean: {:.2f}m".format(mean), transform=ax.get_xaxis_transform())
+    plt.text(mean+1, .925, "{:.2f}m".format(mean), transform=ax.get_xaxis_transform())
+
+    plt.axvline(cis[0], color='r', linestyle='dotted', linewidth=1)
+    plt.axvline(cis[1], color='r', linestyle='dotted', linewidth=1)
+
+    plt.text(cis[0]+1, .925, "{:.2f}m".format(cis[0]), transform=ax.get_xaxis_transform())
+    plt.text(cis[1]+1, .925, "{:.2f}m".format(cis[1]), transform=ax.get_xaxis_transform())
 
     fig.set_size_inches(3.0, 2.5)
     plt.tight_layout()
 
     plt.xlabel("Distance [m]")
-    plt.ylabel("# Connections")
+    plt.ylabel("Connection Duration Rate")
     #plt.axis([0, 30, -100, 0])
     #plt.grid(True)
     plt.tight_layout()
-    plt.savefig(export_dir + slugify('export_app_connection_distance_histogramm') + ".pdf", format="pdf")
+    plt.savefig(export_dir + slugify('connection_distance_histogramm') + ".pdf", format="pdf")
     plt.close()
 
 def export_testbed_rssi_per_distance(db, export_dir):
@@ -981,12 +995,12 @@ def export_ict(db, base_path):
     all =  populated_runs + dense_runs + very_dense_runs
 
     runs = db((db.run.status == 'processed') & (db.run.group.belongs(all))).select()
-    max_dist = 30
+    max_dist = 50
 
     per_density = {
-        'populated': [],
+        'very_dense': [],
         'dense': [],
-        'very_dense': []
+        'populated': []
     }
 
     max_s = 360
@@ -1027,15 +1041,17 @@ def export_ict(db, base_path):
     fig, ax = plt.subplots()
     fig.set_size_inches(3.0, 3.0)
 
-    if 'populated' in xs:
-        plt.plot(positions, xs['populated'], linestyle='--', label="Populated", color='C0')
+    if 'very_dense' in xs:
+        plt.plot(positions, xs['very_dense'], linestyle=':', label="Very Dense", color='C0')
+
     if 'dense' in xs:
         plt.plot(positions, xs['dense'], linestyle=':', label="Dense", color='C1')
-    if 'very_dense' in xs:
-        plt.plot(positions, xs['very_dense'], linestyle=':', label="Very Dense", color='C2')
+
+    if 'populated' in xs:
+        plt.plot(positions, xs['populated'], linestyle='--', label="Populated", color='C2')
 
     plt.legend()
-    plt.xlabel("Time [minute]")
+    plt.xlabel("Time [min]")
     plt.ylabel('P(X>x)')
     plt.axis([None, None, None, None])
     plt.tight_layout()
@@ -1144,6 +1160,8 @@ def export_filter_connection_impact(db, base_path):
         #failure_means.append(np.mean(np.array([x[1]-x[0] for x in overall_data[g]])))
         #failure_stds.append(np.std(np.array([x[1]-x[0] for x in overall_data[g]])))
 
+        print("{} mean {}".format(g,successful_means[g] ))
+
     fig, ax = plt.subplots()
 
     x = np.arange(3)
@@ -1153,10 +1171,12 @@ def export_filter_connection_impact(db, base_path):
     width = 0.2
 
     offset = -1.5*width
-    for (k, label) in zip(['filter_off_', 'filter_cc_', 'filter_rssi_', 'filter_both_'], ["None", "Prob", "RSSI (-75dBm)", "Both"]):
+    for (k, label) in zip(['filter_off_', 'filter_cc_', 'filter_rssi_', 'filter_both_'], ["No Filter", "ConnProb", "RSSI above -75dBm", "ConnProb & RSSI"]):
         keys = [ k+x for x in ['populated', 'dense', 'very_dense']]
         ax.bar(x+offset, [successful_means[a] for a in keys],  width, label=label, yerr=[successful_stds[a] for a in keys], capsize=0)
         offset += width
+
+
     ax.set_xticks(x)
     ax.set_xticklabels(["Populated", "Dense", "Very Dense"])
 
@@ -1168,7 +1188,7 @@ def export_filter_connection_impact(db, base_path):
     #plt.axis([None, None, 0, 100])
 
     # Adapt the figure size as needed
-    fig.set_size_inches(3.0, 3.0)
+    fig.set_size_inches(3.4, 3.0)
     plt.tight_layout()
     plt.savefig(export_dir + slugify(("filter_connection_impact")) + ".pdf", format="pdf")
     plt.close()
@@ -1187,7 +1207,7 @@ def export_filter_bundle_hash_impact(db, base_path):
         overall_data[g] = []
 
     for r in runs:
-        name = slugify(("export_filter_bundle_hash_impact_3", str(r.name), str(r.id)))
+        name = slugify(("export_filter_bundle_hash_impact_5", str(r.name), str(r.id)))
         print("Handling {}".format(name))
 
         def proc():
@@ -1208,7 +1228,6 @@ def export_filter_bundle_hash_impact(db, base_path):
                         JOIN stored_bundle sb ON sb.id = bt.source_stored_bundle
                         JOIN bundle b ON b.id = sb.bundle
                         GROUP BY bt.conn_info
-                        WHERE bt.end_us IS NOT NULL
                         HAVING COUNT(*) = 4 AND COUNT(CASE WHEN b.is_sv = 'T' THEN 1 END) = 4 AND COUNT(CASE WHEN b.destination_eid LIKE '%/request' AND b.payload_length = 8 THEN 1 END) = 2
                     ) as a ON a.conn_info = ci.id
                     WHERE ci.run = {run}
@@ -1219,7 +1238,6 @@ def export_filter_bundle_hash_impact(db, base_path):
 
         run_data  = cached(name, proc)
         overall_data[r.group].append(run_data)
-
 
     means = {}
     stds = {}
@@ -1238,8 +1256,9 @@ def export_filter_bundle_hash_impact(db, base_path):
     rects2 = ax.bar(x + width/2, [max(means['broadcast_sv_ch_filter_on'], 1.0), max(means['unicast_sv_ch_filter_on'], 1.0)],  width, label='Hash Enabled', yerr=[stds['broadcast_sv_ch_filter_on'], stds['unicast_sv_ch_filter_on']], capsize=0)
 
 
-    for (mean, rect) in zip([means['broadcast_sv_ch_filter_off'], means['unicast_sv_ch_filter_off'], means['broadcast_sv_ch_filter_on'], means['unicast_sv_ch_filter_on']], (rects1 + rects2)):
-        plt.text(rect.get_x()+ rect.get_width() / 2.0, rect.get_height()+3, "{}%".format(round(mean)), fontsize='small', ha='center', va='bottom')
+    for (mean, rect, offset) in zip([means['broadcast_sv_ch_filter_off'], means['unicast_sv_ch_filter_off'], means['broadcast_sv_ch_filter_on'], means['unicast_sv_ch_filter_on']], (rects1 + rects2), [3, 8, 0, 8]):
+        plt.text(rect.get_x()+ rect.get_width() / 2.0, rect.get_height()+offset, "{}%".format(round(mean)), fontsize='small', ha='center', va='bottom')
+
 
     ax.set_xticks(x)
     ax.set_xticklabels(["Broadcast", "Unicast"])
@@ -1283,7 +1302,7 @@ def export_filter_bundle_hash_impact_on_conn_times(db, base_path):
 
 def export_broadcast(db, base_path):
 
-    length_s = 900 #3000 TODO: use 3000 again!
+    length_s = 1500 #3000 TODO: use 3000 again!
     step = 1.0
 
     groups = ['broadcast_populated', 'broadcast_dense', 'broadcast_very_dense']
@@ -1295,13 +1314,13 @@ def export_broadcast(db, base_path):
         overall_reception_steps[g] = []
 
     for r in db((db.run.status == 'processed') & (db.run.group.belongs(groups))).iterselect():
-        name = slugify(("forwarding broadcast", str(r.name), str(r.id), str(length_s), str(step)))
+        name = slugify(("forwarding broadcast without limit", str(r.name), str(r.id), str(length_s), str(step)))
         print("Handling run {}".format(name))
 
         def proc():
             run_reception_steps = []
 
-            bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://fake') & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))).iterselect()
+            bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://fake')).iterselect()
             for b in bundles:
                 receptions_steps = [0]*(max_step+1)
 
@@ -1339,33 +1358,46 @@ def export_broadcast(db, base_path):
 
     for g in groups:
         steps = np.array(overall_reception_steps[g], dtype=np.float64)
+        print(g)
         steps = np.swapaxes(steps, 0, 1)  # we swap the axes to get all t=0 values at the first position together
         steps = steps * 100.0
         mean[g] = np.mean(steps, axis=1)
         cis[g] = np.percentile(steps, [2.5, 97.5], axis=1)
 
+        full_sec = 0
+        for x in range(0, max_step+1):
+            if mean[g][x] > 99.99:
+                full_sec = x
+                break
+
+        print("Throughput {} at 100% at {} secs".format(g, full_sec))
+
 
     if 'broadcast_very_dense' in mean:
-        plt.plot(positions, mean['broadcast_very_dense'], linestyle='-', label="Mean: Very Dense", alpha=0.75, color='C0')
-        plt.fill_between(positions, cis['broadcast_very_dense'][0], cis['broadcast_very_dense'][1], color='C0', label='95% CI: Very Dense', alpha=0.25, linewidth=0.0)
+        plt.plot(positions, mean['broadcast_very_dense'], linestyle='-', label="Very Dense", alpha=0.75, color='C0')
+        plt.fill_between(positions, cis['broadcast_very_dense'][0], cis['broadcast_very_dense'][1], color='C0',  alpha=0.25, linewidth=0.0)
 
     if 'broadcast_dense' in mean:
-        plt.plot(positions, mean['broadcast_dense'], linestyle='-', label="Mean: Dense", alpha=0.75, color='C1')
-        plt.fill_between(positions, cis['broadcast_dense'][0], cis['broadcast_dense'][1], color='C1', label='95% CI: Dense', alpha=0.25, linewidth=0.0)
+        plt.plot(positions, mean['broadcast_dense'], linestyle='-', label="Dense", alpha=0.75, color='C1')
+        plt.fill_between(positions, cis['broadcast_dense'][0], cis['broadcast_dense'][1], color='C1', alpha=0.25, linewidth=0.0)
 
     if 'broadcast_populated' in mean:
-        plt.plot(positions, mean['broadcast_populated'], linestyle='-', label="Mean: Populated", alpha=0.75, color='C2')
-        plt.fill_between(positions, cis['broadcast_populated'][0], cis['broadcast_populated'][1], color='C2', label='95% CI: Populated', alpha=0.25, linewidth=0.0)
+        plt.plot(positions, mean['broadcast_populated'], linestyle='-', label="Populated", alpha=0.75, color='C2')
+        plt.fill_between(positions, cis['broadcast_populated'][0], cis['broadcast_populated'][1], color='C2', alpha=0.25, linewidth=0.0)
 
 
     plt.legend()
     plt.xlabel("Time [min]")
-    plt.ylabel('Bundle Reception Rate [%]')
-    plt.axis([0, 900, None, None])
+    plt.ylabel('Mean Bundle Reception Rate [%]')
+    plt.axis([0, 1200, 0, None])
     plt.grid(True)
 
-    ticks = ticker.FuncFormatter(lambda x, pos: '{0:g}'.format(int(x/60)))
+    ticks = ticker.FuncFormatter(lambda x, pos: '{}'.format(round(x/60.0)))
     ax.xaxis.set_major_formatter(ticks)
+
+    ax.xaxis.set_major_locator(MultipleLocator(120))
+    # For the minor ticks, use no labels; default NullFormatter.
+    ax.xaxis.set_minor_locator(MultipleLocator(60))
 
     plt.tight_layout()
     plt.savefig(base_path + "broadcast_comparison" + ".pdf", format="pdf")
@@ -1374,7 +1406,7 @@ def export_broadcast(db, base_path):
 
 def export_unicast(db, base_path):
 
-    length_s = 1800 #3000 TODO: use 3000 again!
+    length_s = 2700
     step = 1.0
 
     groups = ['unicast_populated', 'unicast_dense', 'unicast_very_dense']
@@ -1386,16 +1418,14 @@ def export_unicast(db, base_path):
         overall_reception_steps[g] = []
 
     for r in db((db.run.status == 'processed') & (db.run.group.belongs(groups))).iterselect():
-        name = slugify(("forwarding unicast", str(r.name), str(r.id), str(length_s), str(step)))
+        name = slugify(("forwarding unicast without limit 2", str(r.name), str(r.id), str(length_s), str(step)))
         print("Handling run {}".format(name))
 
         def proc():
             run_reception_steps = []
             # & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))
-            bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://source') & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))).iterselect()
+            bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://source')).iterselect()
             for b in bundles:
-                if b.creation_timestamp_ms > ((r.simulation_time/1000)-(length_s*1000)):
-                    continue    # this bundle is too late
 
                 receptions_steps = [0.0]*(max_step+1)
 
@@ -1431,16 +1461,27 @@ def export_unicast(db, base_path):
 
     for g in groups:
         steps = np.array(overall_reception_steps[g], dtype=np.float64)
+
+        print(g)
+        print(steps)
+
         steps = np.swapaxes(steps, 0, 1)  # we swap the axes to get all t=0 values at the first position together
         steps = steps * 100.0
         mean[g] = np.mean(steps, axis=1)
         cis[g] = np.percentile(steps, [2.5, 97.5], axis=1)
 
+        full_sec = 0
+        for x in range(0, max_step+1):
+            if mean[g][x] > 99.99:
+                full_sec = x
+                break
+
+        print("Throughput {} at 100% at {} secs".format(g, full_sec))
+        print("Throughput {}, mean {} at max secs".format(g, mean[g][max_step]))
+
     if 'unicast_very_dense' in mean:
         plt.plot(positions, mean['unicast_very_dense'], linestyle='-', label="Very Dense", alpha=0.75, color='C0')
         #plt.fill_between(positions, cis['unicast_very_dense'][0], cis['unicast_very_dense'][1], color='C0', label='95% CI Very Dense', alpha=0.25, linewidth=0.0)
-
-
 
     if 'unicast_dense' in mean:
         plt.plot(positions, mean['unicast_dense'], linestyle='-', label="Dense", alpha=0.75, color='C1')
@@ -1455,10 +1496,14 @@ def export_unicast(db, base_path):
     plt.legend()
     plt.xlabel("Time [min]")
     plt.ylabel('Mean Bundle Reception Rate [%]')
-    plt.axis([0, 1800, None, None])
+    plt.axis([0, 2700, 0, None])
 
-    ticks = ticker.FuncFormatter(lambda x, pos: '{0:g}'.format(int(x/60)))
+    ticks = ticker.FuncFormatter(lambda x, pos: '{}'.format(round(x/60.0)))
     ax.xaxis.set_major_formatter(ticks)
+
+    ax.xaxis.set_major_locator(MultipleLocator(300))
+    # For the minor ticks, use no labels; default NullFormatter.
+    #ax.xaxis.set_minor_locator(MultipleLocator(60))
 
     plt.grid(True)
     plt.tight_layout()
@@ -1479,7 +1524,6 @@ def export_throughput(db, base_path):
     plt.clf()
 
     fig, ax = plt.subplots()
-    fig.set_size_inches(3.6, 2.5)
 
     for (i, sn) in enumerate([16, 32, 48, 64]):
         overall_reception_steps = []
@@ -1516,26 +1560,40 @@ def export_throughput(db, base_path):
             overall_reception_steps += run_reception_steps
 
 
-
         if len(overall_reception_steps) > 0:
             steps = np.array(overall_reception_steps, dtype=np.float64)
             steps = np.swapaxes(steps, 0, 1)
+            steps *= 100.0 # scale to percent
 
             mean = np.mean(steps, axis=1)
             cis = np.percentile(steps, [2.5, 97.5], axis=1)
 
-            plt.plot(positions, mean, linestyle='-', label="Mean: {}%".format((i+1)*25), alpha=0.75, color='C{}'.format(i))
-            plt.fill_between(positions, cis[0], cis[1], color='C{}'.format(i), label='95% CI: {}%'.format((i+1)*25), alpha=0.25, linewidth=0.0)
+            plt.plot(positions, mean, linestyle='-', label="{} kB".format((i+1)*16), alpha=0.75, color='C{}'.format(i))
+            plt.fill_between(positions, cis[0], cis[1], color='C{}'.format(i), alpha=0.5, linewidth=0.0)
+
+            full_sec = 0
+            for x in range(0, max_step+1):
+                if mean[x] > 99.99:
+                    full_sec = x
+                    break
+
+            print("Throughput {} at 100% at {} secs".format(sn, full_sec))
 
     plt.legend()
     plt.xlabel("Time [min]")
-    plt.ylabel('Bundle Reception Rate [%]')
-    plt.axis([0, 900, None, None])
+    plt.ylabel('Mean Bundle Reception Rate [%]')
+    plt.axis([0, 840, 0, None])
     plt.grid(True)
 
-    ticks = ticker.FuncFormatter(lambda x, pos: '{0:g}'.format(int(x/60)))
+
+    ticks = ticker.FuncFormatter(lambda x, pos: '{}'.format(round(x/60.0)))
     ax.xaxis.set_major_formatter(ticks)
 
+    ax.xaxis.set_major_locator(MultipleLocator(120))
+    # For the minor ticks, use no labels; default NullFormatter.
+    ax.xaxis.set_minor_locator(MultipleLocator(60))
+
+    fig.set_size_inches(3.6, 2.5)
     plt.tight_layout()
     plt.savefig(base_path + "throughput" + ".pdf", format="pdf")
     plt.close()
@@ -1587,34 +1645,21 @@ if __name__ == "__main__":
     db.commit() # we need to commit
 
     exports = [
-        export_ict,
-        export_throughput,
-        export_broadcast,
-        export_unicast,
-        export_filter_connection_impact,
-        export_filter_bundle_hash_impact_on_conn_times,
-        export_filter_bundle_hash_impact,
-        export_testbed_calibration_bundle_rssi_bars,
-        export_testbed_calibration_bundle_transmission_time,
-        export_testbed_calibration_bundle_transmission_success,
-        export_testbed_calibration_setup_times,
-        #export_testbed_calibration_bundle_rssi_per_distance,
-        #export_fake_bundle_propagation_direct,
-        #export_bundle_propagation_epidemic,
-        #export_app_connection_distance_histogramm,
-        #export_testbed_rssi_per_distance,
-        #export_pre_calibration_connection_times,
-        #export_testbed_connection_times,
-        #export_mean_path_loss,
-        #export_connection_times,
-        #export_stored_bundles,
-        #export_bundle_transmission_time_per_distance,
-        #export_bundle_transmission_time_per_neighbors,
-        #export_rssi_per_distance,
-        #export_advertisement_reception_rate,
-        #export_fake_bundle_propagation_epidemic,
-        #export_fake_bundle_propagation_direct,
-        #export_ict,
+        #export_throughput,
+        #export_broadcast,
+        #export_testbed_calibration_bundle_rssi_bars,
+        #export_testbed_calibration_bundle_transmission_success,
+        #export_testbed_calibration_bundle_transmission_time,
+        #export_testbed_calibration_setup_times,
+        #export_filter_bundle_hash_impact,
+        #export_filter_connection_impact,
+        #export_unicast,
+        export_connection_distance_histogramm,
+
+        # Waiting:        export_ict,
+        # Waiting:         ,
+        # Waiting:         ,
+        # shall this be included? export_filter_bundle_hash_impact_on_conn_times,
     ]
 
     for step in exports:
