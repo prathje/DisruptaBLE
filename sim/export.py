@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 from export_utility import slugify, cached, init_cache, load_env_config
 
 from scipy.optimize import curve_fit
-
+import matplotlib.ticker as ticker
 
 METHOD_PREFIX = 'export_'
 
@@ -124,13 +124,13 @@ def export_testbed_calibration_setup_times(db, base_path):
     ax.set_xticks(x)
     ax.set_xticklabels(distance_groups)
 
-    ax.set_ylabel('Mean Link Setup Time [s]')
+    ax.set_ylabel('Mean Setup Time [s]')
     ax.set_xlabel('Distance [m]')
     #ax.set_title('')
-    ax.legend() # (loc='upper center', bbox_to_anchor=(0.5, -0.5), ncol=2)
+    #ax.legend() # (loc='upper center', bbox_to_anchor=(0.5, -0.5), ncol=2)
 
     # Adapt the figure size as needed
-    fig.set_size_inches(1.75, 2.5)
+    fig.set_size_inches(1.75, 2.1)
     plt.tight_layout()
     plt.savefig(export_dir + slugify(("testbed_calibration_setup_times")) + ".pdf", format="pdf")
     plt.close()
@@ -207,10 +207,10 @@ def export_testbed_calibration_bundle_transmission_time(db, base_path):
 
     ax.set_ylabel('Bundle Tx Time [s]')
     #ax.set_title('')
-    ax.legend()
+    #ax.legend()
 
     # Adapt the figure size as needed
-    fig.set_size_inches(1.75, 2.5)
+    fig.set_size_inches(1.75, 2.1)
     plt.tight_layout()
     plt.savefig(export_dir + slugify(("testbed_calibration_bundle_transmission_time")) + ".pdf", format="pdf")
     plt.close()
@@ -268,6 +268,7 @@ def export_testbed_calibration_bundle_transmission_success(db, base_path):
     width = 0.4  # the width of the bars
 
     fig, ax = plt.subplots()
+    print(bt_success_mean['calibration'])
     rects1 = ax.bar(x - width/2, bt_success_mean['testbed'],  width, label='Testbed', capsize=0)
     rects2 = ax.bar(x + width/2, bt_success_mean['calibration'], width,label='Simulation', capsize=0)
 
@@ -276,13 +277,13 @@ def export_testbed_calibration_bundle_transmission_success(db, base_path):
 
     ax.set_ylabel('Bundle TX Success [%]')
     ax.set_xlabel('Distance [m]')
-    ax.legend(loc='lower center') # (loc='upper center', bbox_to_anchor=(0.5, -0.5), ncol=2)
+    #ax.legend(loc='lower center') # (loc='upper center', bbox_to_anchor=(0.5, -0.5), ncol=2)
     #ax.set_title('')
     #ax.legend()
     plt.axis([None, None, 0, 100])
 
     # Adapt the figure size as needed
-    fig.set_size_inches(1.75, 2.5)
+    fig.set_size_inches(1.75, 2.1)
     plt.tight_layout()
     plt.savefig(export_dir + slugify(("testbed_calibration_bundle_transmission_success")) + ".pdf", format="pdf")
     plt.close()
@@ -341,6 +342,8 @@ def export_testbed_calibration_bundle_rssi_bars(db, base_path):
     width = 0.4  # the width of the bars
 
     fig, ax = plt.subplots()
+
+    print(rssi_means['calibration'])
     rects1 = ax.bar(x - width/2, rssi_means['testbed'],  width, yerr= rssi_std['testbed'], label='Testbed', capsize=0)
     rects2 = ax.bar(x + width/2, rssi_means['calibration'], width,yerr= rssi_std['calibration'], label='Simulation', capsize=0)
 
@@ -348,13 +351,13 @@ def export_testbed_calibration_bundle_rssi_bars(db, base_path):
     ax.set_xticklabels(distance_groups)
     ax.set_ylabel('Mean RSSI [dBm]')
     ax.set_xlabel('Distance [m]')
-    ax.legend(loc='upper center')
+    #ax.legend(loc='upper center')
     #ax.set_title('')
 
-    plt.axis([None, None, -100, 0])
+    plt.axis([None, None, -100, -40])
 
     # Adapt the figure size as needed
-    fig.set_size_inches(1.8, 2.5)
+    fig.set_size_inches(1.8, 1.6)
     plt.tight_layout()
     plt.savefig(export_dir + slugify(("testbed_calibration_bundle_rssi_bars")) + ".pdf", format="pdf")
     plt.close()
@@ -968,206 +971,19 @@ def export_advertisement_reception_rate(db, export_dir):
 
         handle_adv_data(slugify("Adv reception rate per Distance (overall) {}".format(r.id)), overall_data)
 
-def export_bundle_propagation_epidemic(db, base_path):
-
-    length_s = 250 #3000 TODO: use 3000 again!
-    step = 1.0
-
-    runs = db((db.run.status == 'processed') & (db.run.group == 'broadcast')).select()
-    max_step = math.ceil(length_s/step)
-
-    per_density_reception_steps = {
-        'sparse': [],
-        'populated': [],
-        'dense': [],
-        'very_dense': []
-    }
-
-    for r in runs:
-
-        run_config = json.loads(r.configuration_json)
-        name = slugify(("epidemic propagation", str(r.name), str(r.id), str(length_s), str(step)))
-
-
-        model_options = json.loads(run_config['SIM_MODEL_OPTIONS'])
-
-        print("Handling run {}".format(name))
-
-        density = get_density(r)
-
-        def proc():
-            run_reception_steps = []
-
-            bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://fake') & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))).iterselect()
-            for b in bundles:
-                receptions_steps = [0]*(max_step+1)
-
-                res = db.executesql(
-                    '''
-                        SELECT us, receiver_eid = destination_eid FROM bundle_reception
-                        WHERE bundle = {}
-                        ORDER BY us ASC
-                    '''.format(b.id)
-                )
-
-                for row in res:
-                    ms = (row[0]/1000)-b.creation_timestamp_ms
-                    ts = round((ms/1000) / step)
-                    for x in range(ts, max_step+1):
-                        receptions_steps[x] += 1
-                run_reception_steps.append(receptions_steps)
-            return run_reception_steps
-
-        run_reception_steps = cached(name, proc)
-        per_density_reception_steps[density] += run_reception_steps
-
-    positions = range(0, max_step + 1)
-    plt.clf()
-
-    mean = {}
-    cis = {}
-
-
-    fig, ax = plt.subplots()
-    fig.set_size_inches(3.0, 3.0)
-
-    for k in per_density_reception_steps:
-        if len(per_density_reception_steps[k]) > 0:
-            per_density_reception_steps[k] = np.array(per_density_reception_steps[k], dtype=np.float64)
-            per_density_reception_steps[k] = np.swapaxes(per_density_reception_steps[k], 0, 1)  # we swap the axes to get all t=0 values at the first position together
-            per_density_reception_steps[k] = (per_density_reception_steps[k] / 24.0) * 100.0
-            mean[k] = np.mean(per_density_reception_steps[k], axis=1)
-            cis[k] = np.percentile(per_density_reception_steps[k], [2.5, 97.5], axis=1)
-
-
-    if 'sparse' in mean:
-        plt.plot(positions, mean['sparse'], linestyle='-', label="Sparse", alpha=0.75, color='C1')
-        plt.fill_between(positions, cis['sparse'][0], cis['sparse'][1], color='C1', label='95% CI Sparse', alpha=0.25, linewidth=0.0)
-
-    if 'populated' in mean:
-        plt.plot(positions, mean['populated'], linestyle='-', label="Populated", alpha=0.75, color='C2')
-        plt.fill_between(positions, cis['populated'][0], cis['populated'][1], color='C2', label='95% CI Populated', alpha=0.25, linewidth=0.0)
-
-    if 'dense' in mean:
-        plt.plot(positions, mean['dense'], linestyle='-', label="Dense", alpha=0.75, color='C4')
-        plt.fill_between(positions, cis['dense'][0], cis['dense'][1], color='C4', label='95% CI Dense', alpha=0.25, linewidth=0.0)
-
-    if 'very_dense' in mean:
-        plt.plot(positions, mean['very_dense'], linestyle='-', label="Very Dense", alpha=0.75, color='C5')
-        plt.fill_between(positions, cis['very_dense'][0], cis['very_dense'][1], color='C5', label='95% CI Very Dense', alpha=0.25, linewidth=0.0)
-
-    plt.legend()
-    plt.xlabel("Time [s]")
-    plt.ylabel('Bundle Reception Rate [%]')
-    plt.axis([0, 300, None, None])
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(base_path + "epidemic_propagation" + ".pdf", format="pdf")
-    plt.close()
-
-def export_fake_bundle_propagation_direct(db, base_path):
-
-    length_s = 250 # 3000 TODO use real value again!
-    step = 1.0
-
-    runs = db((db.run.status == 'processed') & (db.run.group == 'unicast')).select()
-
-    max_step = math.ceil(length_s/step)
-
-    per_density_reception_steps = {
-        'sparse': [],
-        'populated': [],
-        'dense': [],
-        'very_dense': []
-    }
-
-    for r in runs:
-        run_config = json.loads(r.configuration_json)
-        name = slugify(("direct propagation 2", str(r.name), str(r.id), str(length_s), str(step)))
-
-        density = get_density(r)
-
-        def proc():
-            run_reception_steps = []
-            # & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))
-            bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://source') & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))).iterselect()
-            for b in bundles:
-                if b.creation_timestamp_ms > ((r.simulation_time/1000)-(length_s*1000)):
-                    continue    # this bundle is too late
-
-                receptions_steps = [0]*(max_step+1)
-
-                res = db.executesql(
-                    '''
-                        SELECT us FROM bundle_reception
-                        WHERE bundle = {} AND receiver_eid = destination_eid
-                        ORDER BY us ASC
-                    '''.format(b.id)
-                )
-
-                for row in res:
-                    ms = (row[0]/1000)-b.creation_timestamp_ms
-                    ts = round((ms/1000) / step)
-
-                    for x in range(ts, max_step+1):
-                        receptions_steps[x] += 1
-
-                run_reception_steps.append(receptions_steps)
-            return run_reception_steps
-
-        run_reception_steps = cached(name, proc)
-        per_density_reception_steps[density] += run_reception_steps
-
-    positions = range(0, max_step + 1)
-    plt.clf()
-
-    fig, ax = plt.subplots()
-    fig.set_size_inches(3.0, 3.0)
-
-    mean = {}
-    cis = {}
-
-
-    for k in per_density_reception_steps:
-        if len(per_density_reception_steps[k]) > 0:
-            per_density_reception_steps[k] = np.array(per_density_reception_steps[k], dtype=np.float64)
-            per_density_reception_steps[k] = np.swapaxes(per_density_reception_steps[k], 0, 1)  # we swap the axes to get all t=0 values at the first position together
-            per_density_reception_steps[k] = per_density_reception_steps[k]*100
-            mean[k] = np.mean(per_density_reception_steps[k], axis=1)
-            cis[k] = np.percentile(per_density_reception_steps[k], [2.5, 97.5], axis=1)
-
-    if 'sparse' in mean:
-        plt.plot(positions, mean['sparse'], linestyle='-', label="Sparse", alpha=0.75, color='C1')
-        plt.fill_between(positions, cis['sparse'][0], cis['sparse'][1], color='C1', label='95% CI Sparse', alpha=0.25, linewidth=0.0)
-
-    if 'populated' in mean:
-        plt.plot(positions, mean['populated'], linestyle='-', label="Populated", alpha=0.75, color='C2')
-        plt.fill_between(positions, cis['populated'][0], cis['populated'][1], color='C2', label='95% CI Populated', alpha=0.25, linewidth=0.0)
-
-    if 'dense' in mean:
-        plt.plot(positions, mean['dense'], linestyle='-', label="Dense", alpha=0.75, color='C4')
-        plt.fill_between(positions, cis['dense'][0], cis['dense'][1], color='C4', label='95% CI Dense', alpha=0.25, linewidth=0.0)
-
-    if 'very_dense' in mean:
-        plt.plot(positions, mean['very_dense'], linestyle='-', label="Very Dense", alpha=0.75, color='C5')
-        plt.fill_between(positions, cis['very_dense'][0], cis['very_dense'][1], color='C5', label='95% CI Very Dense', alpha=0.25, linewidth=0.0)
-
-    plt.legend()
-    plt.xlabel("Time [s]")
-    plt.ylabel('Bundle Reception Rate [%]')
-    plt.axis([0, 300, None, None])
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(base_path + "spray_and_wait_propagation" + ".pdf", format="pdf")
-    plt.close()
-
 
 def export_ict(db, base_path):
-    runs = db((db.run.status == 'processed') & ((db.run.group == 'broadcast') | (db.run.group == 'unicast'))).select()
-    max_dist = 50
+    populated_runs = ['broadcast_populated', 'unicast_populated']
+    dense_runs = ['broadcast_dense', 'unicast_dense']
+    very_dense_runs = ['broadcast_very_dense', 'unicast_very_dense']
+
+
+    all =  populated_runs + dense_runs + very_dense_runs
+
+    runs = db((db.run.status == 'processed') & (db.run.group.belongs(all))).select()
+    max_dist = 30
 
     per_density = {
-        'sparse': [],
         'populated': [],
         'dense': [],
         'very_dense': []
@@ -1183,6 +999,7 @@ def export_ict(db, base_path):
         print("Handling {}".format(name))
 
         density = get_density(r)
+        assert density
 
         def proc():
             # build ict map
@@ -1210,14 +1027,12 @@ def export_ict(db, base_path):
     fig, ax = plt.subplots()
     fig.set_size_inches(3.0, 3.0)
 
-    if 'sparse' in xs:
-        plt.plot(positions, xs['sparse'], linestyle='-', label="Sparse", color='C1')
     if 'populated' in xs:
-        plt.plot(positions, xs['populated'], linestyle='--', label="Populated", color='C2')
+        plt.plot(positions, xs['populated'], linestyle='--', label="Populated", color='C0')
     if 'dense' in xs:
-        plt.plot(positions, xs['dense'], linestyle=':', label="Dense", color='C3')
+        plt.plot(positions, xs['dense'], linestyle=':', label="Dense", color='C1')
     if 'very_dense' in xs:
-        plt.plot(positions, xs['very_dense'], linestyle=':', label="Very Dense", color='C4')
+        plt.plot(positions, xs['very_dense'], linestyle=':', label="Very Dense", color='C2')
 
     plt.legend()
     plt.xlabel("Time [minute]")
@@ -1264,20 +1079,50 @@ def export_connection_times(db, base_path):
 
 def export_filter_connection_impact(db, base_path):
 
-    groups = ['filter_off', 'filter_cc', 'filter_rssi', 'filter_both']
+    groups = [
+        'filter_off_populated',
+        'filter_cc_populated',
+        'filter_rssi_populated',
+        'filter_both_populated',
+        'filter_off_dense',
+        'filter_cc_dense',
+        'filter_rssi_dense',
+        'filter_both_dense',
+        'filter_off_very_dense',
+        'filter_cc_very_dense',
+        'filter_rssi_very_dense',
+        'filter_both_very_dense',
+    ]
+
     runs = db((db.run.status == 'processed') & (db.run.group.belongs(groups))).select()
 
     overall_data = {}
-    overall_distances = {}
 
     for g in groups:
         overall_data[g] = []
 
     for r in runs:
-        name = slugify(("filter_connection_impact_2", str(r.name), str(r.id)))
+        name = slugify(("filter_connection_impact_2with_failed_conns_4", str(r.name), str(r.id)))
         print("Handling {}".format(name))
 
         def proc():
+            succ_conns = (db.executesql(
+                '''
+                    SELECT COUNT(*)
+                    FROM conn_info ci
+                    JOIN (
+                        SELECT bt.conn_info as conn_info
+                        FROM bundle_transmission bt
+                        JOIN stored_bundle sb ON sb.id = bt.source_stored_bundle
+                        JOIN bundle b ON b.id = sb.bundle
+                        WHERE bt.end_us IS NOT NULL
+                        GROUP BY bt.conn_info
+                        HAVING COUNT(*) >= 4
+                    ) as a ON a.conn_info = ci.id
+                    WHERE ci.run = {run}
+                '''.format(run=r.id)
+            ))[0][0]
+
             res = (db.executesql(
                 '''
                     SELECT  COALESCE(SUM(NOT(ISNULL(ci.client_channel_up_us))), 0), COUNT(*)
@@ -1286,46 +1131,44 @@ def export_filter_connection_impact(db, base_path):
                 '''.format(run=r.id)
             ))[0]
 
-            return (int(res[0]), int(res[1]))
-
+            return (int(res[0]), int(res[1]), int(succ_conns))
         run_data  = cached(name, proc)
         overall_data[r.group].append(run_data)
 
-    failure_means = []
-    failure_stds = []
-    successful_means = []
-    successful_stds = []
+    successful_means = {}
+    successful_stds = {}
 
     for g in groups:
-        successful_means.append(np.mean(np.array([x[0] for x in overall_data[g]])))
-        successful_stds.append(np.std(np.array([x[0] for x in overall_data[g]])))
-        failure_means.append(np.mean(np.array([x[1]-x[0] for x in overall_data[g]])))
-        failure_stds.append(np.std(np.array([x[1]-x[0] for x in overall_data[g]])))
+        successful_means[g] =(np.mean(np.array([x[2] for x in overall_data[g]])))
+        successful_stds[g] = (np.std(np.array([x[2] for x in overall_data[g]])))
+        #failure_means.append(np.mean(np.array([x[1]-x[0] for x in overall_data[g]])))
+        #failure_stds.append(np.std(np.array([x[1]-x[0] for x in overall_data[g]])))
 
     fig, ax = plt.subplots()
 
-    x = np.arange(len(groups))
-    width = 0.7  # the width of the bars
+    x = np.arange(3)
 
     fig, ax = plt.subplots()
-    rects1 = ax.bar(x, failure_means,  width, label='Failed', yerr=failure_stds, capsize=0, bottom=successful_means)
-    rects2 = ax.bar(x, successful_means, width,yerr=successful_stds, label='Successful', capsize=0)
 
-    for (i, rect) in enumerate(rects2):
-        plt.text(rect.get_x()+ rect.get_width() / 2.0, 25, "{}%".format(round((successful_means[i] / (successful_means[i]+failure_means[i])*100))), fontsize='small', ha='center', va='bottom')
+    width = 0.2
 
+    offset = -1.5*width
+    for (k, label) in zip(['filter_off_', 'filter_cc_', 'filter_rssi_', 'filter_both_'], ["None", "Prob", "RSSI (-75dBm)", "Both"]):
+        keys = [ k+x for x in ['populated', 'dense', 'very_dense']]
+        ax.bar(x+offset, [successful_means[a] for a in keys],  width, label=label, yerr=[successful_stds[a] for a in keys], capsize=0)
+        offset += width
     ax.set_xticks(x)
-    ax.set_xticklabels(["None", "Prob", "RSSI", "Both"])
+    ax.set_xticklabels(["Populated", "Dense", "Very Dense"])
 
-    ax.set_ylabel('Mean # Conn. per Run')
-    ax.set_xlabel('Active Filters')
+    ax.set_ylabel('Mean # SV Exchanges per Run')
+    ax.set_xlabel('Density')
     #ax.legend(loc='lower center') # (loc='upper center', bbox_to_anchor=(0.5, -0.5), ncol=2)
     #ax.set_title('')
     ax.legend()
     #plt.axis([None, None, 0, 100])
 
     # Adapt the figure size as needed
-    fig.set_size_inches(2.25, 2.0)
+    fig.set_size_inches(3.0, 3.0)
     plt.tight_layout()
     plt.savefig(export_dir + slugify(("filter_connection_impact")) + ".pdf", format="pdf")
     plt.close()
@@ -1344,7 +1187,7 @@ def export_filter_bundle_hash_impact(db, base_path):
         overall_data[g] = []
 
     for r in runs:
-        name = slugify(("export_filter_bundle_hash_impact_2", str(r.name), str(r.id)))
+        name = slugify(("export_filter_bundle_hash_impact_3", str(r.name), str(r.id)))
         print("Handling {}".format(name))
 
         def proc():
@@ -1365,6 +1208,7 @@ def export_filter_bundle_hash_impact(db, base_path):
                         JOIN stored_bundle sb ON sb.id = bt.source_stored_bundle
                         JOIN bundle b ON b.id = sb.bundle
                         GROUP BY bt.conn_info
+                        WHERE bt.end_us IS NOT NULL
                         HAVING COUNT(*) = 4 AND COUNT(CASE WHEN b.is_sv = 'T' THEN 1 END) = 4 AND COUNT(CASE WHEN b.destination_eid LIKE '%/request' AND b.payload_length = 8 THEN 1 END) = 2
                     ) as a ON a.conn_info = ci.id
                     WHERE ci.run = {run}
@@ -1413,22 +1257,45 @@ def export_filter_bundle_hash_impact(db, base_path):
     plt.close()
 
 
-def export_forwarding(db, base_path):
+def export_filter_bundle_hash_impact_on_conn_times(db, base_path):
+    groups = ['broadcast_sv_ch_filter_off', 'broadcast_sv_ch_filter_on', 'unicast_sv_ch_filter_off', 'unicast_sv_ch_filter_on']
+    for g in groups:
+        client_res = (db.executesql(
+            '''
+                SELECT (AVG(ci.client_channel_down_us-ci.client_conn_init_us)/1000000) / COUNT(DISTINCT r.id)
+                FROM run r 
+                LEFT JOIN conn_info ci ON ci.run = r.id
+                WHERE r.status = 'processed' AND r.group = '{g}' AND (ci.id IS NULL OR (ci.client_connection_success_us IS NOT NULL AND ci.client_disconnect_us IS NOT NULL))
+                GROUP BY r.group
+            '''.format(g=g))[0])
 
-    length_s = 1795 #3000 TODO: use 3000 again!
+        peripheral_res = (db.executesql(
+            '''
+                SELECT (AVG(ci.client_channel_down_us-ci.client_conn_init_us)/1000000) / COUNT(DISTINCT r.id)
+                FROM run r
+                JOIN conn_info ci ON ci.run = r.id
+                WHERE r.status = 'processed' AND r.group = '{g}' AND (ci.id IS NULL OR (ci.peripheral_connection_success_us IS NOT NULL AND ci.peripheral_disconnect_us IS NOT NULL))
+                GROUP BY r.group
+            '''.format(g=g))[0])
+
+        print(g, client_res, peripheral_res, client_res+peripheral_res)
+
+
+def export_broadcast(db, base_path):
+
+    length_s = 900 #3000 TODO: use 3000 again!
     step = 1.0
 
-    groups = ['broadcast_dense', 'unicast_dense']
+    groups = ['broadcast_populated', 'broadcast_dense', 'broadcast_very_dense']
     max_step = math.ceil(length_s/step)
-
 
     overall_reception_steps = {}
 
     for g in groups:
         overall_reception_steps[g] = []
 
-    for r in db((db.run.status == 'processed') & (db.run.group == 'broadcast_dense')).iterselect():
-        name = slugify(("forwarding comparison", str(r.name), str(r.id), str(length_s), str(step)))
+    for r in db((db.run.status == 'processed') & (db.run.group.belongs(groups))).iterselect():
+        name = slugify(("forwarding broadcast", str(r.name), str(r.id), str(length_s), str(step)))
         print("Handling run {}".format(name))
 
         def proc():
@@ -1437,6 +1304,8 @@ def export_forwarding(db, base_path):
             bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://fake') & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))).iterselect()
             for b in bundles:
                 receptions_steps = [0]*(max_step+1)
+
+                print(b.id)
 
                 res = db.executesql(
                     '''
@@ -1459,8 +1328,66 @@ def export_forwarding(db, base_path):
         run_reception_steps = cached(name, proc)
         overall_reception_steps[r.group] += run_reception_steps
 
-    for r in db((db.run.status == 'processed') & (db.run.group == 'unicast_dense')).iterselect():
-        name = slugify(("forwarding 2", str(r.name), str(r.id), str(length_s), str(step)))
+    positions = range(0, max_step + 1)
+    plt.clf()
+
+    mean = {}
+    cis = {}
+
+    fig, ax = plt.subplots()
+    fig.set_size_inches(3.6, 2.5)
+
+    for g in groups:
+        steps = np.array(overall_reception_steps[g], dtype=np.float64)
+        steps = np.swapaxes(steps, 0, 1)  # we swap the axes to get all t=0 values at the first position together
+        steps = steps * 100.0
+        mean[g] = np.mean(steps, axis=1)
+        cis[g] = np.percentile(steps, [2.5, 97.5], axis=1)
+
+
+    if 'broadcast_very_dense' in mean:
+        plt.plot(positions, mean['broadcast_very_dense'], linestyle='-', label="Mean: Very Dense", alpha=0.75, color='C0')
+        plt.fill_between(positions, cis['broadcast_very_dense'][0], cis['broadcast_very_dense'][1], color='C0', label='95% CI: Very Dense', alpha=0.25, linewidth=0.0)
+
+    if 'broadcast_dense' in mean:
+        plt.plot(positions, mean['broadcast_dense'], linestyle='-', label="Mean: Dense", alpha=0.75, color='C1')
+        plt.fill_between(positions, cis['broadcast_dense'][0], cis['broadcast_dense'][1], color='C1', label='95% CI: Dense', alpha=0.25, linewidth=0.0)
+
+    if 'broadcast_populated' in mean:
+        plt.plot(positions, mean['broadcast_populated'], linestyle='-', label="Mean: Populated", alpha=0.75, color='C2')
+        plt.fill_between(positions, cis['broadcast_populated'][0], cis['broadcast_populated'][1], color='C2', label='95% CI: Populated', alpha=0.25, linewidth=0.0)
+
+
+    plt.legend()
+    plt.xlabel("Time [min]")
+    plt.ylabel('Bundle Reception Rate [%]')
+    plt.axis([0, 900, None, None])
+    plt.grid(True)
+
+    ticks = ticker.FuncFormatter(lambda x, pos: '{0:g}'.format(int(x/60)))
+    ax.xaxis.set_major_formatter(ticks)
+
+    plt.tight_layout()
+    plt.savefig(base_path + "broadcast_comparison" + ".pdf", format="pdf")
+    plt.close()
+
+
+def export_unicast(db, base_path):
+
+    length_s = 1800 #3000 TODO: use 3000 again!
+    step = 1.0
+
+    groups = ['unicast_populated', 'unicast_dense', 'unicast_very_dense']
+    max_step = math.ceil(length_s/step)
+
+    overall_reception_steps = {}
+
+    for g in groups:
+        overall_reception_steps[g] = []
+
+    for r in db((db.run.status == 'processed') & (db.run.group.belongs(groups))).iterselect():
+        name = slugify(("forwarding unicast", str(r.name), str(r.id), str(length_s), str(step)))
+        print("Handling run {}".format(name))
 
         def proc():
             run_reception_steps = []
@@ -1500,7 +1427,7 @@ def export_forwarding(db, base_path):
     cis = {}
 
     fig, ax = plt.subplots()
-    fig.set_size_inches(3.8, 2.5)
+    fig.set_size_inches(3.6, 2.5)
 
     for g in groups:
         steps = np.array(overall_reception_steps[g], dtype=np.float64)
@@ -1509,101 +1436,108 @@ def export_forwarding(db, base_path):
         mean[g] = np.mean(steps, axis=1)
         cis[g] = np.percentile(steps, [2.5, 97.5], axis=1)
 
+    if 'unicast_very_dense' in mean:
+        plt.plot(positions, mean['unicast_very_dense'], linestyle='-', label="Very Dense", alpha=0.75, color='C0')
+        #plt.fill_between(positions, cis['unicast_very_dense'][0], cis['unicast_very_dense'][1], color='C0', label='95% CI Very Dense', alpha=0.25, linewidth=0.0)
 
-    plt.plot(positions, mean['broadcast_dense'], linestyle='-', label="Broadcast", alpha=0.75, color='C0')
-    plt.fill_between(positions, cis['broadcast_dense'][0], cis['broadcast_dense'][1], color='C0', label='95% CI Broadcast', alpha=0.25, linewidth=0.0)
 
-    plt.plot(positions, mean['unicast_dense'], linestyle='-', label="Unicast", alpha=0.75, color='C1')
-    plt.fill_between(positions, cis['unicast_dense'][0], cis['unicast_dense'][1], color='C1', label='95% CI Unicast', alpha=0.25, linewidth=0.0)
+
+    if 'unicast_dense' in mean:
+        plt.plot(positions, mean['unicast_dense'], linestyle='-', label="Dense", alpha=0.75, color='C1')
+        #plt.fill_between(positions, cis['unicast_dense'][0], cis['unicast_dense'][1], color='C1', label='95% CI Dense', alpha=0.25, linewidth=0.0)
+
+    if 'unicast_populated' in mean:
+        plt.plot(positions, mean['unicast_populated'], linestyle='-', label="Populated", alpha=0.75, color='C2')
+        #plt.fill_between(positions, cis['unicast_populated'][0], cis['unicast_populated'][1], color='C2', label='95% CI Populated', alpha=0.25, linewidth=0.0)
+
 
 
     plt.legend()
-    plt.xlabel("Time [s]")
-    plt.ylabel('Bundle Reception Rate [%]')
+    plt.xlabel("Time [min]")
+    plt.ylabel('Mean Bundle Reception Rate [%]')
     plt.axis([0, 1800, None, None])
+
+    ticks = ticker.FuncFormatter(lambda x, pos: '{0:g}'.format(int(x/60)))
+    ax.xaxis.set_major_formatter(ticks)
+
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig(base_path + "forwarding_comparison" + ".pdf", format="pdf")
+    plt.savefig(base_path + "unicast_comparison" + ".pdf", format="pdf")
     plt.close()
 
+
+
 def export_throughput(db, base_path):
-    length_s = 595 #3000 TODO: use 3000 again!
+
+    length_s = 900
     step = 1.0
 
-    groups = ['throughput_dense']
+    group = 'throughput_dense'
     max_step = math.ceil(length_s/step)
-
-    overall_reception_steps = {}
-
-    max_sn = 10
-
-    for g in groups:
-        overall_reception_steps[g] = []
-
-    for r in db((db.run.status == 'processed') & (db.run.group.belongs(groups))).iterselect():
-        name = slugify(("throughput_6", str(r.name), str(r.id), str(length_s), str(step), str(max_sn)))
-        print("Handling run {}".format(name))
-
-        def proc():
-            run_reception_steps = []
-
-            bundles = db((db.bundle.run == r) & (db.bundle.sequence_number <= max_sn) &(db.bundle.destination_eid == 'dtn://fake') & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))).iterselect(orderby=~db.bundle.sequence_number, limitby=(0,1))
-            for b in bundles:
-                receptions_steps = [0]*(max_step+1)
-
-                res = db.executesql(
-                    '''
-                        SELECT us, receiver_eid = destination_eid FROM bundle_reception
-                        WHERE bundle = {}
-                        ORDER BY us ASC
-                    '''.format(b.id)
-                )
-
-                print(res)
-
-                for row in res:
-                    ms = (row[0]/1000)-b.creation_timestamp_ms
-                    ts = round((ms/1000) / step)
-                    for x in range(ts, max_step+1):
-                        receptions_steps[x] += 1
-                for x in range(0, max_step+1):
-                    receptions_steps[x] /= 24.0 # we scale all values down to percentages
-                if receptions_steps[max_step] == 0.0:
-                    print("IGNORING bundle {} from {}".format(b.id, r.id))
-                else:
-                    run_reception_steps.append(receptions_steps)
-            return run_reception_steps
-
-        run_reception_steps = cached(name, proc)
-        overall_reception_steps[r.group] += run_reception_steps
 
     positions = range(0, max_step + 1)
     plt.clf()
 
-    mean = {}
-    cis = {}
-
     fig, ax = plt.subplots()
-    fig.set_size_inches(3.8, 2.5)
+    fig.set_size_inches(3.6, 2.5)
 
-    for g in groups:
-        steps = np.array(overall_reception_steps[g], dtype=np.float64)
-        steps = np.swapaxes(steps, 0, 1)  # we swap the axes to get all t=0 values at the first position together
-        steps = steps * 100.0
-        mean[g] = np.mean(steps, axis=1)
-        cis[g] = np.percentile(steps, [2.5, 97.5], axis=1)
+    for (i, sn) in enumerate([16, 32, 48, 64]):
+        overall_reception_steps = []
+
+        for r in db((db.run.status == 'processed') & (db.run.group == group)).iterselect():
+            name = slugify(("throughput broadcast", str(r.name), str(r.id), str(length_s), str(step), str(sn)))
+            print("Handling run {}".format(name))
+
+            def proc():
+                run_reception_steps = []
+
+                bundles = db((db.bundle.run == r) & (db.bundle.sequence_number == sn) & (db.bundle.destination_eid == 'dtn://fake') & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))).iterselect()
+                for b in bundles:
+                    receptions_steps = [0]*(max_step+1)
+                    res = db.executesql(
+                        '''
+                            SELECT us, receiver_eid = destination_eid FROM bundle_reception
+                            WHERE bundle = {}
+                            ORDER BY us ASC
+                        '''.format(b.id)
+                    )
+
+                    for row in res:
+                        ms = (row[0]/1000)-b.creation_timestamp_ms
+                        ts = round((ms/1000) / step)
+                        for x in range(ts, max_step+1):
+                            receptions_steps[x] += 1
+                    for x in range(0, max_step+1):
+                        receptions_steps[x] /= 24.0 # we scale all values down to percentages
+                    run_reception_steps.append(receptions_steps)
+                return run_reception_steps
+
+            run_reception_steps = cached(name, proc)
+            overall_reception_steps += run_reception_steps
 
 
-    plt.plot(positions, mean['throughput_dense'], linestyle='-', label="Broadcast", alpha=0.75, color='C0')
-    plt.fill_between(positions, cis['throughput_dense'][0], cis['throughput_dense'][1], color='C0', label='95% CI Broadcast', alpha=0.25, linewidth=0.0)
+
+        if len(overall_reception_steps) > 0:
+            steps = np.array(overall_reception_steps, dtype=np.float64)
+            steps = np.swapaxes(steps, 0, 1)
+
+            mean = np.mean(steps, axis=1)
+            cis = np.percentile(steps, [2.5, 97.5], axis=1)
+
+            plt.plot(positions, mean, linestyle='-', label="Mean: {}%".format((i+1)*25), alpha=0.75, color='C{}'.format(i))
+            plt.fill_between(positions, cis[0], cis[1], color='C{}'.format(i), label='95% CI: {}%'.format((i+1)*25), alpha=0.25, linewidth=0.0)
 
     plt.legend()
-    plt.xlabel("Time [s]")
+    plt.xlabel("Time [min]")
     plt.ylabel('Bundle Reception Rate [%]')
-    plt.axis([0, 1800, None, None])
+    plt.axis([0, 900, None, None])
     plt.grid(True)
+
+    ticks = ticker.FuncFormatter(lambda x, pos: '{0:g}'.format(int(x/60)))
+    ax.xaxis.set_major_formatter(ticks)
+
     plt.tight_layout()
-    plt.savefig(base_path + "throughput_comparison" + ".pdf", format="pdf")
+    plt.savefig(base_path + "throughput" + ".pdf", format="pdf")
     plt.close()
 
 def get_density(run):
@@ -1653,18 +1587,20 @@ if __name__ == "__main__":
     db.commit() # we need to commit
 
     exports = [
+        export_ict,
+        export_throughput,
+        export_broadcast,
+        export_unicast,
+        export_filter_connection_impact,
+        export_filter_bundle_hash_impact_on_conn_times,
+        export_filter_bundle_hash_impact,
         export_testbed_calibration_bundle_rssi_bars,
         export_testbed_calibration_bundle_transmission_time,
         export_testbed_calibration_bundle_transmission_success,
         export_testbed_calibration_setup_times,
-        export_forwarding,
-        export_filter_bundle_hash_impact,
-        export_filter_connection_impact,
-        export_throughput,
         #export_testbed_calibration_bundle_rssi_per_distance,
         #export_fake_bundle_propagation_direct,
         #export_bundle_propagation_epidemic,
-        #export_ict,
         #export_app_connection_distance_histogramm,
         #export_testbed_rssi_per_distance,
         #export_pre_calibration_connection_times,
