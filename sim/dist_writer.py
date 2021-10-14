@@ -101,7 +101,15 @@ def rwp_iterators(num_proxy_nodes, model_options):
 def rwp_raw_positions(rseed, num_proxy_nodes, model_options):
     numpy.random.seed(rseed)
 
-    (dim_width, dim_height) = model_options['dimensions'] if 'dimensions' in model_options else (1000.0, 1000.0)
+    if 'dimensions' in model_options:
+        (dim_width, dim_height) = model_options['dimensions'] if 'dimensions' in model_options else (1000.0, 1000.0)
+    elif 'density' in model_options:
+        density_in_km_sq = float(model_options['density'])
+        density_in_m_sq = density_in_km_sq / 1000000.0
+        # a is the side-length
+        a = math.sqrt((num_proxy_nodes+1) / density_in_m_sq)
+        (dim_width, dim_height) = (a,a)
+
     seconds_per_step = model_options['seconds_per_step'] if 'seconds_per_step' in model_options else 1.0
 
 
