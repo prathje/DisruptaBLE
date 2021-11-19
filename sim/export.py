@@ -139,7 +139,7 @@ def export_testbed_calibration_setup_times(db, base_path):
     # Adapt the figure size as needed
     fig.set_size_inches(1.75, 2.1)
     plt.tight_layout()
-    plt.savefig(export_dir + slugify(("testbed_calibration_setup_times")) + ".pdf", format="pdf")
+    plt.savefig(export_dir + slugify(("testbed_calibration_setup_times")) + ".pdf", format="pdf", bbox_inches='tight')
     plt.close()
 
 
@@ -220,7 +220,7 @@ def export_testbed_calibration_bundle_transmission_time(db, base_path):
     # Adapt the figure size as needed
     fig.set_size_inches(1.75, 2.1)
     plt.tight_layout()
-    plt.savefig(export_dir + slugify(("testbed_calibration_bundle_transmission_time")) + ".pdf", format="pdf")
+    plt.savefig(export_dir + slugify(("testbed_calibration_bundle_transmission_time")) + ".pdf", format="pdf", bbox_inches='tight')
     plt.close()
 
 def export_testbed_calibration_bundle_transmission_success(db, base_path):
@@ -293,7 +293,7 @@ def export_testbed_calibration_bundle_transmission_success(db, base_path):
     # Adapt the figure size as needed
     fig.set_size_inches(1.75, 2.1)
     plt.tight_layout()
-    plt.savefig(export_dir + slugify(("testbed_calibration_bundle_transmission_success")) + ".pdf", format="pdf")
+    plt.savefig(export_dir + slugify(("testbed_calibration_bundle_transmission_success")) + ".pdf", format="pdf", bbox_inches='tight')
     plt.close()
 
 def export_testbed_calibration_bundle_rssi_bars(db, base_path):
@@ -367,7 +367,7 @@ def export_testbed_calibration_bundle_rssi_bars(db, base_path):
     # Adapt the figure size as needed
     fig.set_size_inches(1.8, 1.6)
     plt.tight_layout()
-    plt.savefig(export_dir + slugify(("testbed_calibration_bundle_rssi_bars")) + ".pdf", format="pdf")
+    plt.savefig(export_dir + slugify(("testbed_calibration_bundle_rssi_bars")) + ".pdf", format="pdf", bbox_inches='tight')
     plt.close()
 
 def export_testbed_calibration_bundle_rssi_per_distance(db, base_path):
@@ -442,7 +442,7 @@ def export_testbed_calibration_bundle_rssi_per_distance(db, base_path):
     plt.grid(True)
     plt.tight_layout()
     #plt.savefig(export_dir + slugify('testbed_calibration_bundle_rssi_per_distance') + ".pdf", format="pdf")
-    plt.savefig(export_dir + slugify('testbed_calibration_bundle_rssi_per_distance') + ".png", format="png", dpi=1200)
+    plt.savefig(export_dir + slugify('testbed_calibration_bundle_rssi_per_distance') + ".png", format="png", dpi=1200, bbox_inches='tight')
     plt.close()
 
 
@@ -498,23 +498,23 @@ def export_connection_distance_histogramm(db, export_dir):
     n, bins, patches = ax.hist(overall_data, 50, density=True)
 
     plt.axvline(mean, color='k', linestyle='dashed', linewidth=1)
-    plt.text(mean+1, .925, "{:.2f}m".format(mean), transform=ax.get_xaxis_transform())
+    plt.text(mean+1, .225, "{:.2f}m".format(mean), transform=ax.get_xaxis_transform())
 
     plt.axvline(cis[0], color='r', linestyle='dotted', linewidth=1)
     plt.axvline(cis[1], color='r', linestyle='dotted', linewidth=1)
 
-    plt.text(cis[0]+1, .925, "{:.2f}m".format(cis[0]), transform=ax.get_xaxis_transform())
-    plt.text(cis[1]+1, .925, "{:.2f}m".format(cis[1]), transform=ax.get_xaxis_transform())
+    plt.text(cis[0]+1, .225, "{:.2f}m".format(cis[0]), transform=ax.get_xaxis_transform())
+    plt.text(cis[1]+1, .225, "{:.2f}m".format(cis[1]), transform=ax.get_xaxis_transform())
 
-    fig.set_size_inches(3.0, 2.5)
+    fig.set_size_inches(3.0, 2.25)
     plt.tight_layout()
 
     plt.xlabel("Distance [m]")
-    plt.ylabel("Connection Duration Rate")
+    plt.ylabel("Connection Duration Fraction")
     #plt.axis([0, 30, -100, 0])
     #plt.grid(True)
     plt.tight_layout()
-    plt.savefig(export_dir + slugify('connection_distance_histogramm') + ".pdf", format="pdf")
+    plt.savefig(export_dir + slugify('connection_distance_histogramm') + ".pdf", format="pdf", bbox_inches='tight')
     plt.close()
 
 def export_testbed_rssi_per_distance(db, export_dir):
@@ -552,7 +552,7 @@ def export_testbed_rssi_per_distance(db, export_dir):
         plt.axis([0, max_dist, -100, -40])
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(export_dir + slugify(name) + ".pdf", format="pdf")
+        plt.savefig(export_dir + slugify(name) + ".pdf", format="pdf", bbox_inches='tight')
         plt.close()
 
 
@@ -619,7 +619,7 @@ def export_pre_calibration_connection_times(db, base_path):
         # Adapt the figure size as needed
         fig.set_size_inches(5.0, 8.0)
         plt.tight_layout()
-        plt.savefig(export_dir + slugify((name, 5.0, 8.0)) + ".pdf", format="pdf")
+        plt.savefig(export_dir + slugify((name, 5.0, 8.0)) + ".pdf", format="pdf", bbox_inches='tight')
         plt.close()
 
         with open(export_dir + slugify((name, "first_bundle_payload_length")) + ".txt", "w") as f:
@@ -803,7 +803,7 @@ def export_rssi_per_distance(db, export_dir):
         plt.axis([0, max_dist, -100, -40])
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(export_dir + slugify(name) + ".pdf", format="pdf")
+        plt.savefig(export_dir + slugify(name) + ".pdf", format="pdf", bbox_inches='tight')
         plt.close()
 
 
@@ -869,7 +869,7 @@ def export_mean_path_loss(db, export_dir):
         plt.xlabel("RSSI [dB]")
         plt.ylabel("Amount")
         plt.tight_layout()
-        plt.savefig(export_dir + slugify((name, 'histogramm')) + ".pdf", format="pdf")
+        plt.savefig(export_dir + slugify((name, 'histogramm')) + ".pdf", format="pdf", bbox_inches='tight')
         plt.close()
 
     overall_limit = 1000
@@ -935,7 +935,7 @@ def export_advertisement_reception_rate(db, export_dir):
         plt.axis([0, max_dist, 0, 100])
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(export_dir + slugify(name) + ".pdf", format="pdf")
+        plt.savefig(export_dir + slugify(name) + ".pdf", format="pdf", bbox_inches='tight')
         plt.close()
 
 
@@ -995,7 +995,7 @@ def export_ict(db, base_path):
     all =  populated_runs + dense_runs + very_dense_runs
 
     runs = db((db.run.status == 'processed') & (db.run.group.belongs(all))).select()
-    max_dist = 50
+    max_dist = 50.3
 
     per_density = {
         'very_dense': [],
@@ -1035,6 +1035,8 @@ def export_ict(db, base_path):
                 pa.append(p)
             xs[k] = pa
 
+        print("{}: mean at 120secs: {}".format(k, xs[k][119]))
+
     positions = [t/60.0 for t in range(0, max_s)]
     plt.clf()
 
@@ -1042,7 +1044,7 @@ def export_ict(db, base_path):
     fig.set_size_inches(3.0, 3.0)
 
     if 'very_dense' in xs:
-        plt.plot(positions, xs['very_dense'], linestyle=':', label="Very Dense", color='C0')
+        plt.plot(positions, xs['very_dense'], linestyle='-', label="Very Dense", color='C0')
 
     if 'dense' in xs:
         plt.plot(positions, xs['dense'], linestyle=':', label="Dense", color='C1')
@@ -1050,12 +1052,19 @@ def export_ict(db, base_path):
     if 'populated' in xs:
         plt.plot(positions, xs['populated'], linestyle='--', label="Populated", color='C2')
 
+
+    ax.xaxis.set_major_locator(MultipleLocator(1))
+
+
+    fig.set_size_inches(3.0, 2.0)
+
     plt.legend()
+    plt.grid()
     plt.xlabel("Time [min]")
     plt.ylabel('P(X>x)')
-    plt.axis([None, None, None, None])
+    plt.axis([None, None, 0, 1.0])
     plt.tight_layout()
-    plt.savefig(base_path + "export_ict" + ".pdf", format="pdf")
+    plt.savefig(base_path + "export_ict" + ".pdf", format="pdf", bbox_inches='tight')
     plt.close()
 
 
@@ -1188,9 +1197,9 @@ def export_filter_connection_impact(db, base_path):
     #plt.axis([None, None, 0, 100])
 
     # Adapt the figure size as needed
-    fig.set_size_inches(3.4, 3.0)
+    fig.set_size_inches(3.0, 2.5)
     plt.tight_layout()
-    plt.savefig(export_dir + slugify(("filter_connection_impact")) + ".pdf", format="pdf")
+    plt.savefig(export_dir + slugify(("filter_connection_impact")) + ".pdf", format="pdf", bbox_inches='tight')
     plt.close()
 
 
@@ -1272,7 +1281,7 @@ def export_filter_bundle_hash_impact(db, base_path):
     # Adapt the figure size as needed
     fig.set_size_inches(2.5, 2.0)
     plt.tight_layout()
-    plt.savefig(export_dir + slugify(("bundle_hash_impact")) + ".pdf", format="pdf")
+    plt.savefig(export_dir + slugify(("bundle_hash_impact")) + ".pdf", format="pdf", bbox_inches='tight')
     plt.close()
 
 
@@ -1400,7 +1409,7 @@ def export_broadcast(db, base_path):
     ax.xaxis.set_minor_locator(MultipleLocator(60))
 
     plt.tight_layout()
-    plt.savefig(base_path + "broadcast_comparison" + ".pdf", format="pdf")
+    plt.savefig(base_path + "broadcast_comparison" + ".pdf", format="pdf", bbox_inches='tight')
     plt.close()
 
 
@@ -1507,7 +1516,7 @@ def export_unicast(db, base_path):
 
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig(base_path + "unicast_comparison" + ".pdf", format="pdf")
+    plt.savefig(base_path + "unicast_comparison" + ".pdf", format="pdf", bbox_inches='tight')
     plt.close()
 
 
@@ -1569,7 +1578,7 @@ def export_throughput(db, base_path):
             cis = np.percentile(steps, [2.5, 97.5], axis=1)
 
             plt.plot(positions, mean, linestyle='-', label="{} kB".format((i+1)*16), alpha=0.75, color='C{}'.format(i))
-            plt.fill_between(positions, cis[0], cis[1], color='C{}'.format(i), alpha=0.5, linewidth=0.0)
+            #plt.fill_between(positions, cis[0], cis[1], color='C{}'.format(i), alpha=0.5, linewidth=0.0)
 
             full_sec = 0
             for x in range(0, max_step+1):
@@ -1595,7 +1604,7 @@ def export_throughput(db, base_path):
 
     fig.set_size_inches(3.6, 2.5)
     plt.tight_layout()
-    plt.savefig(base_path + "throughput" + ".pdf", format="pdf")
+    plt.savefig(base_path + "throughput" + ".pdf", format="pdf", bbox_inches='tight')
     plt.close()
 
 def get_density(run):
@@ -1645,18 +1654,18 @@ if __name__ == "__main__":
     db.commit() # we need to commit
 
     exports = [
-        #export_throughput,
-        #export_broadcast,
-        #export_testbed_calibration_bundle_rssi_bars,
-        #export_testbed_calibration_bundle_transmission_success,
-        #export_testbed_calibration_bundle_transmission_time,
-        #export_testbed_calibration_setup_times,
-        #export_filter_bundle_hash_impact,
-        #export_filter_connection_impact,
-        #export_unicast,
+        export_filter_connection_impact,
+        export_ict,
+        export_throughput,
+        export_broadcast,
+        export_testbed_calibration_bundle_rssi_bars,
+        export_testbed_calibration_bundle_transmission_success,
+        export_testbed_calibration_bundle_transmission_time,
+        export_testbed_calibration_setup_times,
+        export_filter_bundle_hash_impact,
+        export_filter_connection_impact,
+        export_unicast,
         export_connection_distance_histogramm,
-
-        # Waiting:        export_ict,
         # Waiting:         ,
         # Waiting:         ,
         # shall this be included? export_filter_bundle_hash_impact_on_conn_times,
