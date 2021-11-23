@@ -220,7 +220,7 @@ static void on_offer_msg(struct bundle_adu data, void *param) {
     size_t sv_length = data.length-sizeof(struct summary_vector_characteristic);
     // create summary_vector from this message
     struct summary_vector *offer_sv = summary_vector_create_from_memory(data.payload, sv_length);
-    struct summary_vector_characteristic *offer_ch = (struct summary_vector_characteristic *) data.payload+sv_length;
+    struct summary_vector_characteristic *offer_ch = (struct summary_vector_characteristic *) (data.payload+sv_length);
 
     if (offer_sv) {
 
