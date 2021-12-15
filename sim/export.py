@@ -1013,6 +1013,7 @@ def export_ict(db, base_path):
         print("Handling {}".format(name))
 
         density = get_density(r)
+
         assert density
 
         def proc():
@@ -1035,7 +1036,7 @@ def export_ict(db, base_path):
                 pa.append(p)
             xs[k] = pa
 
-        print("{}: mean at 120secs: {}".format(k, xs[k][119]))
+            print("{}: mean at 120secs: {}".format(k, xs[k][119]))
 
     positions = [t/60.0 for t in range(0, max_s)]
     plt.clf()
@@ -1197,7 +1198,7 @@ def export_filter_connection_impact(db, base_path):
     #plt.axis([None, None, 0, 100])
 
     # Adapt the figure size as needed
-    fig.set_size_inches(3.0, 2.5)
+    fig.set_size_inches(3.0, 3.0)
     plt.tight_layout()
     plt.savefig(export_dir + slugify(("filter_connection_impact")) + ".pdf", format="pdf", bbox_inches='tight')
     plt.close()
