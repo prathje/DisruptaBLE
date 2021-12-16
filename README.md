@@ -105,10 +105,16 @@ docker run --rm -it -v ${PWD}/ud3tn-ble:/app -v ${PWD}/zephyr:/zephyr/zephyr pra
    cd $ZEPHYR_BASE && west update && sudo apt-get install -y gdb valgrind libc6-dbg:i386
 ```
 
+Upgrade to newer cmake:
 ```
-sudo apt-get remove cmake
-sudo -H pip3 install cmake
+sudo apt-get remove cmake && sudo -H pip3 install cmake
 ```
+
+Increase file descriptor limit:
+```
+ulimit -n 65536
+```
+
 
 ```
 west build -b nrf52840dk_nrf52840 --pristine auto  /app/zephyr/
