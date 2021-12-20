@@ -23,6 +23,8 @@ METHOD_PREFIX = 'export_'
 
 CONFIDENCE_FILL_COLOR = '0.8'
 
+NUM_NODES = 24
+
 def load_plot_defaults():
     # Configure as needed
     plt.rc('lines', linewidth=2.0)
@@ -1350,7 +1352,7 @@ def export_broadcast(db, base_path):
                     for x in range(ts, max_step+1):
                         receptions_steps[x] += 1
                 for x in range(0, max_step+1):
-                    receptions_steps[x] /= 24.0 # we scale all values down to percentages
+                    receptions_steps[x] /= float(NUM_NODES) # we scale all values down to percentages
                 run_reception_steps.append(receptions_steps)
             return run_reception_steps
 
@@ -1562,7 +1564,7 @@ def export_throughput(db, base_path):
                         for x in range(ts, max_step+1):
                             receptions_steps[x] += 1
                     for x in range(0, max_step+1):
-                        receptions_steps[x] /= 24.0 # we scale all values down to percentages
+                        receptions_steps[x] /= float(NUM_NODES) # we scale all values down to percentages
                     run_reception_steps.append(receptions_steps)
                 return run_reception_steps
 
