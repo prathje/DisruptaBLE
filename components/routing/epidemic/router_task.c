@@ -129,6 +129,7 @@ void router_task(void *rt_parameters)
             );
         }
 
+        contact_manager_remove_and_free_expired_contacts();
         routing_agent_update();
         router_update();
     }
