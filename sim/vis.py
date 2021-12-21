@@ -53,27 +53,29 @@ if __name__ == "__main__":
     # this is the central node
     plt.scatter([side_length*0.5], [side_length*0.5], alpha=1.0)
 
+
+
     node_circles = []
+    node_circles.append(plt.Circle((0.0, 0.0), 0.5, color = 'blue', fill = True, linestyle='--', linewidth=2.0))
     for i in range(run.num_proxy_devices):
         circle = plt.Circle((0.0, 0.0), 0.5, color = 'black', fill = True, linestyle='--', linewidth=2.0)
         node_circles.append(ax.add_artist(circle))
 
-#    conn_lines = []
-#    for i in range(run.num_proxy_devices):
-#        conn_lines.append(
-#            plt.scatter(0, 0)
-#        )
-
+    # add lines before node circles
+    conn_lines = []
+    for i in range(run.num_proxy_devices+1):
+        conn_lines.append(
+            plt.plot([0.0, 0.0], [0.0, 0.0], color='gray', linestyle='-', linewidth=2, zorder=-10)[0]
+        )
 
     devices = []
-    for i in range(run.num_proxy_devices):
-        devices.append(db((db.device.run == run) & (db.device.number == (i+1))).select()[0])
+    for i in range(run.num_proxy_devices+1):
+        devices.append(db((db.device.run == run) & (db.device.number == i)).select()[0])
 
 
     broadcast_bundle = db((db.bundle.run == run) & (db.bundle.destination_eid == 'dtn://fake')).select()[0]
 
-
-    axamp = plt.axes([0.25, 0.1, 0.65, 0.03])
+    axamp = plt.axes([0.25, 0.2, 0.65, 0.03])
     time_slider = Slider(
         ax=axamp,
         label="Time [s]",
@@ -87,10 +89,25 @@ if __name__ == "__main__":
     time_slider.val = 0.0
     def render_time():
         us = time_slider.val*1000000
-        for i in range(run.num_proxy_devices):
+        dev_pos = {}
+
+        for i in range(run.num_proxy_devices+1):
             pos = db((db.position.device == devices[i]) & (db.position.us == us)).select()[0]
+            dev_pos[devices[i].id] = (pos.pos_x, pos.pos_y)
             received = db(((db.stored_bundle.device == devices[i]) & (db.stored_bundle.created_us <= us)) & (db.stored_bundle.bundle == broadcast_bundle)).count() > 0
             node_circles[i].set(center=(pos.pos_x, pos.pos_y), color= ('red' if received else 'black'))
+
+        conn_info_list =  db((db.conn_info.run == run) & (db.conn_info.peripheral_channel_up_us <= us) & ((db.conn_info.peripheral_channel_down_us == None) | (db.conn_info.peripheral_channel_down_us > us))).select()
+
+        for (i, conn_info) in enumerate(conn_info_list):
+            (c_pos_x, c_pos_y) = dev_pos[conn_info.client]
+            (p_pos_x, p_pos_y) = dev_pos[conn_info.peripheral]
+            conn_lines[i].set_xdata([c_pos_x, p_pos_x])
+            conn_lines[i].set_ydata([c_pos_y, p_pos_y])
+
+        for i in range(len(conn_info_list), len(conn_lines)):
+            conn_lines[i].set_xdata([0.0, 0.0])
+            conn_lines[i].set_ydata([0.0, 0.0])
 
         fig.canvas.draw_idle()
 
