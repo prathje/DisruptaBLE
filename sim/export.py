@@ -1352,7 +1352,11 @@ def export_broadcast(db, base_path):
                     for x in range(ts, max_step+1):
                         receptions_steps[x] += 1
                 for x in range(0, max_step+1):
-                    receptions_steps[x] /= float(NUM_NODES) # we scale all values down to percentages
+                    if x*step > r.simulation_time/1000000 and receptions_steps[x] < NUM_NODES:
+                        receptions_steps[x] = None # we do not have any data for this! -> set to None
+                    else:
+                        receptions_steps[x] /= float(NUM_NODES) # we scale all values down to percentages
+
                 run_reception_steps.append(receptions_steps)
             return run_reception_steps
 
