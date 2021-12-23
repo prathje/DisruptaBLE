@@ -25,9 +25,8 @@
 #define CONFIG_CONTACT_TIMEOUT_S 60
 #endif
 
-// TODO: Configure this!
 #ifndef MAX_CONCURRENT_CONTACTS
-#define MAX_CONCURRENT_CONTACTS 25
+#error MAX_CONCURRENT_CONTACTS not defined
 #endif
 
 
@@ -37,7 +36,7 @@ struct contact_info {
 };
 
 // we just use two callbacks atm, one for the routing agent and another for the actual router
-// we use callbacks as there is not really a need for this contact manager to now any specific functionality
+// we use callbacks as there is not really a need for this contact manager to know any specific functionality
 #define CONTACT_MANAGER_NUM_CALLBACKS 2
 
 static struct contact_manager_config {
