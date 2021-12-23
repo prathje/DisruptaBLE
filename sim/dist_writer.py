@@ -46,15 +46,20 @@ def handle_distances(nr_nodes, distances):
                 f.write("{} {}\n".format(t_us, format_dist(dist)))
         # We now start the simulation
 
+def density_to_side_length(density, num_proxy_nodes):
+    density_in_km_sq = density
+    density_in_m_sq = density_in_km_sq / 1000000.0
+    # a is the side-length
+    a = math.sqrt((num_proxy_nodes+1) / density_in_m_sq)
+    return a
+
 
 def rwp_iterators(num_proxy_nodes, model_options):
     if 'dimensions' in model_options:
         (dim_width, dim_height) = model_options['dimensions'] if 'dimensions' in model_options else (1000.0, 1000.0)
     elif 'density' in model_options:
-        density_in_km_sq = float(model_options['density'])
-        density_in_m_sq = density_in_km_sq / 1000000.0
         # a is the side-length
-        a = math.sqrt((num_proxy_nodes+1) / density_in_m_sq)
+        a = density_to_side_length(float(model_options['density']), num_proxy_nodes)
         (dim_width, dim_height) = (a,a)
 
 
