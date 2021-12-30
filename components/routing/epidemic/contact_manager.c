@@ -180,6 +180,10 @@ uint8_t contact_manager_remove_and_free_expired_contacts() {
  */
 static struct contact_info * find_contact_info_by_eid(const char *const eid) {
 
+    if (!strcmp(eid, EID_NONE)) {
+        return NULL; // we can not identify contacts by eid without a valid eid...
+    }
+
     struct contact_info *found = NULL;
 
     for (int i = cm_config.current_contact_count - 1; i >= 0; i--) {
