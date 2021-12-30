@@ -380,7 +380,7 @@ static void handle_conn_up(const char *cla_address) {
         info = find_contact_info_by_cla_addr(cla_address);
 
         if (!info) {
-            LOG("Could not handle missing cla address");
+            LOGF("Could not handle missing cla address for conn_up with current contact count %d", cm_config.current_contact_count);
             return;
         }
 
@@ -405,7 +405,7 @@ static void handle_conn_down(const char *cla_address) {
         info = find_contact_info_by_cla_addr(cla_address);
 
         if (!info) {
-            LOG("Could not handle missing cla address");
+            LOGF("Could not handle missing cla address for conn_down with current contact count %d", cm_config.current_contact_count);
             return;
         }
         on_event(CONTACT_EVENT_ADDED, info->contact);
