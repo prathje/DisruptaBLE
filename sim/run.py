@@ -323,6 +323,7 @@ if __name__ == "__main__":
                                     '-s='+config['SIM_NAME'],
                                     '-sim_length='+config['SIM_LENGTH'],
                                     '-D='+str(num_overall_devices),
+                                    '-nodump',
                                     '-rs='+str(int(rseed)),
                                     '-defmodem=BLE_simple',
                                     ] + channel_args,
