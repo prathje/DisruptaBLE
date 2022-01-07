@@ -105,6 +105,15 @@ docker run --rm -it -v ${PWD}/ud3tn-ble:/app -v ${PWD}/zephyr:/zephyr/zephyr pra
    cd $ZEPHYR_BASE && west update && sudo apt-get install -y gdb valgrind libc6-dbg:i386
 ```
 
+
+Install new 2G4 positional channel:
+```
+cd /bsim
+git clone https://github.com/prathje/ext_2G4_channel_positional.git ./components/ext_2G4_channel_positional
+make all
+```
+
+
 Upgrade to newer cmake:
 ```
 sudo apt-get remove cmake && sudo -H pip3 install cmake

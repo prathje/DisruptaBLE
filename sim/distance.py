@@ -78,10 +78,10 @@ class safeteeobject(object):
     def __copy__(self):
         return safeteeobject(self.teeobj.__copy__(), self.lock)
 
-def time_dist_iter_from_pos_iter(pos_iter, num_nodes, step_us):
+def time_dist_iters_from_pos_iter(tp_iter, num_nodes):
     lock = threading.Lock()
 
-    tp_iter = time_pos_iter(pos_iter, step_us)
+    #tp_iter = time_pos_iter(pos_iter, step_us)
 
     time_pos_iters = list(itertools.tee(tp_iter, len(list(iter_nodes(num_nodes)))))
     time_pos_iters = [safeteeobject(it, lock) for it in time_pos_iters]

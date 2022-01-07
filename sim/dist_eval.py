@@ -1,6 +1,7 @@
 import argparse
 import os
 import dist_writer
+import distance
 from pymobility.mobility import random_waypoint
 import dotenv
 import os
@@ -20,12 +21,15 @@ config = {
 
 
 def dist_time_iters_from_run(run_config):
-    return dist_writer.model_to_iterators(
-        int(run_config['SIM_PROXY_NUM_NODES']),
-        run_config['SIM_MODEL'],
-        json.loads(run_config['SIM_MODEL_OPTIONS'] or "{}"),
-        int(run_config['SIM_RANDOM_SEED'])
-    )
+
+    if run_config['SIM_MODEL'] == 'rwp':
+        return dist_writer.rwp_dist_iterators(
+            int(run_config['SIM_RANDOM_SEED']),
+            int(run_config['SIM_PROXY_NUM_NODES']),
+            json.loads(run_config['SIM_MODEL_OPTIONS'] or "{}")
+        )
+    else:
+        return None # TODO: not yet supported!
 
 def contact_pairs_iter(dist_time_iter, max_us, max_dist):
     last_contact_start = None

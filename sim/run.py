@@ -13,6 +13,7 @@ import queue
 import dist_writer
 import uuid
 from pprint import pprint
+from shutil import copy
 
 import tables
 import uuid
@@ -35,7 +36,7 @@ def compile_and_move(rdir, exec_name, overlay_config):
     subprocess.run(west_build_command, shell=True, check=True)
 
     # Move resulting executable to main folder
-    os.rename(
+    copy(
         os.path.join(bdir, "zephyr", "zephyr.exe"),
         os.path.join(config['BSIM_OUT_PATH'], "bin", exec_name)
     )
@@ -306,11 +307,9 @@ if __name__ == "__main__":
     )
 
     channel_args = [
-        '-channel=Indoorv1',
+        '-channel=positional',
         '-argschannel',
-        '-preset=Huge10',
-        '-speed=1.0',
-        '-dist=' + dist_file_path,
+        '-stream=' + dist_file_path,
         '-at='+str(at_value),
         '-atextra='+str(atextra_value),
         '-exp='+str(float(config['SIM_DISTANCE_EXPONENT'])),
