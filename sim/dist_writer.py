@@ -55,6 +55,8 @@ def density_to_side_length(density, num_proxy_nodes):
 
 def rwp_position_iterator(rseed, num_proxy_nodes, model_options):
     numpy.random.seed(rseed)
+
+    (dim_width, dim_height) = (1000.0, 1000.0)
     if 'dimensions' in model_options:
         (dim_width, dim_height) = model_options['dimensions'] if 'dimensions' in model_options else (1000.0, 1000.0)
     elif 'density' in model_options:
@@ -113,7 +115,7 @@ def rwp_line_iterator(rseed, num_proxy_nodes, model_options):
 
 def model_to_line_iterator(num_proxy_nodes, model, model_options, rseed):
     if model =='rwp':
-        return rwp_line_iterator(rseed, num_proxy_nodes, model_options)
+        yield from rwp_line_iterator(rseed, num_proxy_nodes, model_options)
     elif model == 'raw':
         if 'file_content' not in model_options:
             print("key file_content not in model_options")
@@ -133,10 +135,10 @@ def start(directory, num_proxy, rseed, model, model_options={}):
     position_file_path = os.path.join(tmp_dir, "positions.txt")
     os.mkfifo(position_file_path)
 
-    # create the main distance file to describe the named pipes, this will block (not as all the other pipes!)
-    pos_fd = os.open(position_file_path, os.O_WRONLY)
 
     def file_writer_thread():
+        # create the main distance file to describe the named pipes, this will block (not as all the other pipes!)
+        pos_fd = os.open(position_file_path, os.O_WRONLY)
         for line in line_iter:
             if line[-1] != "\n": # force new lines
                 line += "\n"
