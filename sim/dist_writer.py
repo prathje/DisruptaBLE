@@ -126,20 +126,18 @@ def model_to_line_iterator(num_proxy_nodes, model, model_options, rseed):
 def start(directory, num_proxy, rseed, model, model_options={}):
 
     tmp_dir = tempfile.mkdtemp(dir=directory)
-    iterator = model_to_line_iterator(num_proxy, model, model_options, rseed)
+    line_iter = model_to_line_iterator(num_proxy, model, model_options, rseed)
 
     # First: Create the distance matrix pipe so we can return the filepath
     # note that this will block bsim as long as the data has not yet been written to the pipe
     position_file_path = os.path.join(tmp_dir, "positions.txt")
     os.mkfifo(position_file_path)
 
-    def file_writer_thread(tmp_dir, iterator):
-        pos_file_path = os.path.join(tmp_dir, "positions.txt")
+    # create the main distance file to describe the named pipes, this will block (not as all the other pipes!)
+    pos_fd = os.open(position_file_path, os.O_WRONLY)
 
-        # create the main distance file to describe the named pipes, this will block (not as all the other pipes!)
-        pos_fd = os.open(pos_file_path, os.O_WRONLY)
-
-        for line in iterator:
+    def file_writer_thread():
+        for line in line_iter:
             if line[-1] != "\n": # force new lines
                 line += "\n"
             os.write(pos_fd, bytes(line, 'ascii'))
@@ -147,7 +145,7 @@ def start(directory, num_proxy, rseed, model, model_options={}):
         os.close(pos_fd)
 
     # we can now start the thread that actually writes the file contents
-    t = threading.Thread(target=file_writer_thread, args=(tmp_dir, iterator), daemon=True)
+    t = threading.Thread(target=file_writer_thread, args=(), daemon=True)
     t.start()
 
     return position_file_path
