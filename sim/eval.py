@@ -506,7 +506,7 @@ def handle_positions(db, run):
         device_list = list(
             db((db.device.run == run)).select(orderby=db.device.number)
         )
-        pos_with_ts_iter = dist_writer.rwp_raw_positions(int(run_config['SIM_RANDOM_SEED']), int(run_config['SIM_PROXY_NUM_NODES']), json.loads(run_config['SIM_MODEL_OPTIONS']))
+        pos_with_ts_iter = dist_writer.rwp_position_iterator(int(run_config['SIM_RANDOM_SEED']), int(run_config['SIM_PROXY_NUM_NODES']), json.loads(run_config['SIM_MODEL_OPTIONS']))
 
         for (ts, positions) in pos_with_ts_iter:
 
