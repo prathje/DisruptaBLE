@@ -12,6 +12,7 @@ import progressbar
 import threading
 from pymobility.mobility import random_waypoint
 import math
+import kth_walkers
 
 
 F_SETPIPE_SZ = 1031  # Linux 2.6.35+
@@ -98,7 +99,6 @@ def rwp_position_iterator(rseed, num_proxy_nodes, model_options):
             yield ([(dim_width/2, dim_height/2)] + list(pos_list))
 
     pos_iter = add_static_source_node(proxy_pos_iter)
-
     return distance.time_pos_iter(pos_iter, us_per_step)
 
 def rwp_dist_iterators(rseed, num_proxy_nodes, model_options):
@@ -116,6 +116,8 @@ def rwp_line_iterator(rseed, num_proxy_nodes, model_options):
 def model_to_line_iterator(num_proxy_nodes, model, model_options, rseed):
     if model =='rwp':
         yield from rwp_line_iterator(rseed, num_proxy_nodes, model_options)
+    elif model == 'kth_walkers':
+        yield from kth_walkers.walkers_to_line_gen(num_proxy_nodes, model_options)
     elif model == 'raw':
         if 'file_content' not in model_options:
             print("key file_content not in model_options")
@@ -124,6 +126,73 @@ def model_to_line_iterator(num_proxy_nodes, model, model_options, rseed):
         # we simply use the raw file contents
         file_content_str = model_options['file_content']
         yield from file_content_str.splitlines(True)
+
+
+def line_to_position_iterator(num_proxy_nodes, line_iter):
+
+    # a node state is the tuple (time, pos, next_time, next_pos)
+    node_states = []
+
+    for i in range(num_proxy_nodes+1):
+        node_states.append(
+            (0, (0.0,0.0), 0, (0.0, 0.0))
+        )
+
+    def get_node_position(ts, i):
+        (time, pos, next_time, next_pos) = node_states[i]
+        if ts >= next_time:
+            return next_pos
+        elif ts <= time:
+            return pos
+        else:
+            a = float(ts-time) / float(next_time-time)
+            return pos[0] + a * (next_pos[0]-pos[0]), pos[1] + a * (next_pos[1]-pos[1])
+
+    def get_line_ts(line):
+        parts = line.split(" ") # TODO: we just assume spaces...
+        if parts[0][0] == '#':
+            return  # this is a comment
+        ts = int(parts[0])
+        return ts
+
+    def exec_line(line):
+        parts = line.split(" ") # TODO: we just assume spaces...
+        if parts[0][0] == '#':
+            return  # this is a comment
+        ts = int(parts[0])
+        cmd = parts[1]
+        id = int(parts[2])
+        pos_x = float(parts[3])
+        pos_y = float(parts[4])
+        pos_z = float(parts[5])
+
+        if cmd == 'set':    #<ts> set <id> <x> <y> <z>
+            node_states[id] = (ts, (pos_x,pos_y), ts, (pos_x, pos_y))
+        elif cmd == 'move':
+            duration = int(parts[6])
+            next_time = ts+duration
+            cur_pos = get_node_position(ts, id)
+            node_states[i] = (ts, cur_pos, next_time, (pos_x, pos_y))
+        # we only
+
+
+    ts = 0
+    next_line = next(line_iter, None)
+    while True:
+        # yield positions first to accomondate the first ts
+        yield (ts, [get_node_position(ts, i) for i in range(num_proxy_nodes+1)])
+        next_ts = ts + 1000000
+
+        # Execute all lines until but including next_ts
+        while next_line is not None:
+            line_ts = get_line_ts(next_line)
+            if line_ts <= next_ts:
+                exec_line(next_line)
+                next_line = next(line_iter, None)
+            else:
+                break   # we keep the next_line buffered but do not execute it yet
+
+        ts = next_ts
 
 def start(directory, num_proxy, rseed, model, model_options={}):
 
@@ -160,6 +229,13 @@ def cleanup(dist_file_path):
 
 
 if __name__ == "__main__":
+
+    line_iter = model_to_line_iterator(2, "rwp", {}, 0)
+
+    for l in line_iter:
+        print(l)
+    print("done")
+
 
 
     parser = argparse.ArgumentParser(description='Write distances')

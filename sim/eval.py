@@ -5,6 +5,7 @@ import os
 import random
 import dist_writer
 import traceback
+import kth_walkers
 
 from pprint import pprint
 import sqlite3
@@ -499,15 +500,20 @@ def handle_advertisements(db, run):
 
 
 def handle_positions(db, run):
-
+    # TODO we could also use dist_writer.model_to_line_iterator
     run_config = json.loads(run.configuration_json)
+    device_list = list(
+        db((db.device.run == run)).select(orderby=db.device.number)
+    )
+
+    pos_with_ts_iter = None
 
     if run_config['SIM_MODEL'] == 'rwp':
-        device_list = list(
-            db((db.device.run == run)).select(orderby=db.device.number)
-        )
-        pos_with_ts_iter = dist_writer.rwp_position_iterator(int(run_config['SIM_RANDOM_SEED']), int(run_config['SIM_PROXY_NUM_NODES']), json.loads(run_config['SIM_MODEL_OPTIONS']))
+        pos_with_ts_iter = dist_writer.line_to_position_iterator(dist_writer.rwp_line_iterator(int(run_config['SIM_RANDOM_SEED']), int(run_config['SIM_PROXY_NUM_NODES']), json.loads(run_config['SIM_MODEL_OPTIONS'])))
+    elif run_config['SIM_MODEL'] == 'kth_walkers':
+        pos_with_ts_iter = dist_writer.line_to_position_iterator(kth_walkers.walkers_to_line_gen(int(run_config['SIM_PROXY_NUM_NODES']), json.loads(run_config['SIM_MODEL_OPTIONS'])))
 
+    if pos_with_ts_iter:
         for (ts, positions) in pos_with_ts_iter:
 
             if ts > run.simulation_time:
@@ -526,9 +532,6 @@ def handle_positions(db, run):
                 d += 1
             db.position.bulk_insert(pos_batch)
             db.commit()
-
-
-    # TODO: import all positions using the dist_writer
 
 def run_in(runs):
     s = "run IN ("

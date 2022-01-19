@@ -26,6 +26,7 @@ config = {
 
 TIMEOUT_S = 60
 
+DEBUG_OPTIONS = ['gdb', '-q', '-batch', '-ex', 'run', '-ex', 'backtrace', '--args']
 
 def compile_and_move(rdir, exec_name, overlay_config):
     # TODO allow to skip compilation?
@@ -56,7 +57,8 @@ def spawn_node_process(exec_name, id, additional_args=[]):
                                  stderr=sys.stderr,
                                  encoding="ISO-8859-1")
     else:
-        process = subprocess.Popen([exec_path, '-s=' + config['SIM_NAME'], '-d=' + str(id)] + additional_args,
+        process = subprocess.Popen([exec_path, '-s=' + config['SIM_NAME'], '-d=' + str(id),# '-xo_drift=-30e-6'
+                                   ] + additional_args,
                                    cwd=config['BSIM_OUT_PATH']+"/bin",
                                    text=True,
                                    stdout=subprocess.PIPE,
@@ -318,7 +320,7 @@ if __name__ == "__main__":
     num_overall_devices = len(node_processes)+len(wifi_interference_processes)+len(noise_processes)
     phy_exec_path = os.path.join(config['BSIM_OUT_PATH'], "bin", "bs_2G4_phy_v1")
 
-    phy_process = subprocess.Popen([phy_exec_path,
+    phy_process = subprocess.Popen( [ phy_exec_path,
                                     '-s='+config['SIM_NAME'],
                                     '-sim_length='+config['SIM_LENGTH'],
                                     '-D='+str(num_overall_devices),

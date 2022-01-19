@@ -95,14 +95,17 @@ By default, the minimal TCP convergence layer is used and builds on top of [6LoW
 Currently, only the nRF52 platform is supported. This also includes the BLE simulation of multiple devices using [BabbleSim](https://babblesim.github.io/).
 
 First, start the corresponding container and mount the current working direction (the ud3tn project root) to /app:
-```
-docker run --rm -it -v ${PWD}:/app -v ~/git/zephyr:/zephyr prathje/babble-sim-docker:latest /bin/bash
-cd $ZEPHYR_BASE && git fetch && git checkout zephyr-v2.5.0 && west update && sudo apt-get install --force-yes gdb
-```
 
 ```
 docker run --rm -it -v ${PWD}/ud3tn-ble:/app -v ${PWD}/zephyr:/zephyr/zephyr prathje/babble-sim-docker:latest /bin/bash
    cd $ZEPHYR_BASE && west update && sudo apt-get install -y gdb valgrind libc6-dbg:i386
+```
+
+
+Init everything:
+
+```
+cd $ZEPHYR_BASE && west update && sudo apt-get update && sudo apt-get install -y gdb valgrind libc6-dbg:i386 mysql-client && cd /bsim && git clone https://github.com/prathje/ext_2G4_channel_positional.git ./components/ext_2G4_channel_positional && make all && sudo apt-get remove cmake && sudo -H pip3 install cmake && pip3 install python-dotenv pydal progressbar2 matplotlib pymysql scipy seaborn
 ```
 
 
@@ -119,9 +122,9 @@ Upgrade to newer cmake:
 sudo apt-get remove cmake && sudo -H pip3 install cmake
 ```
 
-Increase file descriptor limit:
+Increase limits:
 ```
-ulimit -n 65536
+ulimit -n 1000000 && ulimit -s  256 && ulimit -i  120000 && echo 120000 > /proc/sys/kernel/threads-max && echo 600000 > /proc/sys/vm/max_map_count && echo 200000 > /proc/sys/kernel/pid_max 
 ```
 
 
