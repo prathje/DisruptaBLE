@@ -9,6 +9,8 @@ def walkers_to_line_gen(num_proxy_nodes, model_options):
         for i in range(num_proxy_nodes+1):
             yield "0 disable {}".format(i)
 
+        # we then set node 0 position and enable it
+        yield "0 set 0 783.2 1639.4 0"
         # we then enable node 0
         yield "0 enable 0"
 
@@ -44,32 +46,52 @@ def walkers_to_line_gen(num_proxy_nodes, model_options):
             else:
                 print("Warning: could not find cmd: " + r)
 
+def walkers_get_num_created_nodes_until(max_time, model_options):
+    assert 'filepath' in model_options
+    num_created = 0
+    with gzip.open(model_options['filepath'],'rt') as f:
+        reader = csv.reader(f, delimiter=' ')
+        for r in reader:
+            if max_time and float(r[0]) > max_time:
+                break
+            if r[1] == 'create':
+                num_created += 1
+    return num_created
+
+if __name__ == "__main__":
+    #with gzip.open('data/kth_walkers/dense_run1/ostermalm_090_1.tr.gz','rt') as f:
+    #with gzip.open('data/kth_walkers/medium_run1/ostermalm_007_1.tr.gz','rt') as f:
+    with gzip.open('data/kth_walkers/sparse_run1/ostermalm_001_1.tr.gz','rt') as f:
+        reader = csv.reader(f, delimiter=' ')
+
+        num_created = 0
+        num_destroyed = 0
+        max_concurrent = 0
+        max_concurrent_time = None
+
+        max_time = 3600
+
+        for r in reader:
+            if max_time and float(r[0]) > max_time:
+                break
+            if r[1] == 'create':
+                num_created += 1
+            if r[1] == 'destroy':
+                num_destroyed += 1
+            concurrent = num_created-num_destroyed
+            if concurrent > max_concurrent:
+                max_concurrent = concurrent
+                max_concurrent_time = r[0]
+
+        print('concurrent', max_concurrent, max_concurrent_time, 'created', num_created)
+
+        #test_gen = walkers_to_line_gen(100, {'filepath': 'data/kth_walkers/sparse_run1/ostermalm_005_1.tr.gz'})
+
+        #for line in test_gen:
+        #    print(line)
+    
 
 
-#with gzip.open('data/kth_walkers/dense_run1/ostermalm_090_1.tr.gz','rt') as f:
-#with gzip.open('data/kth_walkers/medium_run1/ostermalm_007_1.tr.gz','rt') as f:
-# with gzip.open('data/kth_walkers/sparse_run1/ostermalm_005_1.tr.gz','rt') as f:
-#     reader = csv.reader(f, delimiter=' ')
-#
-#     num_created = 0
-#     num_destroyed = 0
-#     max_concurrent = 0
-#     max_concurrent_time = None
-#
-#     for r in reader:
-#         if r[1] == 'create':
-#             num_created += 1
-#         if r[1] == 'destroy':
-#             num_destroyed += 1
-#         concurrent = num_created-num_destroyed
-#         if concurrent > max_concurrent:
-#             max_concurrent = concurrent
-#             max_concurrent_time = r[0]
-#
-# #   print('concurrent', max_concurrent, max_concurrent_time)
-# #   print('created', num_created)
-#
-#     test_gen = walkers_to_line_gen(100, {'filepath': 'data/kth_walkers/sparse_run1/ostermalm_005_1.tr.gz'})
-#
-#     for line in test_gen:
-#         print(line)
+    # 001: 57 12156.6 created 2092
+    # 005: 233 3057.6 created 4227
+    # 007: 301 4387.8 created 5706

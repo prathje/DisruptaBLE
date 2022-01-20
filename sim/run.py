@@ -11,6 +11,7 @@ from pydal import DAL, Field
 from datetime import datetime
 import queue
 import dist_writer
+import kth_walkers
 import uuid
 from pprint import pprint
 from shutil import copy
@@ -202,9 +203,22 @@ if __name__ == "__main__":
 
     tables.init_tables(db)
 
-
     rseed = int(config['SIM_RANDOM_SEED'])
     random.seed(rseed)
+
+    model = config['SIM_MODEL']
+    model_options = {}
+
+    if 'SIM_MODEL_OPTIONS' in config and config['SIM_MODEL_OPTIONS']:
+        model_options = json.loads(config['SIM_MODEL_OPTIONS'])
+
+    assert('wifi_devices' not in model_options)
+
+    if int(config['SIM_PROXY_NUM_NODES']) == 0 and config['SIM_MODEL'] == 'kth_walkers':
+        # we infer the number of proxy nodes based on the simulation time
+        config['SIM_PROXY_NUM_NODES'] = str(kth_walkers.walkers_get_num_created_nodes_until(int(float(config['SIM_LENGTH'])) / 1000000.0, model_options))
+        print("Inferring number of proxy nodes based on the walkers dataset: " + config['SIM_PROXY_NUM_NODES'])
+
 
     run = db['run'].insert(**{
         "name": origin_run_name, # we use the
@@ -286,15 +300,6 @@ if __name__ == "__main__":
             )
         )
 
-
-    model = config['SIM_MODEL']
-    model_options = {}
-
-
-    if 'SIM_MODEL_OPTIONS' in config and config['SIM_MODEL_OPTIONS']:
-        model_options = json.loads(config['SIM_MODEL_OPTIONS'])
-
-    assert('wifi_devices' not in model_options)
 
 
     dist_dir = os.path.join(rdir, "distances")
