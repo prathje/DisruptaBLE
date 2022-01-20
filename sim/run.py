@@ -25,7 +25,7 @@ config = {
     **os.environ,  # override loaded values with environment variables
 }
 
-TIMEOUT_S = 60
+TIMEOUT_S = 60*60*24    # use a full day for now...
 
 DEBUG_OPTIONS = ['gdb', '-q', '-batch', '-ex', 'run', '-ex', 'backtrace', '--args']
 
