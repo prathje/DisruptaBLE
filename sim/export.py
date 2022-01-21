@@ -66,9 +66,9 @@ def rssi_from_d(d, n, rssi_0):
     return ad
 
 def export_testbed_calibration_setup_times(db, base_path):
-    distance_groups = [5, 10, 15, 20, 25]
+    distance_groups = [5, 10, 15, 20, 25, 30]
     #distance_groups = [5, 10, 15, 20]
-    range = 2.5 # the +- range for each distance
+    range = [5.0, 0.0] # the -+ range for each distance
 
     types = ['testbed', 'calibration']
     runs = db((db.run.status == 'processed') & (db.run.group.belongs(types))).select()
@@ -109,7 +109,7 @@ def export_testbed_calibration_setup_times(db, base_path):
         for (i, dg) in enumerate(distance_groups):
             xs = []
             for (d, (con_set, chan_set)) in zip(overall_distances[g], overall_data[g]):
-                if dg-range <= d < dg+range:
+                if dg-range[0] <= d < dg+range[1]:
                     xs.append(con_set+chan_set)
 
             xs = np.array(xs) / 1000000.0
@@ -146,8 +146,8 @@ def export_testbed_calibration_setup_times(db, base_path):
 
 
 def export_testbed_calibration_bundle_transmission_time(db, base_path):
-    distance_groups = [5, 10, 15, 20, 25]
-    range = 2.5 # the +- range for each distance
+    distance_groups = [5, 10, 15, 20, 25, 30]
+    range = [5.0, 0.0] # the -+ range for each distance
     types = ['testbed', 'calibration']
     runs = db((db.run.status == 'processed') & (db.run.group.belongs(types))).select()
 
@@ -191,7 +191,7 @@ def export_testbed_calibration_bundle_transmission_time(db, base_path):
         for (i, dg) in enumerate(distance_groups):
             xs = []
             for (d, x) in zip(overall_distances[g], overall_data[g]):
-                if dg-range <= d < dg+range:
+                if dg-range[0] <= d < dg+range[1]:
                     xs.append(x)
             times = np.array(xs) / 1000000.0
             bt_means[g][i] = np.mean(times)
@@ -226,9 +226,9 @@ def export_testbed_calibration_bundle_transmission_time(db, base_path):
     plt.close()
 
 def export_testbed_calibration_bundle_transmission_success(db, base_path):
-    distance_groups = [5, 10, 15, 20, 25]
+    distance_groups = [5, 10, 15, 20, 25, 30]
     #distance_groups = [5, 10, 15, 20]
-    range = 2.5 # the +- range for each distance
+    range = [5.0, 0.0] # the -+ range for each distance
 
     types = ['testbed', 'calibration']
     runs = db((db.run.status == 'processed') & (db.run.group.belongs(types))).select()
@@ -267,7 +267,7 @@ def export_testbed_calibration_bundle_transmission_success(db, base_path):
         for (i, dg) in enumerate(distance_groups):
             xs = []
             for (d, x) in zip(overall_distances[g], overall_data[g]):
-                if dg-range <= d < dg+range:
+                if dg-range[0] <= d < dg+range[1]:
                     xs.append(1.0 if x else 0.0)
             xs = np.array(xs)
             bt_success_mean[g][i] = np.mean(xs)*100.0
@@ -299,9 +299,9 @@ def export_testbed_calibration_bundle_transmission_success(db, base_path):
     plt.close()
 
 def export_testbed_calibration_bundle_rssi_bars(db, base_path):
-    distance_groups = [5, 10, 15, 20, 25]
+    distance_groups = [5, 10, 15, 20, 25, 30]
     #distance_groups = [5, 10, 15, 20]
-    range = 2.5 # the +- range for each distance
+    range = [5.0, 0.0] # the -+ range for each distance
 
     types = ['testbed', 'calibration']
     runs = db((db.run.status == 'processed') & (db.run.group.belongs(types))).select()
@@ -336,11 +336,10 @@ def export_testbed_calibration_bundle_rssi_bars(db, base_path):
         rssi_means[g] = [0.0 for dg in distance_groups]
         rssi_std[g] =  [0.0 for dg in distance_groups]
 
-
         for (i, dg) in enumerate(distance_groups):
             xs = []
             for (d, x) in zip(overall_distances[g], overall_data[g]):
-                if dg-range <= d < dg+range:
+                if dg-range[0] <= d < dg+range[1]:
                     xs.append(x)
             xs = np.array(xs)
             rssi_means[g][i] = np.mean(xs)
