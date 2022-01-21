@@ -509,9 +509,9 @@ def handle_positions(db, run):
     pos_with_ts_iter = None
 
     if run_config['SIM_MODEL'] == 'rwp':
-        pos_with_ts_iter = dist_writer.line_to_position_iterator(dist_writer.rwp_line_iterator(int(run_config['SIM_RANDOM_SEED']), int(run_config['SIM_PROXY_NUM_NODES']), json.loads(run_config['SIM_MODEL_OPTIONS'])))
+        pos_with_ts_iter = dist_writer.line_to_position_iterator(int(run_config['SIM_PROXY_NUM_NODES']), dist_writer.rwp_line_iterator(int(run_config['SIM_RANDOM_SEED']), int(run_config['SIM_PROXY_NUM_NODES']), json.loads(run_config['SIM_MODEL_OPTIONS'])))
     elif run_config['SIM_MODEL'] == 'kth_walkers':
-        pos_with_ts_iter = dist_writer.line_to_position_iterator(kth_walkers.walkers_to_line_gen(int(run_config['SIM_PROXY_NUM_NODES']), json.loads(run_config['SIM_MODEL_OPTIONS'])))
+        pos_with_ts_iter = dist_writer.line_to_position_iterator(int(run_config['SIM_PROXY_NUM_NODES']), kth_walkers.walkers_to_line_gen(int(run_config['SIM_PROXY_NUM_NODES']), json.loads(run_config['SIM_MODEL_OPTIONS'])))
 
     if pos_with_ts_iter:
         for (ts, positions) in pos_with_ts_iter:
