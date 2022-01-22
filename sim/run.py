@@ -287,20 +287,17 @@ if __name__ == "__main__":
 
     noise_processes = []
 
-    for i in range(2, 13, 2):
-        noise_processes.append(
-            spawn_node_process(
-                "bs_device_2G4_WLAN_actmod",
-                len(node_processes)+len(wifi_interference_processes)+len(noise_processes),
-                [
-                    "-ConfigSet={}".format(100),
-                    "-channel={}".format(i),
-                    "-power={}".format(0)   # we use them just as background noise at -100 dBm
-                ]
-            )
+    noise_processes.append(
+        spawn_node_process(
+            "bs_device_2G4_burst_interf",
+            len(node_processes)+len(wifi_interference_processes)+len(noise_processes),
+            [
+                "-type='WN80'".format(100), # 80MHz white noise
+                "-centerfreq={}".format(2440), # center frequency (BLE ranges from 2402 to 2480
+                "-power={}".format(0)   # we use them just as background noise at -100 dBm
+            ]
         )
-
-
+    )
 
     dist_dir = os.path.join(rdir, "distances")
     os.makedirs(dist_dir, exist_ok=True)
