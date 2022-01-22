@@ -292,7 +292,7 @@ if __name__ == "__main__":
             "bs_device_2G4_burst_interf",
             len(node_processes)+len(wifi_interference_processes)+len(noise_processes),
             [
-                "-type='WN80'".format(100), # 80MHz white noise
+                "-type=WN80".format(100), # 80MHz white noise
                 "-centerfreq={}".format(2440), # center frequency (BLE ranges from 2402 to 2480
                 "-power={}".format(0)   # we use them just as background noise at -100 dBm
             ]
