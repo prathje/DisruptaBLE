@@ -162,13 +162,16 @@ def line_to_position_iterator(num_proxy_nodes, line_iter):
         ts = int(parts[0])
         cmd = parts[1]
         id = int(parts[2])
-        pos_x = float(parts[3])
-        pos_y = float(parts[4])
-        pos_z = float(parts[5])
 
         if cmd == 'set':    #<ts> set <id> <x> <y> <z>
+            pos_x = float(parts[3])
+            pos_y = float(parts[4])
+            pos_z = float(parts[5])
             node_states[id] = (ts, (pos_x,pos_y), ts, (pos_x, pos_y))
         elif cmd == 'move':
+            pos_x = float(parts[3])
+            pos_y = float(parts[4])
+            pos_z = float(parts[5])
             duration = int(parts[6])
             next_time = ts+duration
             cur_pos = get_node_position(ts, id)
