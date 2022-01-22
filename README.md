@@ -127,6 +127,10 @@ Increase limits:
 ulimit -n 1000000 && ulimit -s  256 && ulimit -i  120000 && echo 120000 > /proc/sys/kernel/threads-max && echo 600000 > /proc/sys/vm/max_map_count && echo 200000 > /proc/sys/kernel/pid_max 
 ```
 
+Add manual background noise:
+```
+double TotalInterfmW  = pow(10.0, -96.42/10.0);
+```
 
 ```
 west build -b nrf52840dk_nrf52840 --pristine auto  /app/zephyr/
