@@ -8,6 +8,7 @@ from pydal import DAL, Field
 import tables
 import numpy as np
 import math
+import kth_walkers
 
 from dist_eval import extract_contact_pairs, dist_time_iters_from_run
 
@@ -45,18 +46,22 @@ if __name__ == "__main__":
 
     fig, ax = plt.subplots()
 
-    side_length = density_to_side_length(model_options['density'], run.num_proxy_devices)
-    plt.axis([0, side_length, 0, side_length])
+    if run_config['SIM_MODEL'] == 'kth_walkers':
+        (min_x, min_y), (max_x, max_y) = ((573.3, 1451.1), (949.9, 1816.0))
+        plt.axis([min_x-50, max_x+50, min_y-50, max_y+50])
+    else:
+        side_length = density_to_side_length(model_options['density'], run.num_proxy_devices)
+        plt.axis([0, side_length, 0, side_length])
+
+    # this is the central node
 
     plt.subplots_adjust(left=0.25, bottom=0.3)
 
-    # this is the central node
-    plt.scatter([side_length*0.5], [side_length*0.5], alpha=1.0)
-
-
 
     node_circles = []
-    node_circles.append(plt.Circle((0.0, 0.0), 0.5, color = 'blue', fill = True, linestyle='--', linewidth=2.0))
+    circle = plt.Circle((0.0, 0.0), 0.5, color = 'purple', fill = True, linestyle='--', linewidth=2.0)
+    node_circles.append(ax.add_artist(circle))
+
     for i in range(run.num_proxy_devices):
         circle = plt.Circle((0.0, 0.0), 0.5, color = 'black', fill = True, linestyle='--', linewidth=2.0)
         node_circles.append(ax.add_artist(circle))
@@ -95,7 +100,10 @@ if __name__ == "__main__":
             pos = db((db.position.device == devices[i]) & (db.position.us == us)).select()[0]
             dev_pos[devices[i].id] = (pos.pos_x, pos.pos_y)
             received = db(((db.stored_bundle.device == devices[i]) & (db.stored_bundle.created_us <= us)) & (db.stored_bundle.bundle == broadcast_bundle)).count() > 0
-            node_circles[i].set(center=(pos.pos_x, pos.pos_y), color= ('red' if received else 'black'))
+            color = 'red' if received else 'black'
+            if i == 0:
+                color = 'blue'
+            node_circles[i].set(center=(pos.pos_x, pos.pos_y), color=color)
 
         conn_info_list =  db((db.conn_info.run == run) & (db.conn_info.peripheral_channel_up_us <= us) & ((db.conn_info.peripheral_channel_down_us == None) | (db.conn_info.peripheral_channel_down_us > us))).select()
 

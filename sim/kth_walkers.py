@@ -58,7 +58,41 @@ def walkers_get_num_created_nodes_until(max_time, model_options):
                 num_created += 1
     return num_created
 
+def get_node_lifetimes(max_time, model_options):
+    assert 'filepath' in model_options
+
+    lifetimes = {}
+    with gzip.open(model_options['filepath'],'rt') as f:
+        reader = csv.reader(f, delimiter=' ')
+        for r in reader:
+            if max_time and float(r[0]) > max_time:
+                break
+            if r[1] == 'create':
+                assert int(r[2]) not in lifetimes
+                lifetimes[int(r[2])] = (float(r[0]), max_time) # we assume they stay "alive" until the end
+            if r[1] == 'destroy':
+                assert int(r[2]) in lifetimes
+                lifetimes[int(r[2])] = (lifetimes[int(r[2])][0], min(lifetimes[int(r[2])][1], float(r[0]))) # we assume they stay "alive" until the end
+    return lifetimes
+
+def get_bounds(model_options):
+    assert 'filepath' in model_options
+
+    xs = []
+    ys = []
+
+    with gzip.open(model_options['filepath'],'rt') as f:
+        reader = csv.reader(f, delimiter=' ')
+        for r in reader:
+            if r[1] == 'create' or r[1] == 'setdest':
+                xs.append(float(r[3]))
+                ys.append(float(r[4]))
+
+    return (min(xs), min(ys)), (max(xs), max(ys))
+
+
 if __name__ == "__main__":
+
     #with gzip.open('data/kth_walkers/dense_run1/ostermalm_090_1.tr.gz','rt') as f:
     #with gzip.open('data/kth_walkers/medium_run1/ostermalm_007_1.tr.gz','rt') as f:
     with gzip.open('data/kth_walkers/sparse_run1/ostermalm_001_1.tr.gz','rt') as f:
@@ -71,6 +105,11 @@ if __name__ == "__main__":
 
         max_time = 3600
 
+        min_x = None
+        min_y = None
+        max_x = None
+        max_y = None
+
         for r in reader:
             if max_time and float(r[0]) > max_time:
                 break
@@ -82,6 +121,9 @@ if __name__ == "__main__":
             if concurrent > max_concurrent:
                 max_concurrent = concurrent
                 max_concurrent_time = r[0]
+
+            if r[3] == 'destroy':
+                num_destroyed += 1
 
         print('concurrent', max_concurrent, max_concurrent_time, 'created', num_created)
 
