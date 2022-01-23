@@ -7,6 +7,7 @@ from pydal import DAL, Field
 import tables
 import numpy as np
 import math
+import kth_walkers
 
 from dist_eval import extract_contact_pairs, dist_time_iters_from_run
 
@@ -1613,6 +1614,124 @@ def export_throughput(db, base_path):
     plt.savefig(base_path + "throughput" + ".pdf", format="pdf", bbox_inches='tight')
     plt.close()
 
+def export_walkers_reception_rate(db, base_path):
+
+    length_s = 1200 #3000 TODO: use 3000 again!
+    step = 1.0
+
+    groups = ['kth_walkers_001']
+    max_step = math.ceil(length_s/step)
+
+    overall_reception_steps = {}
+
+    for g in groups:
+        overall_reception_steps[g] = []
+
+    for r in db((db.run.status == 'processed') & (db.run.group.belongs(groups))).iterselect():
+        name = slugify(("walkers reception rate", str(r.name), str(r.id), str(length_s), str(step)))
+        print("Handling run {}".format(name))
+
+        def proc():
+            run_reception_steps = []
+
+            devices = db((db.device.run == r)).select()
+
+            config = json.loads(r.configuration_json)
+            model_options = json.loads(config['SIM_MODEL_OPTIONS'])
+
+            #lifetimes in seconds! (dictionary, also containing 0!)
+            node_lifetimes = kth_walkers.get_node_lifetimes(r.simulation_time/1000000.0, model_options)
+
+            #lifetime in steps
+            device_lifesteps_by_eid = {}
+
+            for d in devices:
+                if d.number != 0:
+                    device_lifesteps_by_eid[d.eid] = (round(node_lifetimes[d.number][0]/step), round(node_lifetimes[d.number][1]/step))
+
+            bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://fake')).iterselect()
+            for b in bundles:
+                receptions_steps = [0]*(max_step+1)
+
+                res = db.executesql(
+                    '''
+                        SELECT us, receiver_eid FROM bundle_reception
+                        WHERE bundle = {}
+                        ORDER BY us ASC
+                    '''.format(b.id)
+                )
+
+                for row in res:
+                    ms = (row[0]/1000)-b.creation_timestamp_ms
+                    from_ts = round((ms/1000) / step)
+                    to_ts = min(max_step, device_lifesteps_by_eid[row[1]][1])
+                    for x in range(from_ts, to_ts+1):
+                        receptions_steps[x] += 1
+
+                for x in range(0, max_step+1):
+                    if x*step > r.simulation_time/1000000:
+                        receptions_steps[x] = None # we do not have any data for this! -> set to None
+                    else:
+                        num_nodes_at = len([True for k in device_lifesteps_by_eid if device_lifesteps_by_eid[k][0] <= x <= device_lifesteps_by_eid[k][1]])
+                        if num_nodes_at > 0:
+                            receptions_steps[x] /= float(num_nodes_at) # we scale all values down to percentages
+                        else:
+                            receptions_steps[x] = 0.0
+
+                run_reception_steps.append(receptions_steps)
+            return run_reception_steps
+
+        run_reception_steps = cached(name, proc)
+        overall_reception_steps[r.group] += run_reception_steps
+
+    positions = range(0, max_step + 1)
+    plt.clf()
+
+    mean = {}
+    cis = {}
+
+    fig, ax = plt.subplots()
+    fig.set_size_inches(3.6, 2.5)
+
+    for g in groups:
+        steps = np.array(overall_reception_steps[g], dtype=np.float64)
+        print(g)
+        steps = np.swapaxes(steps, 0, 1)  # we swap the axes to get all t=0 values at the first position together
+        steps = steps * 100.0
+        mean[g] = np.mean(steps, axis=1)
+        cis[g] = np.percentile(steps, [2.5, 97.5], axis=1)
+
+        full_sec = 0
+        for x in range(0, max_step+1):
+            if mean[g][x] > 99.99:
+                full_sec = x
+                break
+
+        print("Reception Rate {} at 100% at {} secs".format(g, full_sec))
+
+
+    if 'kth_walkers_001' in mean:
+        plt.plot(positions, mean['kth_walkers_001'], linestyle='-', label="kth_walkers_001", alpha=0.75, color='C0')
+        plt.fill_between(positions, cis['kth_walkers_001'][0], cis['kth_walkers_001'][1], color='C0',  alpha=0.25, linewidth=0.0)
+
+
+    plt.legend()
+    plt.xlabel("Time [min]")
+    plt.ylabel('Mean Bundle Reception Rate [%]')
+    plt.axis([0, 1200, 0, None])
+    plt.grid(True)
+
+    ticks = ticker.FuncFormatter(lambda x, pos: '{}'.format(round(x/60.0)))
+    ax.xaxis.set_major_formatter(ticks)
+
+    ax.xaxis.set_major_locator(MultipleLocator(120))
+    # For the minor ticks, use no labels; default NullFormatter.
+    ax.xaxis.set_minor_locator(MultipleLocator(60))
+
+    plt.tight_layout()
+    plt.savefig(base_path + "kth_walkers_reception_rate" + ".pdf", format="pdf", bbox_inches='tight')
+    plt.close()
+
 def get_density(run):
     run_config = json.loads(run.configuration_json)
     model_options = json.loads(run_config['SIM_MODEL_OPTIONS'])
@@ -1660,6 +1779,7 @@ if __name__ == "__main__":
     db.commit() # we need to commit
 
     exports = [
+        export_walkers_reception_rate,
         export_testbed_calibration_bundle_rssi_bars,
         export_testbed_calibration_bundle_transmission_success,
         export_testbed_calibration_bundle_transmission_time,
