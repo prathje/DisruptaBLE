@@ -26,7 +26,7 @@ config = {
 }
 
 TIMEOUT_S = 60*60*24    # use a full day for now...
-
+DB_WAIT_SECS = 60*5     # we will wait up to 5 minutes to commit something!
 DEBUG_OPTIONS = ['gdb', '-q', '-batch', '-ex', 'run', '-ex', 'backtrace', '--args']
 
 def compile_and_move(rdir, exec_name, overlay_config):
@@ -199,7 +199,7 @@ if __name__ == "__main__":
     os.makedirs(logdir, exist_ok=True)
 
     # Get access to the database (create if necessary!)
-    db = DAL(config['SIM_DB_URI'], folder=logdir, attempts=30)
+    db = DAL(config['SIM_DB_URI'], folder=logdir, attempts=DB_WAIT_SECS)
 
     tables.init_tables(db)
 
