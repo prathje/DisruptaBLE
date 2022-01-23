@@ -175,7 +175,7 @@ def line_to_position_iterator(num_proxy_nodes, line_iter):
             duration = int(parts[6])
             next_time = ts+duration
             cur_pos = get_node_position(ts, id)
-            node_states[i] = (ts, cur_pos, next_time, (pos_x, pos_y))
+            node_states[id] = (ts, cur_pos, next_time, (pos_x, pos_y))
         # we only
 
 
