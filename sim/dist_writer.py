@@ -182,20 +182,18 @@ def line_to_position_iterator(num_proxy_nodes, line_iter):
     ts = 0
     next_line = next(line_iter, None)
     while True:
-        # yield positions first to accomondate the first ts
-        yield (ts, [get_node_position(ts, i) for i in range(num_proxy_nodes+1)])
-        next_ts = ts + 1000000
-
-        # Execute all lines until but including next_ts
+        # Execute all lines until and including ts
         while next_line is not None:
             line_ts = get_line_ts(next_line)
-            if line_ts <= next_ts:
+            if line_ts <= ts:
                 exec_line(next_line)
                 next_line = next(line_iter, None)
             else:
                 break   # we keep the next_line buffered but do not execute it yet
 
-        ts = next_ts
+        # yield positions
+        yield (ts, [get_node_position(ts, i) for i in range(num_proxy_nodes+1)])
+        ts += 1000000
 
 def start(directory, num_proxy, rseed, model, model_options={}):
 
