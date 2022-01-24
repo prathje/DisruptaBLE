@@ -60,8 +60,11 @@ def walkers_get_num_created_nodes_until(max_time, model_options):
 
 def get_node_lifetimes(max_time, model_options):
     assert 'filepath' in model_options
+    assert max_time > 0
 
     lifetimes = {}
+    lifetimes[0] = (0.0, max_time)
+
     with gzip.open(model_options['filepath'],'rt') as f:
         reader = csv.reader(f, delimiter=' ')
         for r in reader:
@@ -90,8 +93,132 @@ def get_bounds(model_options):
 
     return (min(xs), min(ys)), (max(xs), max(ys))
 
+def get_max_density(model_options):
+    assert 'filepath' in model_options
+
+    ((min_x, min_y), (max_x, max_y)) = get_bounds(model_options)
+
+    with gzip.open(model_options['filepath'],'rt') as f:
+        reader = csv.reader(f, delimiter=' ')
+
+        num_created = 0
+        num_destroyed = 0
+        max_concurrent = 0
+        max_concurrent_time = None
+        max_available_time = None
+
+        max_time = None# 3600
+
+        for r in reader:
+            if max_time and float(r[0]) > max_time:
+                max_available_time = None
+                break
+            if r[1] == 'create':
+                num_created += 1
+            if r[1] == 'destroy':
+                num_destroyed += 1
+            concurrent = num_created-num_destroyed
+            if concurrent > max_concurrent:
+                max_concurrent = concurrent
+                max_concurrent_time = r[0]
+            max_available_time = r[0]
+
+    print('concurrent', max_concurrent, max_concurrent_time, 'created', num_created, 'max_available', max_available_time)
+
+    area = (max_x-min_x)*(max_y-min_y)
+    print((max_x-min_x), (max_y-min_y), area, max_concurrent, max_concurrent/(area/1000000.0))
+
+
+
+def simulate_broadcast(max_time, model_options):
+    assert 'filepath' in model_options
+    assert max_time > 0
+
+    dist_limit = 20.0
+    setup_time = 5.0
+
+    node_lifetimes = get_node_lifetimes(max_time, model_options)
+    num_proxy_nodes = len(node_lifetimes)-1
+
+    node_informed = {}
+    for k in node_lifetimes:
+        node_informed[k] = None
+    node_informed[0] = 0 # source device is informed from the start
+
+    conn_start = {}    # dict with key (a,b) and the second the connection did start (or None)
+
+    import dist_writer
+    pos_iter = dist_writer.line_to_position_iterator(num_proxy_nodes, walkers_to_line_gen(num_proxy_nodes, model_options))
+
+    t = 0
+    while t <= max_time:
+        (ts, positions) = next(pos_iter)
+        alive_nodes = [k for k in node_lifetimes if node_lifetimes[k][0] <= t <= node_lifetimes[k][1]]
+        # iterate over all alive nodes
+        for a in alive_nodes:
+            for b in alive_nodes:
+                if a <= b:   # otherwise already checked (or the same node) note that we
+                    continue
+
+                pos_a = positions[a]
+                pos_b = positions[b]
+                diff_x = pos_a[0] - pos_b[0]
+                diff_y = pos_a[1] - pos_b[1]
+                dist = math.sqrt(diff_x * diff_x + diff_y * diff_y)
+                if dist > dist_limit:   # connection breaks!
+                    conn_start[(a,b)] = None # we reset the connection
+                else:
+                    if (a,b) not in conn_start or conn_start[(a,b)] is None : # connection could already have been started
+                        conn_start[(a,b)] = t
+                    assert conn_start[(a,b)] <= t
+
+                    if t-conn_start[(a,b)] >= setup_time:
+                        if node_informed[a] is not None and node_informed[b] is None:   # node_informed[a] <= t anyway
+                            # a informs b
+                            node_informed[b] = t
+                        elif node_informed[b] is not None and node_informed[a] is None:
+                            # b informs a
+                            node_informed[a] = t
+        t += 1
+    print(node_informed)
+    return node_informed
 
 if __name__ == "__main__":
+
+    simulate_broadcast(3600, {'filepath': 'data/kth_walkers/sparse_run1/ostermalm_001_1.tr.gz'})
+    exit()
+    #
+    # print('001')
+    # get_max_density({'filepath': 'data/kth_walkers/sparse_run1/ostermalm_001_1.tr.gz'})
+    # print('002')
+    # get_max_density({'filepath': 'data/kth_walkers/sparse_run1/ostermalm_002_1.tr.gz'})
+    # print('003')
+    # get_max_density({'filepath': 'data/kth_walkers/sparse_run1/ostermalm_003_1.tr.gz'})
+    # print('004')
+    # get_max_density({'filepath': 'data/kth_walkers/sparse_run1/ostermalm_004_1.tr.gz'})
+    # print('005')
+    # get_max_density({'filepath': 'data/kth_walkers/sparse_run1/ostermalm_005_1.tr.gz'})
+    #
+    # print('007')
+    # get_max_density({'filepath': 'data/kth_walkers/medium_run1/ostermalm_007_1.tr.gz'})
+    # print('009')
+    # get_max_density({'filepath': 'data/kth_walkers/medium_run1/ostermalm_009_1.tr.gz'})
+    # print('011')
+    # get_max_density({'filepath': 'data/kth_walkers/medium_run1/ostermalm_011_1.tr.gz'})
+    # print('015')
+    # get_max_density({'filepath': 'data/kth_walkers/medium_run1/ostermalm_015_1.tr.gz'})
+    # print('020')
+    # get_max_density({'filepath': 'data/kth_walkers/medium_run1/ostermalm_020_1.tr.gz'})
+    # print('030')
+    # get_max_density({'filepath': 'data/kth_walkers/dense_run1/ostermalm_030_1.tr.gz'})
+    # print('040')
+    # get_max_density({'filepath': 'data/kth_walkers/dense_run1/ostermalm_040_1.tr.gz'})
+    # print('050')
+    # get_max_density({'filepath': 'data/kth_walkers/dense_run1/ostermalm_050_1.tr.gz'})
+    # print('070')
+    # get_max_density({'filepath': 'data/kth_walkers/dense_run1/ostermalm_070_1.tr.gz'})
+    # print('090')
+    # get_max_density({'filepath': 'data/kth_walkers/dense_run1/ostermalm_090_1.tr.gz'})
 
     #with gzip.open('data/kth_walkers/dense_run1/ostermalm_090_1.tr.gz','rt') as f:
     #with gzip.open('data/kth_walkers/medium_run1/ostermalm_007_1.tr.gz','rt') as f:
