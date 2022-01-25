@@ -1744,13 +1744,13 @@ if __name__ == "__main__":
 
     db.commit() # we need to commit
     exports = [
+        export_unicast,
+        export_broadcast,
         export_filter_bundle_hash_impact,
         export_testbed_calibration_bundle_rssi_per_distance,
         export_testbed_calibration_bundle_transmission_success,
         export_testbed_calibration_bundle_transmission_time,
-        export_testbed_calibration_setup_times,
-        export_unicast,
-        export_broadcast
+        export_testbed_calibration_setup_times
         #export_filter_connection_impact,
         #export_testbed_calibration_bundle_rssi_bars,
         #export_walkers_reception_rate,
