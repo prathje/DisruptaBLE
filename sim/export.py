@@ -443,7 +443,7 @@ def export_testbed_calibration_bundle_rssi_per_distance(db, base_path):
     plt.ylabel("Mean RSSI [dBm]")
     plt.axis([0, 25, -100, -40])
     plt.xticks([5,10,15,20])
-    plt.grid(False)
+    plt.grid(True)
     fig.set_size_inches(1.8, 1.6)
     plt.tight_layout()
     plt.savefig(export_dir + slugify('testbed_calibration_bundle_rssi_per_distance') + ".pdf", format="pdf", bbox_inches='tight')
