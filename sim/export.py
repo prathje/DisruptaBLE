@@ -1462,7 +1462,7 @@ def export_broadcast(db, base_path):
         plt.plot(positions, mean['kth_walkers_broadcast_003'], linestyle='-', label="003", alpha=0.75, color='C1')
         plt.fill_between(positions, cis['kth_walkers_broadcast_003'][0], cis['kth_walkers_broadcast_003'][1], color='C1',  alpha=0.25, linewidth=0.0)
 
-    if 'kth_walkers_001' in mean:
+    if 'kth_walkers_broadcast_001' in mean:
         plt.plot(positions, mean['kth_walkers_broadcast_001'], linestyle='-', label="001", alpha=0.75, color='C2')
         plt.fill_between(positions, cis['kth_walkers_broadcast_001'][0], cis['kth_walkers_broadcast_001'][1], color='C2',  alpha=0.25, linewidth=0.0)
 
