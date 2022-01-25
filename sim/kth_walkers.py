@@ -151,31 +151,39 @@ def simulate_broadcast(max_time, model_options, dist_limit=20.0, setup_time=20.0
     while t <= max_time:
         (ts, positions) = next(pos_iter)
         alive_nodes = [k for k in node_lifetimes if node_lifetimes[k][0] <= t <= node_lifetimes[k][1]]
-        # iterate over all alive nodes
-        for a in alive_nodes:
-            for b in alive_nodes:
-                if a <= b:   # otherwise already checked (or the same node) note that we
-                    continue
+        # iterate over all alive nodes until no new nodes were informed
 
-                pos_a = positions[a]
-                pos_b = positions[b]
-                diff_x = pos_a[0] - pos_b[0]
-                diff_y = pos_a[1] - pos_b[1]
-                dist = math.sqrt(diff_x * diff_x + diff_y * diff_y)
-                if dist > dist_limit:   # connection breaks!
-                    conn_start[(a,b)] = None # we reset the connection
-                else:
-                    if (a,b) not in conn_start or conn_start[(a,b)] is None : # connection could already have been started
-                        conn_start[(a,b)] = t
-                    assert conn_start[(a,b)] <= t
+        while True:
+            newly_informed = False
 
-                    if t-conn_start[(a,b)] >= setup_time:
-                        if node_informed[a] is not None and node_informed[b] is None:   # node_informed[a] <= t anyway
-                            # a informs b
-                            node_informed[b] = t
-                        elif node_informed[b] is not None and node_informed[a] is None:
-                            # b informs a
-                            node_informed[a] = t
+            for a in alive_nodes:
+                for b in alive_nodes:
+                    if a <= b:   # otherwise already checked (or the same node) note that we
+                        continue
+                    pos_a = positions[a]
+                    pos_b = positions[b]
+                    diff_x = pos_a[0] - pos_b[0]
+                    diff_y = pos_a[1] - pos_b[1]
+                    dist = math.sqrt(diff_x * diff_x + diff_y * diff_y)
+
+                    if dist > dist_limit:   # connection breaks!
+                        conn_start[(a,b)] = None # we reset the connection
+                    else:
+                        if (a,b) not in conn_start or conn_start[(a,b)] is None : # connection could already have been started
+                            conn_start[(a,b)] = t
+                        assert conn_start[(a,b)] <= t
+
+                        if t-conn_start[(a,b)] >= setup_time:
+                            if node_informed[a] is not None and node_informed[b] is None:   # node_informed[a] <= t anyway
+                                # a informs b -> newly informed so we might need to inform others as well!
+                                node_informed[b] = t
+                                newly_informed = True
+                            elif node_informed[b] is not None and node_informed[a] is None:
+                                # b informs a -> newly informed so we might need to inform others as well!
+                                node_informed[a] = t
+                                newly_informed = True
+            if not newly_informed: # if we informed someone we need to go through all pairs again and check if new ones could get informed
+                break
         t += 1
     print(node_informed)
     return node_informed

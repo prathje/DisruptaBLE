@@ -1422,8 +1422,9 @@ def export_broadcast(db, base_path):
                     receptions_steps[x] = num_informed/float(len(alive_nodes)) # we scale all values down to percentages
                 else:
                     receptions_steps[x] = 0.0
+            return receptions_steps
 
-        overall_reception_steps[k] = [cached(slugify(('broadcast_ref_sim', k, dist_limit, setup_time)), proc)]   # we just have a single entry for each sim group
+        overall_reception_steps[k] = [cached(slugify(('broadcast_ref_sim_', k, dist_limit, setup_time)), proc)]   # we just have a single entry for each sim group
 
     positions = range(0, max_step + 1)
     plt.clf()
