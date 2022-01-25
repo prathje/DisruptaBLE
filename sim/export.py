@@ -1407,6 +1407,8 @@ def export_broadcast(db, base_path):
             node_lifetimes = kth_walkers.get_node_lifetimes(length_s+1, {'filepath': sims[k]})
             nodes_informed = kth_walkers.simulate_broadcast(length_s+1, {'filepath': sims[k]}, dist_limit=dist_limit, setup_time=setup_time)
 
+            del node_lifetimes[0]   # we do not want the source node itself
+
             receptions_steps = [0]*(max_step+1)
 
             for x in range(0, max_step+1):
