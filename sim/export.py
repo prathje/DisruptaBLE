@@ -1502,7 +1502,7 @@ def export_unicast(db, base_path):
         node_lifetimes = kth_walkers.get_node_lifetimes((r.simulation_time/1000000.0)-length_s, model_options)
         lifetimes_by_device_id = {}
 
-        for d in db((db.device.run == r) & (db.run.group.belongs(groups))).iterselect():
+        for d in db(db.device.run == r).iterselect():
             if d.number in node_lifetimes:
                 lifetimes_by_device_id[d.id] = node_lifetimes[d.number]
 
