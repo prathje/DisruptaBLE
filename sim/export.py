@@ -1411,7 +1411,7 @@ def export_broadcast(db, base_path):
 
                 num_informed = 0
                 for n in alive_nodes:
-                    if n in nodes_informed and nodes_informed[n] <= t:
+                    if n in nodes_informed and nodes_informed[n] is not None and nodes_informed[n] <= t:
                         num_informed += 1
 
                 if len(alive_nodes) > 0:
