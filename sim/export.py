@@ -1386,11 +1386,11 @@ def export_broadcast(db, base_path):
     # we now add our simplistic python simulations other groups
 
     sims = {
-        'ref_001_01': "/app/sim/data/kth_walkers/sparse_run1/ostermalm_001_1.tr.gz",
-        'ref_003_01': "/app/sim/data/kth_walkers/sparse_run1/ostermalm_003_1.tr.gz",
-        'ref_005_01': "/app/sim/data/kth_walkers/sparse_run1/ostermalm_005_1.tr.gz",
-        'ref_001_02': "/app/sim/data/kth_walkers/sparse_run2/ostermalm_001_2.tr.gz",
-        'ref_003_02': "/app/sim/data/kth_walkers/sparse_run2/ostermalm_003_2.tr.gz",
+        #'ref_001_01': "/app/sim/data/kth_walkers/sparse_run1/ostermalm_001_1.tr.gz",
+        #'ref_003_01': "/app/sim/data/kth_walkers/sparse_run1/ostermalm_003_1.tr.gz",
+        #'ref_005_01': "/app/sim/data/kth_walkers/sparse_run1/ostermalm_005_1.tr.gz",
+        #'ref_001_02': "/app/sim/data/kth_walkers/sparse_run2/ostermalm_001_2.tr.gz",
+        #'ref_003_02': "/app/sim/data/kth_walkers/sparse_run2/ostermalm_003_2.tr.gz",
         'ref_005_02': "/app/sim/data/kth_walkers/sparse_run2/ostermalm_005_2.tr.gz",
     }
 
