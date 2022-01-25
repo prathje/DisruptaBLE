@@ -130,12 +130,9 @@ def get_max_density(model_options):
 
 
 
-def simulate_broadcast(max_time, model_options):
+def simulate_broadcast(max_time, model_options, dist_limit=20.0, setup_time=20.0):
     assert 'filepath' in model_options
     assert max_time > 0
-
-    dist_limit = 20.0
-    setup_time = 5.0
 
     node_lifetimes = get_node_lifetimes(max_time, model_options)
     num_proxy_nodes = len(node_lifetimes)-1

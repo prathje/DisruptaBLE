@@ -1398,10 +1398,14 @@ def export_broadcast(db, base_path):
 
     for k in sims:
         groups.append(k)
+
+        dist_limit = 20.0
+        setup_time = 20.0
+
         def proc():
             #lifetimes in seconds! (dictionary, also containing 0!)
             node_lifetimes = kth_walkers.get_node_lifetimes(length_s+1, {'filepath': sims[k]})
-            nodes_informed = kth_walkers.simulate_broadcast(length_s+1, {'filepath': sims[k]})
+            nodes_informed = kth_walkers.simulate_broadcast(length_s+1, {'filepath': sims[k]}, dist_limit=dist_limit, setup_time=setup_time)
 
             receptions_steps = [0]*(max_step+1)
 
@@ -1419,7 +1423,7 @@ def export_broadcast(db, base_path):
                 else:
                     receptions_steps[x] = 0.0
 
-        overall_reception_steps[k] = [cached('broadcast_ref_sim_' + k, proc)]   # we just have a single entry for each sim group
+        overall_reception_steps[k] = [cached(slugify(('broadcast_ref_sim', k, dist_limit, setup_time)), proc)]   # we just have a single entry for each sim group
 
     positions = range(0, max_step + 1)
     plt.clf()
