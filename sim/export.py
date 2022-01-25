@@ -1268,7 +1268,7 @@ def export_filter_bundle_hash_impact(db, base_path):
 
     fig, ax = plt.subplots()
     rects1 = ax.bar(x - width/2, [means['kth_walkers_broadcast_sv_ch_filter_off'], means['kth_walkers_unicast_sv_ch_filter_off']],  width, label='Hash Disabled', yerr=[stds['kth_walkers_broadcast_sv_ch_filter_off'], stds['kth_walkers_unicast_sv_ch_filter_off']], capsize=0)
-    rects2 = ax.bar(x + width/2, [max(means['kth_walkers_kth_walkers_broadcast_sv_ch_filter_on'], 1.0), max(means['kth_walkers_unicast_sv_ch_filter_on'], 1.0)],  width, label='Hash Enabled', yerr=[stds['kth_walkers_broadcast_sv_ch_filter_on'], stds['kth_walkers_unicast_sv_ch_filter_on']], capsize=0)
+    rects2 = ax.bar(x + width/2, [max(means['kth_walkers_broadcast_sv_ch_filter_on'], 1.0), max(means['kth_walkers_unicast_sv_ch_filter_on'], 1.0)],  width, label='Hash Enabled', yerr=[stds['kth_walkers_broadcast_sv_ch_filter_on'], stds['kth_walkers_unicast_sv_ch_filter_on']], capsize=0)
 
 
     for (mean, rect, offset) in zip([means['kth_walkers_broadcast_sv_ch_filter_off'], means['kth_walkers_unicast_sv_ch_filter_off'], means['kth_walkers_broadcast_sv_ch_filter_on'], means['kth_walkers_unicast_sv_ch_filter_on']], (rects1 + rects2), [3, 8, 0, 8]):
