@@ -1489,7 +1489,7 @@ def export_broadcast(db, base_path):
 
 def export_unicast(db, base_path):
 
-    length_s = 1200
+    length_s = 300
     step = 1.0
 
     groups = ['kth_walkers_unicast_001', 'kth_walkers_unicast_003', 'kth_walkers_unicast_005']
