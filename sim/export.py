@@ -65,9 +65,8 @@ def rssi_from_d(d, n, rssi_0):
     return ad
 
 def export_testbed_calibration_setup_times(db, base_path):
-    distance_groups = [5, 10, 15, 20, 25, 30]
-    #distance_groups = [5, 10, 15, 20]
-    range = [5.0, 0.0] # the -+ range for each distance
+    distance_groups = [5, 10, 15, 20]
+    range = [2.5, 2.5] # the -+ range for each distance
 
     types = ['testbed', 'calibration']
     runs = db((db.run.status == 'processed') & (db.run.group.belongs(types))).select()
@@ -145,8 +144,8 @@ def export_testbed_calibration_setup_times(db, base_path):
 
 
 def export_testbed_calibration_bundle_transmission_time(db, base_path):
-    distance_groups = [5, 10, 15, 20, 25, 30]
-    range = [5.0, 0.0] # the -+ range for each distance
+    distance_groups = [5, 10, 15, 20]
+    range = [2.5, 2.5] # the -+ range for each distance
     types = ['testbed', 'calibration']
     runs = db((db.run.status == 'processed') & (db.run.group.belongs(types))).select()
 
@@ -213,7 +212,7 @@ def export_testbed_calibration_bundle_transmission_time(db, base_path):
     ax.set_ylabel('Link Setup Time [s]')
     ax.set_xlabel('Distance [m]')
 
-    ax.set_ylabel('Bundle TX Time [s]')
+    ax.set_ylabel('Mean Bundle TX Time [s]')
     #ax.set_title('')
     #ax.legend()
     plt.axis([None, None, 0, None])
@@ -225,9 +224,8 @@ def export_testbed_calibration_bundle_transmission_time(db, base_path):
     plt.close()
 
 def export_testbed_calibration_bundle_transmission_success(db, base_path):
-    distance_groups = [5, 10, 15, 20, 25, 30]
-    #distance_groups = [5, 10, 15, 20]
-    range = [5.0, 0.0] # the -+ range for each distance
+    distance_groups = [5, 10, 15, 20]
+    range = [2.5, 2.5] # the -+ range for each distance
 
     types = ['testbed', 'calibration']
     runs = db((db.run.status == 'processed') & (db.run.group.belongs(types))).select()
@@ -284,7 +282,7 @@ def export_testbed_calibration_bundle_transmission_success(db, base_path):
     ax.set_xticks(x)
     ax.set_xticklabels(distance_groups)
 
-    ax.set_ylabel('Bundle TX Success [%]')
+    ax.set_ylabel('Mean Bundle TX Success [%]')
     ax.set_xlabel('Distance [m]')
     #ax.legend(loc='lower center') # (loc='upper center', bbox_to_anchor=(0.5, -0.5), ncol=2)
     #ax.set_title('')
@@ -298,9 +296,8 @@ def export_testbed_calibration_bundle_transmission_success(db, base_path):
     plt.close()
 
 def export_testbed_calibration_bundle_rssi_bars(db, base_path):
-    distance_groups = [5, 10, 15, 20, 25, 30]
-    #distance_groups = [5, 10, 15, 20]
-    range = [5.0, 0.0] # the -+ range for each distance
+    distance_groups = [5, 10, 15, 20]
+    range = [2.5, 2.5] # the -+ range for each distance
 
     types = ['testbed', 'calibration']
     runs = db((db.run.status == 'processed') & (db.run.group.belongs(types))).select()
@@ -400,6 +397,7 @@ def export_testbed_calibration_bundle_rssi_per_distance(db, base_path):
         overall_data[r.group] += run_data
 
     plt.clf()
+    fig, ax = plt.subplots()
 
     #plt.plot([2],[-50], 'o', label='ADS', alpha=1.0, markersize=5)
 
@@ -422,7 +420,7 @@ def export_testbed_calibration_bundle_rssi_per_distance(db, base_path):
 
             mean_rssi_vals.append(np.mean(np.array(rs)))
 
-        plt.plot(mean_dist,mean_rssi_vals, 'o', label=labels[i], alpha=1.0, markersize=2)
+        plt.plot(mean_dist, mean_rssi_vals, 'o', label=None, alpha=1.0, markersize=2)
 
         finiteYmask = np.isfinite(mean_rssi_vals)
         ((n, rssi_0), _) = curve_fit(rssi_from_d, np.array(mean_dist)[finiteYmask], np.array(mean_rssi_vals)[finiteYmask], bounds=([0,-100], [10,0]))
@@ -430,23 +428,24 @@ def export_testbed_calibration_bundle_rssi_per_distance(db, base_path):
         #plt.plot(mean_dist, rssi_from_d(np.array(mean_dist), n, rssi_0), linestyle='--', label="{} Base n={}, rssi_0={}".format(labels[i], round(n, 2), round(rssi_0,2)), color='C{}'.format(i+1))
         print("{}: Base n={}, rssi_0={}".format(g, round(n, 2), round(rssi_0,2)))
 
+        # if g == 'calibration':
+        #     n, rssi_0 = (3.6, -38.5)
+        #     plt.plot(mean_dist, rssi_from_d(np.array(mean_dist), n, rssi_0), linestyle='--', label="{}@1m, exp {}".format(round(rssi_0,2), round(n, 2)), color='black', linewidth=1.0, zorder=10)
+
         # We only plot one line
 
-        if g == 'testbed':
-            n, rssi_0 = (3.6, -38.5)
-            plt.plot(mean_dist, rssi_from_d(np.array(mean_dist), n, rssi_0), linestyle='-', label="Exponent {}, RSSI at 1m={}".format(round(n, 2), round(rssi_0,2)), color='C3')
 
-    plt.legend()
-    fig, ax = plt.subplots()
+    #plt.legend()
     #fig.set_size_inches(1.9, 1.9)
     plt.tight_layout()
 
     plt.xlabel("Distance [m]")
-    plt.ylabel("RSSI [dBm]")
-    plt.axis([0, 30, -100, -40])
-    plt.grid(True)
-    plt.tight_layout()
+    plt.ylabel("Mean RSSI [dBm]")
+    plt.axis([0, 25, -100, -40])
+    plt.xticks([5,10,15,20])
+    plt.grid(False)
     fig.set_size_inches(1.8, 1.6)
+    plt.tight_layout()
     plt.savefig(export_dir + slugify('testbed_calibration_bundle_rssi_per_distance') + ".pdf", format="pdf", bbox_inches='tight')
     #plt.savefig(export_dir + slugify('testbed_calibration_bundle_rssi_per_distance') + ".png", format="png", dpi=1200, bbox_inches='tight')
     plt.close()
@@ -1270,9 +1269,8 @@ def export_filter_bundle_hash_impact(db, base_path):
     rects1 = ax.bar(x - width/2, [means['kth_walkers_broadcast_sv_ch_filter_off'], means['kth_walkers_unicast_sv_ch_filter_off']],  width, label='Hash Disabled', yerr=[stds['kth_walkers_broadcast_sv_ch_filter_off'], stds['kth_walkers_unicast_sv_ch_filter_off']], capsize=0)
     rects2 = ax.bar(x + width/2, [max(means['kth_walkers_broadcast_sv_ch_filter_on'], 1.0), max(means['kth_walkers_unicast_sv_ch_filter_on'], 1.0)],  width, label='Hash Enabled', yerr=[stds['kth_walkers_broadcast_sv_ch_filter_on'], stds['kth_walkers_unicast_sv_ch_filter_on']], capsize=0)
 
-
-    for (mean, rect, offset) in zip([means['kth_walkers_broadcast_sv_ch_filter_off'], means['kth_walkers_unicast_sv_ch_filter_off'], means['kth_walkers_broadcast_sv_ch_filter_on'], means['kth_walkers_unicast_sv_ch_filter_on']], (rects1 + rects2), [3, 8, 0, 8]):
-        plt.text(rect.get_x()+ rect.get_width() / 2.0, rect.get_height()+offset, "{}%".format(round(mean)), fontsize='small', ha='center', va='bottom')
+    for (mean, rect, offset) in zip([means['kth_walkers_broadcast_sv_ch_filter_off'], means['kth_walkers_unicast_sv_ch_filter_off'], means['kth_walkers_broadcast_sv_ch_filter_on'], means['kth_walkers_unicast_sv_ch_filter_on']], (rects1 + rects2), [0, 0, 4, 0]):
+        plt.text(rect.get_x()+ rect.get_width() / 2.0, rect.get_height()/2+offset, "{}%".format(round(mean)), fontsize='small', ha='center', va='center')
 
 
     ax.set_xticks(x)
@@ -1745,13 +1743,12 @@ if __name__ == "__main__":
     tables.init_eval_tables(db)
 
     db.commit() # we need to commit
-
     exports = [
+        export_filter_bundle_hash_impact,
         export_testbed_calibration_bundle_rssi_per_distance,
         export_testbed_calibration_bundle_transmission_success,
         export_testbed_calibration_bundle_transmission_time,
         export_testbed_calibration_setup_times,
-        export_filter_bundle_hash_impact,
         export_unicast,
         export_broadcast
         #export_filter_connection_impact,
@@ -1768,6 +1765,7 @@ if __name__ == "__main__":
         # Waiting:         ,
         # shall this be included? export_filter_bundle_hash_impact_on_conn_times,
     ]
+
 
     for step in exports:
         name = remove_prefix(step.__name__, METHOD_PREFIX)
