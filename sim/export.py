@@ -1432,6 +1432,10 @@ def export_broadcast(db, base_path):
 
     for g in groups:
         steps = np.array(overall_reception_steps[g], dtype=np.float64)
+
+        if len(steps) == 0:
+            continue
+
         steps = np.swapaxes(steps, 0, 1)  # we swap the axes to get all t=0 values at the first position together
         steps = steps * 100.0
         mean[g] = np.mean(steps, axis=1)
@@ -1550,6 +1554,9 @@ def export_unicast(db, base_path):
 
     for g in groups:
         steps = np.array(overall_reception_steps[g], dtype=np.float64)
+
+        if len(steps) == 0:
+            continue
 
         print(g)
         print(steps)
