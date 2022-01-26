@@ -1073,6 +1073,46 @@ def export_ict(db, base_path):
     plt.savefig(base_path + "export_ict" + ".pdf", format="pdf", bbox_inches='tight')
     plt.close()
 
+def export_walkers_alive_nodes(db, base_path):
+
+    sims = {
+        'ref_001_01': "data/kth_walkers/sparse_run1/ostermalm_001_1.tr.gz",
+        'ref_003_01': "data/kth_walkers/sparse_run1/ostermalm_003_1.tr.gz",
+        'ref_005_01': "data/kth_walkers/sparse_run1/ostermalm_005_1.tr.gz",
+    }
+
+    plt.clf()
+
+    fig, ax = plt.subplots()
+    fig.set_size_inches(3.0, 3.0)
+    max_time = 3600
+
+    for (i,s) in enumerate(sims):
+        node_lifetimes = kth_walkers.get_node_lifetimes(max_time, {'filepath': sims[s]})
+        del node_lifetimes[0]    # we exclude the central node
+
+        num_alive_nodes_per_step = []
+        for t in range(max_time+1):
+            alive_nodes = [k for k in node_lifetimes if node_lifetimes[k][0] <= t <= node_lifetimes[k][1]]
+            num_alive_nodes_per_step.append(len(alive_nodes))
+
+        plt.plot(range(max_time+1), num_alive_nodes_per_step, linestyle='-', label=s, color='C{}'.format(i))
+
+    #plt.legend()
+    plt.xlabel("Time [min]")
+    plt.ylabel('# Walkers in Area')
+    plt.axis([0, max_time, 0, None])
+    plt.grid(True)
+
+    ticks = ticker.FuncFormatter(lambda x, pos: '{}'.format(round(x/60.0)))
+    ax.xaxis.set_major_formatter(ticks)
+    ax.xaxis.set_major_locator(MultipleLocator(600))
+    # For the minor ticks, use no labels; default NullFormatter.
+    ax.xaxis.set_minor_locator(MultipleLocator(300))
+
+    plt.tight_layout()
+    plt.savefig(base_path + "kth_walkers_alive_nodes" + ".pdf", format="pdf", bbox_inches='tight')
+    plt.close()
 
 def export_connection_times(db, base_path):
     runs = db((db.run.status == 'processed') & (db.run.group == RUN_GROUP)).select()
@@ -1386,12 +1426,12 @@ def export_broadcast(db, base_path):
     # we now add our simplistic python simulations other groups
 
     sims = {
-        #'ref_001_01': "/app/sim/data/kth_walkers/sparse_run1/ostermalm_001_1.tr.gz",
-        #'ref_003_01': "/app/sim/data/kth_walkers/sparse_run1/ostermalm_003_1.tr.gz",
-        #'ref_005_01': "/app/sim/data/kth_walkers/sparse_run1/ostermalm_005_1.tr.gz",
+        'ref_001_01': "data/kth_walkers/sparse_run1/ostermalm_001_1.tr.gz",
+        'ref_003_01': "data/kth_walkers/sparse_run1/ostermalm_003_1.tr.gz",
+        'ref_005_01': "data/kth_walkers/sparse_run1/ostermalm_005_1.tr.gz",
         #'ref_001_02': "/app/sim/data/kth_walkers/sparse_run2/ostermalm_001_2.tr.gz",
         #'ref_003_02': "/app/sim/data/kth_walkers/sparse_run2/ostermalm_003_2.tr.gz",
-        'ref_005_02': "/app/sim/data/kth_walkers/sparse_run2/ostermalm_005_2.tr.gz",
+        #'ref_005_02': "/app/sim/data/kth_walkers/sparse_run2/ostermalm_005_2.tr.gz",
     }
 
     for k in sims:
@@ -1470,7 +1510,7 @@ def export_broadcast(db, base_path):
         plt.plot(positions, mean[k], linestyle='-', label=k, alpha=0.75, color='C{}'.format(i+3))
 
     plt.legend()
-    plt.xlabel("Time [min]")
+    plt.xlabel("Simulation Time [min]")
     plt.ylabel('Mean Bundle Reception Rate [%]')
     plt.axis([0, length_s, 0, 100.0])
     plt.grid(True)
@@ -1593,8 +1633,8 @@ def export_unicast(db, base_path):
         #plt.fill_between(positions, cis['unicast_populated'][0], cis['unicast_populated'][1], color='C2', label='95% CI Populated', alpha=0.25, linewidth=0.0)
 
     plt.legend()
-    plt.xlabel("Time [min]")
-    plt.ylabel('Mean Bundle Reception Rate [%]')
+    plt.xlabel("Time since Node Arrival [min]")
+    plt.ylabel('Mean Delivery Success Rate [%]')
     plt.axis([0, length_s, 0, 100.0])
 
     ticks = ticker.FuncFormatter(lambda x, pos: '{}'.format(round(x/60.0)))
@@ -1744,13 +1784,14 @@ if __name__ == "__main__":
 
     db.commit() # we need to commit
     exports = [
-        export_unicast,
-        export_broadcast,
-        export_filter_bundle_hash_impact,
+        export_walkers_alive_nodes,
         export_testbed_calibration_bundle_rssi_per_distance,
         export_testbed_calibration_bundle_transmission_success,
         export_testbed_calibration_bundle_transmission_time,
-        export_testbed_calibration_setup_times
+        export_testbed_calibration_setup_times,
+        export_filter_bundle_hash_impact,
+        export_unicast,
+        export_broadcast,
         #export_filter_connection_impact,
         #export_testbed_calibration_bundle_rssi_bars,
         #export_walkers_reception_rate,
