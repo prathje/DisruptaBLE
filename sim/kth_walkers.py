@@ -1,6 +1,7 @@
 import gzip
 import csv
 import math
+import distance
 
 def create_kth_walkers_reader(model_options, max_time = None):
     assert 'filepath' in model_options
@@ -132,6 +133,66 @@ def get_max_density(model_options):
     print((max_x-min_x), (max_y-min_y), area, max_concurrent, max_concurrent/(area/1000000.0))
 
 
+def create_contact_pairs(max_time, model_options, dist_limit=20.0, step_s=1.0):
+    assert 'filepath' in model_options
+    assert max_time > 0
+    
+    assert step_s == 1.0 # other is currently not supported...
+
+    node_lifetimes = get_node_lifetimes(max_time, model_options)
+    num_proxy_nodes = len(node_lifetimes)-1
+
+    import dist_writer
+    pos_iter = dist_writer.line_to_position_iterator(num_proxy_nodes, walkers_to_line_gen(num_proxy_nodes, model_options))
+
+    # the dictionary that contains (start_time, end_times) tuples under each key (a,b) with a > b
+    contact_pairs = {}
+
+    # contains the start time of the current contact
+    contact_pairs_start = {}
+
+    for a in range(num_proxy_nodes+1):
+        for b in  range(num_proxy_nodes+1):
+            if a <= b:
+                continue
+            contact_pairs[(a,b)] = []
+            contact_pairs_start[(a,b)] = None
+    t = 0
+    while t <= max_time:
+        (ts, positions) = next(pos_iter)
+        alive_nodes = [k for k in node_lifetimes if node_lifetimes[k][0] <= t <= node_lifetimes[k][1]]
+
+        for a in alive_nodes:
+            for b in alive_nodes:
+                if a <= b:
+                    continue
+
+                pos_a = positions[a]
+                pos_b = positions[b]
+                diff_x = pos_a[0] - pos_b[0]
+                diff_y = pos_a[1] - pos_b[1]
+                dist = math.sqrt(diff_x * diff_x + diff_y * diff_y)
+
+                if dist > dist_limit:
+                    if contact_pairs_start[(a,b)] is not None: # connection breaks!
+                        contact_pairs[(a,b)].append((contact_pairs_start[(a,b)], t))
+                        contact_pairs_start[(a,b)] = None
+                elif contact_pairs_start[(a,b)] is None:
+                    contact_pairs_start[(a,b)] = t  # we start a new contact!
+        t += 1
+
+    # in the end, we need close all contacts based on the nodes lifetimes
+    for a in range(num_proxy_nodes+1):
+        for b in  range(num_proxy_nodes+1):
+            if a <= b:
+                continue
+
+            if contact_pairs_start[(a,b)] is not None:
+                contact_pairs[(a,b)].append((contact_pairs_start[(a,b)], min(node_lifetimes[a][1], node_lifetimes[b][1])))
+                contact_pairs_start[(a,b)] = None
+
+    return contact_pairs
+
 
 def simulate_broadcast(max_time, model_options, dist_limit=20.0, setup_time=20.0):
     assert 'filepath' in model_options
@@ -190,6 +251,13 @@ def simulate_broadcast(max_time, model_options, dist_limit=20.0, setup_time=20.0
         t += 1
     print(node_informed)
     return node_informed
+
+
+def dist_time_iters(max_time, model_options):
+    num_proxy_nodes = walkers_get_num_created_nodes_until(max_time, model_options)
+    import dist_writer
+    tp_iter = dist_writer.line_to_position_iterator(num_proxy_nodes, walkers_to_line_gen(num_proxy_nodes, model_options))
+    return distance.time_dist_iters_from_pos_iter(tp_iter, num_proxy_nodes+1)
 
 
 import numpy as np
