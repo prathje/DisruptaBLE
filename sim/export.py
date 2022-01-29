@@ -1607,6 +1607,210 @@ def export_broadcast(db, base_path):
     plt.close()
 
 
+def export_unicast_plots(db, base_path):
+
+    min_s = 60*4
+    length_s = 1200-60*5
+    step = 1.0
+    include_before_time = False
+
+    groups = ['kth_walkers_unicast_001', 'kth_walkers_unicast_003', 'kth_walkers_unicast_005']
+    max_step = math.ceil(length_s/step)
+
+
+    overall_reception_steps = {}
+    overall_replica_steps = {}
+
+    for g in groups:
+        overall_reception_steps[g] = []
+        overall_replica_steps[g] = []
+
+    for r in db((db.run.status == 'processed') & (db.run.group.belongs(groups))).iterselect():
+        name = slugify(("Unicast Plots", str(r.name), str(min_s), str(r.id), str(length_s), str(step), str(include_before_time)))
+        print("Handling run {}".format(name))
+
+        config = json.loads(r.configuration_json)
+        model_options = json.loads(config['SIM_MODEL_OPTIONS'])
+
+        # Note that we limit the lifetimes here already, only the bundles of these nodes should be included!
+        node_lifetimes = kth_walkers.get_node_lifetimes((r.simulation_time/1000000.0), model_options)
+
+        lifetimes_by_device_id = {}
+
+        for d in db(db.device.run == r).iterselect():
+            if d.number in node_lifetimes:
+                lifetimes_by_device_id[d.id] = node_lifetimes[d.number]
+
+        def proc():
+            run_reception_steps = []
+            run_replica_steps = []
+            # & (db.bundle.creation_timestamp_ms <= ((r.simulation_time/1000)-(length_s*1000)))
+            bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://source')).iterselect()
+
+            for b in bundles:
+                if not include_before_time and lifetimes_by_device_id[b.source][0] > (r.simulation_time/1000000.0)-length_s:
+                    continue    # This node was too late to be included, i.e. its unicast message was too late
+
+                if lifetimes_by_device_id[b.source][0] < min_s:
+                    continue    # this node was too early for a valid sample (biased!)
+
+
+                end_ts = min(max_step, math.floor((r.simulation_time/1000000.0-lifetimes_by_device_id[b.source][0]) / step))
+
+                # handle unicast reception steps
+
+                receptions_steps = [np.nan]*(max_step+1)
+
+                res = db.executesql(
+                    '''
+                        SELECT us, device FROM bundle_reception
+                        WHERE bundle = {} AND receiver_eid = destination_eid
+                        ORDER BY us ASC
+                    '''.format(b.id)
+                )
+
+                for x in range(0, end_ts+1):
+                    receptions_steps[x] = 0 # we have data for this!
+
+                for row in res:
+                    # Calculate the relative times for reception
+                    ms = (row[0]/1000)-(lifetimes_by_device_id[b.source][0]*1000.0)
+                    start_ts = round((ms/1000) / step)
+                    for x in range(start_ts, end_ts+1):
+                        receptions_steps[x] = 1 # there is just one receiver
+                
+                
+                # Handle overall replication steps
+                replicas_steps = [np.nan]*(max_step+1)
+                res = db.executesql(
+                    '''
+                        SELECT us, device FROM bundle_reception
+                        WHERE bundle = {} AND receiver_eid != destination_eid
+                        ORDER BY us ASC
+                    '''.format(b.id)
+                )
+                for x in range(0, end_ts+1):
+                    replicas_steps[x] = 0 # we have data for this!
+
+                for row in res:
+                    # Calculate the relative times for replica
+                    ms = (row[0]/1000)-(lifetimes_by_device_id[b.source][0]*1000.0)
+                    start_ts = round((ms/1000) / step)
+                    receiver_end_ts = min(end_ts, int(lifetimes_by_device_id[row[1]][1]/ step))   # we count only toward the lifetime of the receiver!
+
+                    for x in range(start_ts, receiver_end_ts+1):
+                        replicas_steps[x] += 1
+
+                run_reception_steps.append(receptions_steps)
+                run_replica_steps.append(replicas_steps)
+
+            return run_reception_steps, run_replica_steps
+        run_reception_steps, run_replica_steps = cached(name, proc)
+        overall_reception_steps[r.group] += run_reception_steps
+        overall_replica_steps[r.group] += run_replica_steps
+
+    positions = range(0, max_step + 1)
+    plt.clf()
+
+    reception_steps_mean = {}
+    reception_steps_cis = {}
+
+    replica_steps_mean = {}
+    replica_steps_cis = {}
+
+    fig = plt.figure()
+    gs = fig.add_gridspec(2)#, hspace=0)
+    axs = gs.subplots(sharex=True)
+    fig.set_size_inches(3.6, 3.25)
+
+    #for ax in axs:
+    #    ax.label_outer()
+
+    for g in groups:
+        # Reception steps
+        reception_steps = np.array(overall_reception_steps[g], dtype=np.float64)
+        replica_steps = np.array(overall_replica_steps[g], dtype=np.float64)
+
+        if len(reception_steps) > 0:
+            steps = np.swapaxes(reception_steps, 0, 1)  # we swap the axes to get all t=0 values at the first position together
+            steps = steps * 100.0
+            reception_steps_mean[g] = np.nanmean(steps, axis=1)
+            counts = [len([x for x in steps[k] if not np.isnan(x)]) for k in range(0, max_step+1)]
+            ci = 1.96 * np.nanstd(steps, axis=1)/ np.sqrt(counts)
+            reception_steps_cis[g] = [reception_steps_mean[g]-ci, reception_steps_mean[g]+ci]
+
+            print("Throughput {}, mean {} at max secs".format(g, reception_steps_mean[g][max_step]))
+
+            # full_sec = 0
+            # for x in range(0, max_step+1):
+            #     if mean[g][x] > 99.99:
+            #         full_sec = x
+            #         break
+
+            #print("Throughput {} at 100% at {} secs".format(g, full_sec))
+
+        replica_steps = np.array(overall_replica_steps[g], dtype=np.float64)
+
+        if len(replica_steps) > 0:
+            steps = np.swapaxes(replica_steps, 0, 1)  # we swap the axes to get all t=0 values at the first position together
+            replica_steps_mean[g] = np.nanmean(steps, axis=1)
+            counts = [len([x for x in steps[k] if not np.isnan(x)]) for k in range(0, max_step+1)]
+            ci = 1.96 * np.nanstd(steps, axis=1)/ np.sqrt(counts)
+            replica_steps_cis[g] = [replica_steps_mean[g]-ci, replica_steps_mean[g]+ci]
+            print("Throughput {}, mean {} at max secs".format(g, replica_steps_mean[g][max_step]))
+
+    reception_axs = axs[0]
+    replica_axs = axs[1]
+
+    if 'kth_walkers_unicast_005' in reception_steps_mean:
+        reception_axs.plot(positions, reception_steps_mean['kth_walkers_unicast_005'], linestyle='-', label="High", alpha=0.75, color='C0')
+        reception_axs.fill_between(positions, reception_steps_cis['kth_walkers_unicast_005'][0], reception_steps_cis['kth_walkers_unicast_005'][1], color='C0', label='95% CI', alpha=0.25, linewidth=0.0)
+
+    if 'kth_walkers_unicast_003' in reception_steps_mean:
+        reception_axs.plot(positions, reception_steps_mean['kth_walkers_unicast_003'], linestyle='-', label="Medium", alpha=0.75, color='C1')
+        reception_axs.fill_between(positions, reception_steps_cis['kth_walkers_unicast_003'][0], reception_steps_cis['kth_walkers_unicast_003'][1], color='C1', label='95% CI', alpha=0.25, linewidth=0.0)
+
+    if 'kth_walkers_unicast_001' in reception_steps_mean:
+        reception_axs.plot(positions, reception_steps_mean['kth_walkers_unicast_001'], linestyle='-', label="Low", alpha=0.75, color='C2')
+        reception_axs.fill_between(positions, reception_steps_cis['kth_walkers_unicast_001'][0], reception_steps_cis['kth_walkers_unicast_001'][1], color='C2', label='95% CI', alpha=0.25, linewidth=0.0)
+
+    reception_axs.set_ylabel('Mean Delivery Rate [%]')
+    reception_axs.axis([0, length_s, 0, 100.0])
+    reception_axs.grid(True)
+
+    if 'kth_walkers_unicast_005' in replica_steps_mean:
+        replica_axs.plot(positions, replica_steps_mean['kth_walkers_unicast_005'], linestyle='-', label="High", alpha=0.75, color='C0')
+        replica_axs.fill_between(positions, replica_steps_cis['kth_walkers_unicast_005'][0], replica_steps_cis['kth_walkers_unicast_005'][1], color='C0', label='95% CI', alpha=0.25, linewidth=0.0)
+
+    if 'kth_walkers_unicast_003' in replica_steps_mean:
+        replica_axs.plot(positions, replica_steps_mean['kth_walkers_unicast_003'], linestyle='-', label="Medium", alpha=0.75, color='C1')
+        replica_axs.fill_between(positions, replica_steps_cis['kth_walkers_unicast_003'][0], replica_steps_cis['kth_walkers_unicast_003'][1], color='C1', label='95% CI', alpha=0.25, linewidth=0.0)
+
+    if 'kth_walkers_unicast_001' in replica_steps_mean:
+        replica_axs.plot(positions, replica_steps_mean['kth_walkers_unicast_001'], linestyle='-', label="Low", alpha=0.75, color='C2')
+        replica_axs.fill_between(positions, replica_steps_cis['kth_walkers_unicast_001'][0], replica_steps_cis['kth_walkers_unicast_001'][1], color='C2', label='95% CI', alpha=0.25, linewidth=0.0)
+
+    replica_axs.set_ylabel('Mean Replica Amount', labelpad=9.5)
+    replica_axs.axis([0, length_s, 0, 12])
+    replica_axs.set_yticks(np.arange(0, 12+1, step=2))
+    replica_axs.grid(True)
+
+    reception_axs.legend(ncol=3,handletextpad=0.2, loc='upper center', bbox_to_anchor=(0.5, 1.1))
+
+    plt.xlabel("Time Since Node Arrival [min]")
+
+    ticks = ticker.FuncFormatter(lambda x, pos: '{}'.format(round(x/60.0)))
+    replica_axs.xaxis.set_major_formatter(ticks)
+
+    replica_axs.xaxis.set_major_locator(MultipleLocator(120))
+    # For the minor ticks, use no labels; default NullFormatter.
+    replica_axs.xaxis.set_minor_locator(MultipleLocator(60))
+
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(base_path + "kth_walkers_unicast_stacked" + ".pdf", format="pdf", bbox_inches='tight')
+    plt.close()
+
 def export_unicast(db, base_path):
 
     min_s = 60*4
@@ -2020,7 +2224,8 @@ if __name__ == "__main__":
 
     db.commit() # we need to commit
     exports = [
-        export_broadcast,
+        export_unicast_plots,
+        #export_broadcast,
         #export_unicast_replicas,
         #export_unicast,
         #export_walkers_ict,
