@@ -452,7 +452,9 @@ def export_testbed_calibration_bundle_rssi_per_distance(db, base_path):
 
 
 def export_connection_distance_histogramm(db, export_dir):
-    runs = db((db.run.status == 'processed') & ((db.run.group == 'broadcast_populated') | (db.run.group == 'unicast_populated')) ).select()
+
+    groups = ['kth_walkers_broadcast_001', 'kth_walkers_broadcast_003','kth_walkers_broadcast_005', 'kth_walkers_unicast_001', 'kth_walkers_unicast_003','kth_walkers_unicast_005']
+    runs = db((db.run.status == 'processed') & (db.run.group.belongs(groups))).select()
 
     overall_data = []
 
@@ -498,7 +500,8 @@ def export_connection_distance_histogramm(db, export_dir):
     mean = np.mean(np.array(overall_data))
 
     ci = 1.96 * np.std(np.array(overall_data))/np.sqrt(len(overall_data))
-    cis = [mean-ci, mean+ci]#np.percentile(np.array(overall_data), [2.5, 97.5])
+    cis = [mean-ci, mean+ci]
+    #np.percentile(np.array(overall_data), [2.5, 97.5])
 
     # plt.gca().yaxis.set_major_formatter(PercentFormatter(1))
 
@@ -522,6 +525,248 @@ def export_connection_distance_histogramm(db, export_dir):
     #plt.grid(True)
     plt.tight_layout()
     plt.savefig(export_dir + slugify('connection_distance_histogramm') + ".pdf", format="pdf", bbox_inches='tight')
+    plt.close()
+
+def export_broadcast_propagation_time_histogramm(db, export_dir):
+
+    groups = ['kth_walkers_broadcast_001', 'kth_walkers_broadcast_003', 'kth_walkers_broadcast_005']
+    runs = db((db.run.status == 'processed') & (db.run.group.belongs(groups))).select()
+
+    overall_data = []
+
+    for r in runs:
+        name = slugify(("export_broadcast_connection_time_histogramm_4", str(r.name), str(r.id)))
+        print("Handling {}".format(name))
+
+        config = json.loads(r.configuration_json)
+
+        def proc():
+            data = []
+
+            bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://fake')).iterselect()
+            for b in bundles:
+
+                res = db.executesql(
+                    '''
+                         SELECT br.us - ci.client_conn_init_us 
+                         FROM bundle_reception br
+                         JOIN bundle_transmission bt ON bt.id = br.bundle_transmission
+                         JOIN conn_info ci ON ci.id = bt.conn_info
+                         WHERE bundle = {}
+                    '''.format(b.id)
+                )
+
+                for row in res:
+                    data.append(row[0]/1000000.0)
+            return data
+
+        run_data = cached(name, proc)
+        overall_data += run_data
+
+    plt.clf()
+    #plt.legend()
+
+    fig, ax = plt.subplots()
+    print(overall_data)
+    mean = np.mean(np.array(overall_data))
+
+    ci = 1.96 * np.std(np.array(overall_data))/np.sqrt(len(overall_data))
+    cis = [mean-ci, mean+ci]
+    #np.percentile(np.array(overall_data), [2.5, 97.5])
+
+    # plt.gca().yaxis.set_major_formatter(PercentFormatter(1))
+
+    hist, bins = np.histogram(overall_data, density=True, bins=20)
+    # Width of each bin
+    bins_w = np.diff(bins)
+    # Compute proportion of sample in each bin
+    hist_p = hist * bins_w
+    # Plot histogram
+    ax.bar(bins[:-1], hist_p, width=bins_w, align='edge')
+
+    #n, bins, patches = ax.hist(overall_data, 50, density=True)
+
+    plt.axvline(mean, color='k', linestyle='dashed', linewidth=1)
+    plt.text(mean+0.1, .75, "mean: {:.2f}s".format(mean), transform=ax.get_xaxis_transform())
+
+    #plt.axvline(cis[0], color='r', linestyle='dotted', linewidth=1)
+    #plt.axvline(cis[1], color='r', linestyle='dotted', linewidth=1)
+
+    #plt.text(cis[0]+1, .225, "{:.2f}m".format(cis[0]), transform=ax.get_xaxis_transform())
+    #plt.text(cis[1]+1, .225, "{:.2f}m".format(cis[1]), transform=ax.get_xaxis_transform())
+
+    fig.set_size_inches(3.0, 2.25)
+    plt.tight_layout()
+
+    plt.xlabel("Time Since Advertisement Reception [s]")
+    plt.ylabel("Fraction of Succ. Connections")
+    plt.axis([0, 5, 0, None])
+
+    ax.xaxis.set_major_locator(MultipleLocator(1))
+    ax.xaxis.set_minor_locator(MultipleLocator(0.5))
+
+    #plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(export_dir + slugify('broadcast_propagation_time_histogramm') + ".pdf", format="pdf", bbox_inches='tight')
+    plt.close()
+
+
+def export_connection_state_comparison(db, export_dir):
+
+    max_time_us = 1200*1000000
+    #groups = ['kth_walkers_broadcast_001', 'kth_walkers_broadcast_003', 'kth_walkers_broadcast_005', 'kth_walkers_unicast_001', 'kth_walkers_unicast_003', 'kth_walkers_unicast_005']
+    groups = ['kth_walkers_broadcast_001', 'kth_walkers_broadcast_005', 'kth_walkers_unicast_001', 'kth_walkers_unicast_005']
+
+
+    overall_results = {}
+    for g in groups:
+        overall_results[g] = []
+
+    for g in groups:
+        runs = db((db.run.status == 'processed') & (db.run.group == g)).select()
+        for r in runs:
+            name = slugify(("export_connection_state_comparison_2", str(r.name), str(r.id)))
+            print("Handling {}".format(name))
+
+            config = json.loads(r.configuration_json)
+
+            def proc():
+                res = db.executesql(
+                    '''
+                         SELECT num_bt, num_bt_suc, COUNT(*) as num
+                        FROM (
+                        SELECT COUNT(bt.id) as num_bt, SUM(CASE WHEN bt.end_us IS NOT NULL THEN 1 ELSE 0 END) as num_bt_suc
+                        FROM conn_info ci
+                        LEFT JOIN bundle_transmission bt ON bt.conn_info = ci.id
+                        WHERE ci.run = {} AND ci.client_conn_init_us < {}
+                        GROUP BY ci.id
+                        ) as a
+                        GROUP BY num_bt, num_bt_suc
+                    '''.format(r.id, str(max_time_us))
+                )
+
+
+                per_label = {
+                    'overall': 0,
+                    'conn_failed': 0,
+                    'sv_failed': 0,
+                    'idle': 0,
+                    'interrupted': 0,
+                    'finished': 0,
+                }
+
+                for row in res:
+                    num_bt, num_bt_suc, num = row
+                    num_bt = int(num_bt)
+                    num_bt_suc = int(num_bt_suc)
+                    num = int(num)
+
+                    label = None
+
+                    # we distinguish the following cases:
+                    # no bundles -> connection failed
+                    # less than 4 bundles transmitted -> SV failed
+                    # 4 bundles transmitted but no other scheduled -> IDLE
+                    # not all
+
+                    if num_bt == 0:
+                        label = 'conn_failed'
+                    elif num_bt < 4:
+                        label = 'sv_failed'
+                    elif num_bt_suc < 4:
+                        label = 'sv_failed'
+                    elif num_bt == 4 and num_bt_suc == 4:
+                        label = 'idle'
+                    elif num_bt > 4 and num_bt_suc < num_bt:
+                        label = 'interrupted'
+                    elif num_bt > 4 and num_bt_suc == num_bt:
+                        label = 'finished'
+
+                    assert label
+                    per_label[label] += num
+                    per_label['overall'] += num
+                return per_label
+            overall_results[g].append(proc()) # cached(name, proc)
+
+    per_group_and_label_mean = {}
+    per_group_and_label_std = {}
+
+
+    types = {
+        'conn_failed': 'Failed',
+        'sv_failed': 'Failed',
+        'idle': 'Unproductive',
+        'interrupted': 'Interrupted',
+        'finished': 'Finished'
+    }
+
+    for g in groups:
+        per_group_and_label_mean[g] = {}
+        per_group_and_label_std[g] = {}
+
+        for t in types:
+            xs = []
+            for res in overall_results[g]:
+                xs.append(res[t] / float(res['overall']))   # we scale by the overall amount
+            per_group_and_label_mean[g][t] = np.nanmean(xs)
+            per_group_and_label_std[g][t] = np.nanstd(xs)
+
+    plt.clf()
+
+
+    fig, ax = plt.subplots()
+
+    #x_labels = ['Broadcast Low', 'Broadcast Medium', 'Broadcast High', 'Unicast Low', 'Unicast Medium', 'Unicast High']
+    x_labels = ['Broadcast\nLow', 'Broadcast\nHigh', 'Unicast\nLow', 'Unicast\nHigh']
+
+
+
+    width = 0.35
+
+    means = {}
+    stds = {}
+
+    for t in types:
+        means[t] = []
+        stds[t] = []
+        for g in groups:
+            means[t].append(per_group_and_label_mean[g][t])
+            stds[t].append(per_group_and_label_std[g][t])
+
+        means[t] = np.array(means[t])
+        stds[t] = np.array(stds[t])
+
+    #patterns = [ "/" , "\\" , "+" , ".", "*",  "|",  "o", "O", "-", "x"]
+
+
+    ax.bar(x_labels, means['finished'], width, yerr=stds['finished'], label='Finished', bottom=means['conn_failed']+means['sv_failed']+means['idle']+means['interrupted'])
+    ax.bar(x_labels, means['interrupted'], width, yerr=stds['interrupted'], label='Interrupted', bottom=means['conn_failed']+means['sv_failed']+means['idle'])
+    ax.bar(x_labels, means['idle'], width, yerr=stds['idle'], label='Unproductive',  bottom=means['conn_failed']+means['sv_failed'])
+    ax.bar(x_labels, means['sv_failed'], width, yerr=stds['sv_failed'], label='SV Exchange\nFailed', bottom=means['conn_failed'], color='C4')
+    ax.bar(x_labels, means['conn_failed'], width, yerr=stds['conn_failed'], label='Connection\nFailed', color='C3')
+
+
+    pos = 0
+    for g in groups:
+        mean = np.nanmean([float(res['overall']) for res in overall_results[g]])
+        ax.text(pos, 1.1, "{:,}".format(int(mean)), ha='center', va='center')
+        pos += 1
+
+    plt.legend(ncol=1, loc='center right', bbox_to_anchor=(1.5, 0.5), handletextpad=0.2)
+
+
+    fig.set_size_inches(3.8, 2.25)
+    plt.tight_layout()
+
+    plt.xlabel("Scenario")
+    plt.ylabel("Fraction of Connections")
+
+    plt.yticks(np.arange(0, 1.0+0.1, step=0.2))
+    plt.axis([None, None, 0, 1.2])
+
+    #plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(export_dir + slugify('connection_state_comparison') + ".pdf", format="pdf", bbox_inches='tight')
     plt.close()
 
 def export_testbed_rssi_per_distance(db, export_dir):
@@ -1176,7 +1421,7 @@ def export_walkers_alive_nodes(db, base_path):
 
         plt.plot(range(max_time+1), num_alive_nodes_per_step, linestyle='-', label=s, color='C{}'.format(i))
 
-    plt.legend(ncol=3,handletextpad=0.2, loc='upper center', bbox_to_anchor=(0.5, 1.25))
+    plt.legend(ncol=3, handletextpad=0.2, loc='upper center', bbox_to_anchor=(0.5, 1.25))
     plt.xlabel("Time [min]")
     plt.ylabel('# Walkers in Area')
     plt.axis([0, max_time, 0, 250])
@@ -2224,8 +2469,11 @@ if __name__ == "__main__":
 
     db.commit() # we need to commit
     exports = [
-        export_unicast_plots,
-        export_broadcast,
+        export_connection_distance_histogramm,
+        #export_connection_state_comparison,
+        #export_broadcast_propagation_time_histogramm,
+        #export_unicast_plots,
+        #export_broadcast,
         #export_broadcast,
         #export_unicast_replicas,
         #export_unicast,
