@@ -1574,19 +1574,19 @@ def export_broadcast(db, base_path):
         print("Reception Rate {} at 100% at {} secs".format(g, full_sec))
 
     if 'kth_walkers_broadcast_005' in mean:
-        plt.plot(positions, mean['kth_walkers_broadcast_005'], linestyle='-', label="High", alpha=0.75, color='C0')
-        plt.fill_between(positions, cis['kth_walkers_broadcast_005'][0], cis['kth_walkers_broadcast_005'][1], color='C0',  alpha=0.25, linewidth=0.0)
-        plt.plot(positions, mean['ref_005_01'], linestyle=':', label='High (Ref.)', alpha=0.75, color='C0')
+        plt.plot(positions, mean['kth_walkers_broadcast_005'], linestyle='-', label="High", alpha=1.0, color='C0')
+        plt.fill_between(positions, cis['kth_walkers_broadcast_005'][0], cis['kth_walkers_broadcast_005'][1], color='C0',  alpha=0.5, linewidth=0.0)
+        plt.plot(positions, mean['ref_005_01'], linestyle=':', label='High (Ref.)', alpha=1.0, color='C0')
 
     if 'kth_walkers_broadcast_003' in mean:
-        plt.plot(positions, mean['kth_walkers_broadcast_003'], linestyle='-', label="Medium", alpha=0.75, color='C1')
-        plt.fill_between(positions, cis['kth_walkers_broadcast_003'][0], cis['kth_walkers_broadcast_003'][1], color='C1',  alpha=0.25, linewidth=0.0)
-        plt.plot(positions, mean['ref_003_01'], linestyle=':', label='Medium (Ref.)', alpha=0.75, color='C1')
+        plt.plot(positions, mean['kth_walkers_broadcast_003'], linestyle='-', label="Medium", alpha=1.0, color='C1')
+        plt.fill_between(positions, cis['kth_walkers_broadcast_003'][0], cis['kth_walkers_broadcast_003'][1], color='C1',  alpha=0.5, linewidth=0.0)
+        plt.plot(positions, mean['ref_003_01'], linestyle=':', label='Medium (Ref.)', alpha=1.0, color='C1')
 
     if 'kth_walkers_broadcast_001' in mean:
-        plt.plot(positions, mean['kth_walkers_broadcast_001'], linestyle='-', label="Low", alpha=0.75, color='C2')
-        plt.fill_between(positions, cis['kth_walkers_broadcast_001'][0], cis['kth_walkers_broadcast_001'][1], color='C2',  alpha=0.25, linewidth=0.0)
-        plt.plot(positions, mean['ref_001_01'], linestyle=':', label='Low (Ref.)', alpha=0.75, color='C2')
+        plt.plot(positions, mean['kth_walkers_broadcast_001'], linestyle='-', label="Low", alpha=1.0, color='C2')
+        plt.fill_between(positions, cis['kth_walkers_broadcast_001'][0], cis['kth_walkers_broadcast_001'][1], color='C2',  alpha=0.5, linewidth=0.0)
+        plt.plot(positions, mean['ref_001_01'], linestyle=':', label='Low (Ref.)', alpha=1.0, color='C2')
 
 
     plt.legend()
@@ -1763,32 +1763,32 @@ def export_unicast_plots(db, base_path):
     replica_axs = axs[1]
 
     if 'kth_walkers_unicast_005' in reception_steps_mean:
-        reception_axs.plot(positions, reception_steps_mean['kth_walkers_unicast_005'], linestyle='-', label="High", alpha=0.75, color='C0')
-        reception_axs.fill_between(positions, reception_steps_cis['kth_walkers_unicast_005'][0], reception_steps_cis['kth_walkers_unicast_005'][1], color='C0', label='95% CI', alpha=0.25, linewidth=0.0)
+        reception_axs.plot(positions, reception_steps_mean['kth_walkers_unicast_005'], linestyle='-', label="High", alpha=1.0, color='C0')
+        reception_axs.fill_between(positions, reception_steps_cis['kth_walkers_unicast_005'][0], reception_steps_cis['kth_walkers_unicast_005'][1], color='C0', label='95% CI', alpha=0.5, linewidth=0.0)
 
     if 'kth_walkers_unicast_003' in reception_steps_mean:
-        reception_axs.plot(positions, reception_steps_mean['kth_walkers_unicast_003'], linestyle='-', label="Medium", alpha=0.75, color='C1')
-        reception_axs.fill_between(positions, reception_steps_cis['kth_walkers_unicast_003'][0], reception_steps_cis['kth_walkers_unicast_003'][1], color='C1', label='95% CI', alpha=0.25, linewidth=0.0)
+        reception_axs.plot(positions, reception_steps_mean['kth_walkers_unicast_003'], linestyle='-', label="Medium", alpha=1.0, color='C1')
+        reception_axs.fill_between(positions, reception_steps_cis['kth_walkers_unicast_003'][0], reception_steps_cis['kth_walkers_unicast_003'][1], color='C1', label='95% CI', alpha=0.5, linewidth=0.0)
 
     if 'kth_walkers_unicast_001' in reception_steps_mean:
-        reception_axs.plot(positions, reception_steps_mean['kth_walkers_unicast_001'], linestyle='-', label="Low", alpha=0.75, color='C2')
-        reception_axs.fill_between(positions, reception_steps_cis['kth_walkers_unicast_001'][0], reception_steps_cis['kth_walkers_unicast_001'][1], color='C2', label='95% CI', alpha=0.25, linewidth=0.0)
+        reception_axs.plot(positions, reception_steps_mean['kth_walkers_unicast_001'], linestyle='-', label="Low", alpha=1.0, color='C2')
+        reception_axs.fill_between(positions, reception_steps_cis['kth_walkers_unicast_001'][0], reception_steps_cis['kth_walkers_unicast_001'][1], color='C2', label='95% CI', alpha=0.5, linewidth=0.0)
 
     reception_axs.set_ylabel('Mean Delivery Rate [%]')
     reception_axs.axis([0, length_s, 0, 100.0])
     reception_axs.grid(True)
 
     if 'kth_walkers_unicast_005' in replica_steps_mean:
-        replica_axs.plot(positions, replica_steps_mean['kth_walkers_unicast_005'], linestyle='-', label="High", alpha=0.75, color='C0')
-        replica_axs.fill_between(positions, replica_steps_cis['kth_walkers_unicast_005'][0], replica_steps_cis['kth_walkers_unicast_005'][1], color='C0', label='95% CI', alpha=0.25, linewidth=0.0)
+        replica_axs.plot(positions, replica_steps_mean['kth_walkers_unicast_005'], linestyle='-', label="High", alpha=1.0, color='C0')
+        replica_axs.fill_between(positions, replica_steps_cis['kth_walkers_unicast_005'][0], replica_steps_cis['kth_walkers_unicast_005'][1], color='C0', label='95% CI', alpha=0.5, linewidth=0.0)
 
     if 'kth_walkers_unicast_003' in replica_steps_mean:
-        replica_axs.plot(positions, replica_steps_mean['kth_walkers_unicast_003'], linestyle='-', label="Medium", alpha=0.75, color='C1')
-        replica_axs.fill_between(positions, replica_steps_cis['kth_walkers_unicast_003'][0], replica_steps_cis['kth_walkers_unicast_003'][1], color='C1', label='95% CI', alpha=0.25, linewidth=0.0)
+        replica_axs.plot(positions, replica_steps_mean['kth_walkers_unicast_003'], linestyle='-', label="Medium", alpha=1.0, color='C1')
+        replica_axs.fill_between(positions, replica_steps_cis['kth_walkers_unicast_003'][0], replica_steps_cis['kth_walkers_unicast_003'][1], color='C1', label='95% CI', alpha=0.5, linewidth=0.0)
 
     if 'kth_walkers_unicast_001' in replica_steps_mean:
-        replica_axs.plot(positions, replica_steps_mean['kth_walkers_unicast_001'], linestyle='-', label="Low", alpha=0.75, color='C2')
-        replica_axs.fill_between(positions, replica_steps_cis['kth_walkers_unicast_001'][0], replica_steps_cis['kth_walkers_unicast_001'][1], color='C2', label='95% CI', alpha=0.25, linewidth=0.0)
+        replica_axs.plot(positions, replica_steps_mean['kth_walkers_unicast_001'], linestyle='-', label="Low", alpha=1.0, color='C2')
+        replica_axs.fill_between(positions, replica_steps_cis['kth_walkers_unicast_001'][0], replica_steps_cis['kth_walkers_unicast_001'][1], color='C2', label='95% CI', alpha=0.5, linewidth=0.0)
 
     replica_axs.set_ylabel('Mean Replica Amount', labelpad=9.5)
     replica_axs.axis([0, length_s, 0, 12])
@@ -2225,6 +2225,7 @@ if __name__ == "__main__":
     db.commit() # we need to commit
     exports = [
         export_unicast_plots,
+        export_broadcast,
         #export_broadcast,
         #export_unicast_replicas,
         #export_unicast,
