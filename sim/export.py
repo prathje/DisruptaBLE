@@ -451,15 +451,15 @@ def export_testbed_calibration_bundle_rssi_per_distance(db, base_path):
     plt.close()
 
 
-def export_connection_distance_histogramm(db, export_dir):
+def export_broadcast_connection_distance_histogramm(db, export_dir):
 
-    groups = ['kth_walkers_broadcast_001', 'kth_walkers_broadcast_003','kth_walkers_broadcast_005', 'kth_walkers_unicast_001', 'kth_walkers_unicast_003','kth_walkers_unicast_005']
+    groups = ['kth_walkers_broadcast_001', 'kth_walkers_broadcast_003','kth_walkers_broadcast_005']
     runs = db((db.run.status == 'processed') & (db.run.group.belongs(groups))).select()
 
     overall_data = []
 
     for r in runs:
-        name = slugify(("export_connection_distance_histogramm_per_s_5", str(r.name), str(r.id)))
+        name = slugify(("export_broadcast_connection_distance_histogramm_per_s_5", str(r.name), str(r.id)))
         print("Handling {}".format(name))
 
         config = json.loads(r.configuration_json)
@@ -507,6 +507,8 @@ def export_connection_distance_histogramm(db, export_dir):
 
     n, bins, patches = ax.hist(overall_data, 50, density=True)
 
+    print("STATS: mean distance broadcast_connection_distance_histogramm" + mean)
+
     plt.axvline(mean, color='k', linestyle='dashed', linewidth=1)
     plt.text(mean+1, .225, "{:.2f}m".format(mean), transform=ax.get_xaxis_transform())
 
@@ -524,7 +526,7 @@ def export_connection_distance_histogramm(db, export_dir):
     #plt.axis([0, 30, -100, 0])
     #plt.grid(True)
     plt.tight_layout()
-    plt.savefig(export_dir + slugify('connection_distance_histogramm') + ".pdf", format="pdf", bbox_inches='tight')
+    plt.savefig(export_dir + slugify('broadcast_connection_distance_histogramm') + ".pdf", format="pdf", bbox_inches='tight')
     plt.close()
 
 def export_broadcast_propagation_time_histogramm(db, export_dir):
@@ -588,6 +590,8 @@ def export_broadcast_propagation_time_histogramm(db, export_dir):
 
     plt.axvline(mean, color='k', linestyle='dashed', linewidth=1)
     plt.text(mean+0.1, .75, "mean: {:.2f}s".format(mean), transform=ax.get_xaxis_transform())
+
+    print("STATS: mean distance broadcast_propagation_time_histogramm" + mean)
 
     #plt.axvline(cis[0], color='r', linestyle='dotted', linewidth=1)
     #plt.axvline(cis[1], color='r', linestyle='dotted', linewidth=1)
@@ -1329,9 +1333,9 @@ def export_walkers_ict(db, base_path):
         'ref_005_01': "data/kth_walkers/sparse_run1/ostermalm_005_1.tr.gz",
     }
 
-    max_dist = 25.0
+    max_dist = 20.0
     max_s = 180
-    sim_max_time_s = 1800
+    sim_max_time_s = 3600
 
     results = {}
 
@@ -1353,7 +1357,7 @@ def export_walkers_ict(db, base_path):
 
     xs = {}
 
-    t1 = 120
+    t1 = 20
     for k in results:
         pa = []
         if len(results[k]) > 0:
@@ -1818,6 +1822,17 @@ def export_broadcast(db, base_path):
 
         print("Reception Rate {} at 100% at {} secs".format(g, full_sec))
 
+        from_s = 60*10
+        to_s = length_s
+
+        vals = []
+        for s in range(math.ceil(from_s/step), math.ceil(to_s/step)+1):
+            vals.append(mean[g][s])
+
+        val_mean = np.nanmean(np.array(vals))
+        val_std = np.nanstd(np.array(vals))
+        print("STATS: Overall reception rate {} from {} to {} with mean {} and std {}".format(g, from_s, to_s, val_mean, val_std))
+
     if 'kth_walkers_broadcast_005' in mean:
         plt.plot(positions, mean['kth_walkers_broadcast_005'], linestyle='-', label="High", alpha=1.0, color='C0')
         plt.fill_between(positions, cis['kth_walkers_broadcast_005'][0], cis['kth_walkers_broadcast_005'][1], color='C0',  alpha=0.5, linewidth=0.0)
@@ -1850,6 +1865,84 @@ def export_broadcast(db, base_path):
     plt.tight_layout()
     plt.savefig(base_path + "kth_walkers_broadcast_reception_rate" + ".pdf", format="pdf", bbox_inches='tight')
     plt.close()
+
+
+def export_broadcast_reception_per_node(db, base_path):
+
+    length_s = 1200 #3000 TODO
+    offset_s = 60*10
+
+    groups = ['kth_walkers_broadcast_001', 'kth_walkers_broadcast_003', 'kth_walkers_broadcast_005']
+    overall_reception_steps = {}
+
+    for g in groups:
+        overall_reception_steps[g] = []
+
+    for r in db((db.run.status == 'processed') & (db.run.group.belongs(groups))).iterselect():
+        name = slugify(("walkers reception rate per node 2", str(r.name), str(r.id), str(length_s), str(offset_s)))
+        print("Handling run {}".format(name))
+
+        def proc():
+            run_reception_steps = []
+
+            devices = db((db.device.run == r)).select()
+
+            config = json.loads(r.configuration_json)
+            model_options = json.loads(config['SIM_MODEL_OPTIONS'])
+
+            #lifetimes in seconds! (dictionary, also containing 0!)
+            node_lifetimes = kth_walkers.get_node_lifetimes(r.simulation_time/1000000.0, model_options)
+
+            #lifetime in steps
+            device_lifesteps_by_eid = {}
+
+            for d in devices:
+                d_lt = node_lifetimes[d.number]
+                if d.number != 0 and float(d_lt[0]) >= offset_s and float(d_lt[1]) <= length_s:
+                    device_lifesteps_by_eid[d.eid] = d_lt # we include this node within our range But never the source device itself
+
+            bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://fake')).iterselect()
+            for b in bundles:
+
+                device_received_after = {}
+                for eid in device_lifesteps_by_eid:
+                    device_received_after[eid] = np.nan
+
+                res = db.executesql(
+                    '''
+                        SELECT us, receiver_eid FROM bundle_reception
+                        WHERE bundle = {}
+                        ORDER BY us ASC
+                    '''.format(b.id)
+                )
+
+                for row in res:
+                    eid = row[1]
+                    if eid in device_received_after:
+                        assert np.isnan(device_received_after[eid])
+                        device_received_after[eid] = (float(row[0])/1000000.0)-float(device_lifesteps_by_eid[eid][0])
+
+                for eid in device_lifesteps_by_eid:
+                    run_reception_steps.append(device_received_after[eid])
+
+            return run_reception_steps
+
+        run_reception_steps = cached(name, proc)
+        overall_reception_steps[r.group] += run_reception_steps
+
+    # we now add our simplistic python simulations other groups
+    for g in groups:
+        steps = np.array(overall_reception_steps[g], dtype=np.float64)
+
+        if len(steps) == 0:
+            continue
+
+        rate = len([x for x in steps if not np.isnan(x)]) / len(steps)
+        mean = np.nanmean(steps)
+        std = np.nanstd(steps)
+        std_err = std / np.sqrt(len(steps))
+
+        print("STATS: Reception Rate after within 10-20 minutes in group {}: {}% and mean secs {} with std {} and std_err: {}".format(g, rate, mean, std, std_err))
 
 
 def export_unicast_plots(db, base_path):
@@ -2469,15 +2562,17 @@ if __name__ == "__main__":
 
     db.commit() # we need to commit
     exports = [
-        export_connection_distance_histogramm,
-        #export_connection_state_comparison,
+        export_broadcast,
+        #export_broadcast_reception_per_node,
+        #export_walkers_ict,
+        #export_broadcast_connection_distance_histogramm,
         #export_broadcast_propagation_time_histogramm,
+        #export_connection_state_comparison,
         #export_unicast_plots,
         #export_broadcast,
         #export_broadcast,
         #export_unicast_replicas,
         #export_unicast,
-        #export_walkers_ict,
         #export_walkers_alive_nodes,
         #export_testbed_calibration_bundle_rssi_per_distance,
         #export_testbed_calibration_bundle_transmission_success,
@@ -2495,7 +2590,7 @@ if __name__ == "__main__":
         #export_filter_bundle_hash_impact,
         #export_filter_connection_impact,
         #export_unicast,
-        #export_connection_distance_histogramm,
+        #export_broadcast_connection_distance_histogramm,
         # Waiting:         ,
         # Waiting:         ,
         # shall this be included? export_filter_bundle_hash_impact_on_conn_times,

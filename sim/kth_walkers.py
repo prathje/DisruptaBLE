@@ -101,10 +101,9 @@ def get_bounds(model_options):
 
     return (min(xs), min(ys)), (max(xs), max(ys))
 
-def get_max_density(model_options):
+def get_max_density(model_options, max_time = None):
     ((min_x, min_y), (max_x, max_y)) = get_bounds(model_options)
 
-    max_time = None# 3600
     kw_reader = create_kth_walkers_reader(model_options, max_time=max_time)
 
     num_created = 0
@@ -271,24 +270,24 @@ def eval_lt_stats(max_time, model_options):
 
 if __name__ == "__main__":
 
-
-    print('001', eval_lt_stats(36000, {'filepath': 'data/kth_walkers/sparse_run1/ostermalm_001_1.tr.gz'}))
-    print('002', eval_lt_stats(36000, {'filepath': 'data/kth_walkers/sparse_run1/ostermalm_002_1.tr.gz'}))
-    print('003', eval_lt_stats(36000, {'filepath': 'data/kth_walkers/sparse_run1/ostermalm_003_1.tr.gz'}))
-    print('004', eval_lt_stats(36000, {'filepath': 'data/kth_walkers/sparse_run1/ostermalm_004_1.tr.gz'}))
-    print('005', eval_lt_stats(36000, {'filepath': 'data/kth_walkers/sparse_run1/ostermalm_005_1.tr.gz'}))
-    exit()
+    # print('001', eval_lt_stats(36000, {'filepath': 'data/kth_walkers/sparse_run1/ostermalm_001_1.tr.gz'}))
+    # print('002', eval_lt_stats(36000, {'filepath': 'data/kth_walkers/sparse_run1/ostermalm_002_1.tr.gz'}))
+    # print('003', eval_lt_stats(36000, {'filepath': 'data/kth_walkers/sparse_run1/ostermalm_003_1.tr.gz'}))
+    # print('004', eval_lt_stats(36000, {'filepath': 'data/kth_walkers/sparse_run1/ostermalm_004_1.tr.gz'}))
+    # print('005', eval_lt_stats(36000, {'filepath': 'data/kth_walkers/sparse_run1/ostermalm_005_1.tr.gz'}))
+    # exit()
     #
-    # print('001')
-    # get_max_density({'filepath': 'data/kth_walkers/sparse_run1/ostermalm_001_1.tr.gz'})
-    # print('002')
-    # get_max_density({'filepath': 'data/kth_walkers/sparse_run1/ostermalm_002_1.tr.gz'})
-    # print('003')
-    # get_max_density({'filepath': 'data/kth_walkers/sparse_run1/ostermalm_003_1.tr.gz'})
-    # print('004')
-    # get_max_density({'filepath': 'data/kth_walkers/sparse_run1/ostermalm_004_1.tr.gz'})
-    # print('005')
-    # get_max_density({'filepath': 'data/kth_walkers/sparse_run1/ostermalm_005_1.tr.gz'})
+    print('001')
+    get_max_density({'filepath': 'data/kth_walkers/sparse_run1/ostermalm_001_1.tr.gz'}, max_time=3600)
+    #print('002')
+    #get_max_density({'filepath': 'data/kth_walkers/sparse_run1/ostermalm_002_1.tr.gz'})
+    print('003')
+    get_max_density({'filepath': 'data/kth_walkers/sparse_run1/ostermalm_003_1.tr.gz'}, max_time=3600)
+    #print('004')
+    #get_max_density({'filepath': 'data/kth_walkers/sparse_run1/ostermalm_004_1.tr.gz'})
+    print('005')
+    get_max_density({'filepath': 'data/kth_walkers/sparse_run1/ostermalm_005_1.tr.gz'}, max_time=3600)
+
     #
     # print('007')
     # get_max_density({'filepath': 'data/kth_walkers/medium_run1/ostermalm_007_1.tr.gz'})
