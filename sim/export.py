@@ -459,17 +459,28 @@ def export_broadcast_connection_distance_histogramm(db, export_dir):
     overall_data = []
 
     for r in runs:
-        name = slugify(("export_broadcast_connection_distance_histogramm_per_s_5", str(r.name), str(r.id)))
+        name = slugify(("export_broadcast_connection_distance_histogramm_per_s_8", str(r.name), str(r.id)))
         print("Handling {}".format(name))
 
         config = json.loads(r.configuration_json)
+        model_options = json.loads(config['SIM_MODEL_OPTIONS'])
 
         def proc():
             data = []
 
-            for ci in db((db.conn_info.run == r)).iterselect():
+            # Note that we limit the lifetimes here already, only the bundles of these nodes should be included!
+            node_lifetimes = kth_walkers.get_node_lifetimes((r.simulation_time/1000000.0), model_options)
+            lifetimes_by_device_id = {}
+            for d in db(db.device.run == r).iterselect():
+                if d.number in node_lifetimes:
+                    lifetimes_by_device_id[d.id] = node_lifetimes[d.number]
+
+            for ci in db((db.conn_info.run == r)).iterselect(limitby=(0, 100)):
                 if None in [ci.client_channel_up_us, ci.peripheral_channel_up_us]:
                     continue # this was not a successful connection
+
+                if ci.client not in lifetimes_by_device_id or ci.peripheral not in lifetimes_by_device_id:
+                    continue    # use other connection!
 
                 exact_start_us = min(ci.client_channel_up_us, ci.peripheral_channel_up_us)
                 exact_end_us = max(ci.client_disconnect_us or 0, ci.peripheral_disconnect_us or 0) or r.simulation_time
@@ -478,6 +489,9 @@ def export_broadcast_connection_distance_histogramm(db, export_dir):
                 end_s = math.ceil(exact_end_us/1000000)
 
                 for s in range(start_s, end_s):
+                    if not (lifetimes_by_device_id[ci.client][0] < s < lifetimes_by_device_id[ci.client][1]) or not (lifetimes_by_device_id[ci.peripheral][0] < s < lifetimes_by_device_id[ci.peripheral][1]):
+                        continue
+
                     dist = (db.executesql(
                         '''
                             SELECT dp.us, dp.d + (dp.d_next-dp.d) * (({us}-dp.us)/(dp.us_next-dp.us)) as d
@@ -496,7 +510,6 @@ def export_broadcast_connection_distance_histogramm(db, export_dir):
     #plt.legend()
 
     fig, ax = plt.subplots()
-    print(overall_data)
     mean = np.mean(np.array(overall_data))
 
     ci = 1.96 * np.std(np.array(overall_data))/np.sqrt(len(overall_data))
@@ -507,18 +520,18 @@ def export_broadcast_connection_distance_histogramm(db, export_dir):
 
     n, bins, patches = ax.hist(overall_data, 50, density=True)
 
-    print("STATS: mean distance broadcast_connection_distance_histogramm" + mean)
+    print("STATS: mean distance broadcast_connection_distance_histogramm", mean)
 
     plt.axvline(mean, color='k', linestyle='dashed', linewidth=1)
-    plt.text(mean+1, .225, "{:.2f}m".format(mean), transform=ax.get_xaxis_transform())
+    plt.text(mean+1, .225, "mean:\n{:.2f}m".format(mean), transform=ax.get_xaxis_transform())
 
-    plt.axvline(cis[0], color='r', linestyle='dotted', linewidth=1)
-    plt.axvline(cis[1], color='r', linestyle='dotted', linewidth=1)
+    #plt.axvline(cis[0], color='r', linestyle='dotted', linewidth=1)
+    #plt.axvline(cis[1], color='r', linestyle='dotted', linewidth=1)
 
-    plt.text(cis[0]+1, .225, "{:.2f}m".format(cis[0]), transform=ax.get_xaxis_transform())
-    plt.text(cis[1]+1, .225, "{:.2f}m".format(cis[1]), transform=ax.get_xaxis_transform())
+    #plt.text(cis[0]+1, .225, "{:.2f}m".format(cis[0]), transform=ax.get_xaxis_transform())
+    #plt.text(cis[1]+1, .225, "{:.2f}m".format(cis[1]), transform=ax.get_xaxis_transform())
 
-    fig.set_size_inches(3.0, 2.25)
+    fig.set_size_inches(3.0, 2.1)
     plt.tight_layout()
 
     plt.xlabel("Distance [m]")
@@ -578,7 +591,7 @@ def export_broadcast_propagation_time_histogramm(db, export_dir):
 
     # plt.gca().yaxis.set_major_formatter(PercentFormatter(1))
 
-    hist, bins = np.histogram(overall_data, density=True, bins=20)
+    hist, bins = np.histogram(overall_data, density=True, bins=50)
     # Width of each bin
     bins_w = np.diff(bins)
     # Compute proportion of sample in each bin
@@ -591,7 +604,7 @@ def export_broadcast_propagation_time_histogramm(db, export_dir):
     plt.axvline(mean, color='k', linestyle='dashed', linewidth=1)
     plt.text(mean+0.1, .75, "mean: {:.2f}s".format(mean), transform=ax.get_xaxis_transform())
 
-    print("STATS: mean distance broadcast_propagation_time_histogramm" + mean)
+    print("STATS: mean distance broadcast_propagation_time_histogramm", mean)
 
     #plt.axvline(cis[0], color='r', linestyle='dotted', linewidth=1)
     #plt.axvline(cis[1], color='r', linestyle='dotted', linewidth=1)
@@ -599,7 +612,7 @@ def export_broadcast_propagation_time_histogramm(db, export_dir):
     #plt.text(cis[0]+1, .225, "{:.2f}m".format(cis[0]), transform=ax.get_xaxis_transform())
     #plt.text(cis[1]+1, .225, "{:.2f}m".format(cis[1]), transform=ax.get_xaxis_transform())
 
-    fig.set_size_inches(3.0, 2.25)
+    fig.set_size_inches(3.0, 2.1)
     plt.tight_layout()
 
     plt.xlabel("Time Since Advertisement Reception [s]")
@@ -759,7 +772,7 @@ def export_connection_state_comparison(db, export_dir):
     plt.legend(ncol=1, loc='center right', bbox_to_anchor=(1.5, 0.5), handletextpad=0.2)
 
 
-    fig.set_size_inches(3.8, 2.25)
+    fig.set_size_inches(3.8, 2.5)
     plt.tight_layout()
 
     plt.xlabel("Scenario")
@@ -1947,8 +1960,8 @@ def export_broadcast_reception_per_node(db, base_path):
 
 def export_unicast_plots(db, base_path):
 
-    min_s = 60*4
-    length_s = 1200-60*5
+    min_s = 60*3    # we skip the first 3 minutes
+    length_s = 1200
     step = 1.0
     include_before_time = False
 
@@ -1986,6 +1999,9 @@ def export_unicast_plots(db, base_path):
             bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://source')).iterselect()
 
             for b in bundles:
+                if not b.source in lifetimes_by_device_id:
+                    continue    # this run was ended before the planned time -> we completly ignore this node!
+                
                 if not include_before_time and lifetimes_by_device_id[b.source][0] > (r.simulation_time/1000000.0)-length_s:
                     continue    # This node was too late to be included, i.e. its unicast message was too late
 
@@ -2077,7 +2093,7 @@ def export_unicast_plots(db, base_path):
             ci = 1.96 * np.nanstd(steps, axis=1)/ np.sqrt(counts)
             reception_steps_cis[g] = [reception_steps_mean[g]-ci, reception_steps_mean[g]+ci]
 
-            print("Throughput {}, mean {} at max secs".format(g, reception_steps_mean[g][max_step]))
+            print("STATS: delivery rate {}, mean {} at max secs".format(g, reception_steps_mean[g][max_step]))
 
             # full_sec = 0
             # for x in range(0, max_step+1):
@@ -2095,7 +2111,7 @@ def export_unicast_plots(db, base_path):
             counts = [len([x for x in steps[k] if not np.isnan(x)]) for k in range(0, max_step+1)]
             ci = 1.96 * np.nanstd(steps, axis=1)/ np.sqrt(counts)
             replica_steps_cis[g] = [replica_steps_mean[g]-ci, replica_steps_mean[g]+ci]
-            print("Throughput {}, mean {} at max secs".format(g, replica_steps_mean[g][max_step]))
+            print("STATS: Replica {}, mean {} at max secs".format(g, replica_steps_mean[g][max_step]))
 
     reception_axs = axs[0]
     replica_axs = axs[1]
@@ -2516,6 +2532,132 @@ def export_throughput(db, base_path):
     plt.close()
 
 
+def export_individual_connection_times(db, export_dir):
+    max_time_us = 1200*1000000
+    #groups = ['kth_walkers_broadcast_001', 'kth_walkers_broadcast_003', 'kth_walkers_broadcast_005', 'kth_walkers_unicast_001', 'kth_walkers_unicast_003', 'kth_walkers_unicast_005']
+    groups = ['kth_walkers_broadcast_001', 'kth_walkers_broadcast_005', 'kth_walkers_unicast_001', 'kth_walkers_unicast_005']
+
+    overall_results = {}
+    for g in groups:
+        overall_results[g] = []
+
+    overall_lifetimes = []
+    overall_lifetimes_groups = []
+
+    for g in groups:
+        runs = db((db.run.status == 'processed') & (db.run.group == g)).select()
+        for r in runs:
+            name = slugify(("export_individual_connection_times_8", str(r.name), str(r.id)))
+            print("Handling {}".format(name))
+
+            config = json.loads(r.configuration_json)
+            model_options = json.loads(config['SIM_MODEL_OPTIONS'])
+
+            def proc():
+                run_data_by_id = {}
+                run_lifetime_data = []
+                # Note that we limit the lifetimes here already, only the bundles of these nodes should be included!
+                node_lifetimes = kth_walkers.get_node_lifetimes((r.simulation_time/1000000.0), model_options)
+
+                lifetimes_by_device_id = {}
+                for d in db(db.device.run == r).iterselect():
+                    if d.number != 0 and d.number in node_lifetimes and node_lifetimes[d.number][1] < max_time_us/1000000:
+                        lifetimes_by_device_id[d.id] = node_lifetimes[d.number]
+                        run_lifetime_data.append(node_lifetimes[d.number][1]-node_lifetimes[d.number][0])
+                        run_data_by_id[d.id] = 0
+
+                res = db.executesql(
+                    '''
+                        SELECT d.id, COALESCE(SUM(client_disconnect_us - client_connection_success_us), 0)
+                        FROM conn_info ci
+                        JOIN device d ON d.id = ci.client
+                        WHERE ci.run = {run} AND ci.client_conn_init_us < {us_limit}
+                        GROUP by d.id
+                        UNION
+                        SELECT d.id, COALESCE(SUM(peripheral_disconnect_us - peripheral_connection_success_us), 0)
+                        FROM conn_info ci
+                        JOIN device d ON d.id = ci.peripheral
+                        WHERE ci.run = {run} AND ci.client_conn_init_us < {us_limit}
+                        GROUP by d.id
+                    '''.format(run=r.id, us_limit=str(max_time_us))
+                )
+
+                for row in res:
+                    device_id, sum_us = row
+                    if device_id in lifetimes_by_device_id:
+                        #run_data.append((float(sum_us)/1000000.0)/(lifetimes_by_device_id[device_id][1]-lifetimes_by_device_id[device_id][0]))
+                        run_data_by_id[device_id] += (float(sum_us)/1000000.0)
+                        
+                return run_lifetime_data, [run_data_by_id[k] for k in run_data_by_id]
+
+            lts, data = cached(name, proc)
+            overall_results[g] += data #
+            if g not in overall_lifetimes_groups:   # make sure that we put lifetimes just once per group
+                overall_lifetimes_groups.append(g)
+                overall_lifetimes += lts
+
+    per_group_mean = {}
+    per_group_std = {}
+
+    for g in groups:
+        xs = np.array(overall_results[g])
+        per_group_mean[g] = np.nanmean(xs)
+        per_group_std[g] = np.nanstd(xs)
+
+    plt.clf()
+
+    fig = plt.figure()
+    gs = fig.add_gridspec(1, 2, width_ratios=[3.8, 1])#, hspace=0)
+    axs = gs.subplots(sharey=True)
+
+    print("STATS", per_group_mean)
+
+    #for ax in axs:
+    #    ax.label_outer()
+
+    #x_labels = ['Broadcast Low', 'Broadcast Medium', 'Broadcast High', 'Unicast Low', 'Unicast Medium', 'Unicast High']
+    x_labels = ['Broadcast\nLow', 'Broadcast\nHigh', 'Unicast\nLow', 'Unicast\nHigh']
+
+    width = 0.35
+
+    all_data = []
+    for g in groups:
+        all_data.append(overall_results[g])
+
+    bplot1 = axs[0].violinplot(all_data,showmeans=False, showextrema=True)  # will be used to label x-ticks
+    bplot2 = axs[1].violinplot([overall_lifetimes], widths=0.01, showmeans=False, showextrema=True)  # will be used to label x-ticks
+
+    ticks = ticker.FuncFormatter(lambda x, pos: '{}'.format(round(x/60.0)))
+    axs[0].yaxis.set_major_formatter(ticks)
+    #plt.legend(ncol=1, loc='center right', bbox_to_anchor=(1.5, 0.5), handletextpad=0.2)
+    axs[0].yaxis.set_major_locator(MultipleLocator(120))
+    # For the minor ticks, use no labels; default NullFormatter.
+    axs[0].yaxis.set_minor_locator(MultipleLocator(60))
+
+
+    axs[0].axis([None, None, 0, 18*60.0])
+
+    fig.set_size_inches(3.9, 2.75)
+    plt.tight_layout()
+
+    axs[0].set_xlabel("Scenario")
+    axs[0].set_ylabel("Accumulated\nConnection Time per Device [min]")
+
+    axs[0].set_xticks(np.arange(1, len(x_labels) + 1), labels=x_labels)
+
+
+    axs[1].set_xticks([1], labels=['Time in Area'])
+
+    #plt.yticks(np.arange(0, 1.0+0.1, step=0.2))
+    #plt.axis([None, None, 0, 1.2])
+    perc = np.percentile(np.array(overall_lifetimes), [2.5, 97.5])
+    print("STATS: overall_lifetimes mean: {} std: {}, percentiles: {}, {}".format(str(np.nanmean(overall_lifetimes)), str(np.nanstd(overall_lifetimes)), str(perc[0]), str(perc[1])))
+
+    #plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(export_dir + slugify('individual_connection_times') + ".pdf", format="pdf", bbox_inches='tight')
+    plt.close()
+
 def get_density(run):
     run_config = json.loads(run.configuration_json)
     model_options = json.loads(run_config['SIM_MODEL_OPTIONS'])
@@ -2562,13 +2704,14 @@ if __name__ == "__main__":
 
     db.commit() # we need to commit
     exports = [
-        export_broadcast,
+        #export_connection_state_comparison,
+        export_broadcast_connection_distance_histogramm,
+        export_broadcast_propagation_time_histogramm,
+        #export_unicast_plots,
+        #export_individual_connection_times,
+        #export_broadcast,
         #export_broadcast_reception_per_node,
         #export_walkers_ict,
-        #export_broadcast_connection_distance_histogramm,
-        #export_broadcast_propagation_time_histogramm,
-        #export_connection_state_comparison,
-        #export_unicast_plots,
         #export_broadcast,
         #export_broadcast,
         #export_unicast_replicas,
