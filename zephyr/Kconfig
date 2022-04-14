@@ -67,3 +67,7 @@ config CONNECTION_CONGESTION_CONTROL
 config CONTINUOUS_SV_EXCHANGE
     bool "Resend SV for new bundles that arrived and after all have been transmitted"
     default n
+
+config LOG_ADVERTISEMENTS
+    bool "Log each received advertisement"
+    default y

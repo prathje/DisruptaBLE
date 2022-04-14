@@ -93,8 +93,10 @@ static void device_found_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_t
                     // TODO: Pull correct memory amount !
                     bool sv_ch_ok = !nb_sv_ch_filter_contains(sv_ch);
 
+                    #if defined(CONFIG_LOG_ADVERTISEMENTS) && CONFIG_LOG_ADVERTISEMENTS
                     LOG_EV("adv_received", "\"other_mac_addr\": \"%s\", \"rssi\": %d, \"other_eid\": \"%s\", \"connectable\": %d, \"rssi_ok\": %d, \"sv_ch_ok\": %d",
                            node_info.mac_addr, rssi, eid, connectable, rssi_ok, sv_ch_ok);
+                    #endif
 
                     if (rssi_ok && sv_ch_ok) {
                         nb_ble_config.discover_cb(nb_ble_config.discover_cb_context, &node_info, connectable);
