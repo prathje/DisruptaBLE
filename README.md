@@ -101,11 +101,15 @@ docker run --rm -it -v ${PWD}/ud3tn-ble:/app -v ${PWD}/zephyr:/zephyr/zephyr pra
    cd $ZEPHYR_BASE && west update && sudo apt-get install -y gdb valgrind libc6-dbg:i386
 ```
 
+```
+docker run --rm -it -v ${PWD}/ud3tn-ble:/app -v ${PWD}/zephyr:/zephyr/zephyr --net=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --ulimit nofile=1000000:1000000 --pids-limit -1 prathje/babble-sim-docker:latest /bin/bash
+```
+
 
 Init everything:
 
 ```
-cd $ZEPHYR_BASE && west update && sudo apt-get update && sudo apt-get install -y gdb valgrind libc6-dbg:i386 mysql-client && cd /bsim && git clone https://github.com/prathje/ext_2G4_channel_positional.git ./components/ext_2G4_channel_positional && make all && sudo apt-get remove cmake && sudo -H pip3 install cmake && pip3 install python-dotenv pydal progressbar2 matplotlib pymysql scipy seaborn
+cd $ZEPHYR_BASE && west update && sudo apt-get install -y gdb valgrind libc6-dbg:i386 mysql-client && cd /bsim && git clone https://github.com/prathje/ext_2G4_channel_positional.git ./components/ext_2G4_channel_positional && make all && sudo apt-get remove cmake && sudo -H pip3 install cmake && pip3 install python-dotenv pydal progressbar2 matplotlib pymysql scipy seaborn
 ```
 
 
@@ -127,10 +131,29 @@ Increase limits:
 ulimit -n 1000000 && ulimit -s  256 && ulimit -i  120000 && echo 120000 > /proc/sys/kernel/threads-max && echo 600000 > /proc/sys/vm/max_map_count && echo 200000 > /proc/sys/kernel/pid_max 
 ```
 
-Add manual background noise:
+Important: Add manual background noise in components/ext_2G4_modem_BLE_simple/src/modem_BLE_simple.c:
 ```
+cd /bsim
+nano components/ext_2G4_modem_BLE_simple/src/modem_BLE_simple.c
 double TotalInterfmW  = pow(10.0, -96.42/10.0);
+make all
 ```
+
+
+Script to run the experiments as in the paper - (TODO: put the 30min duration into env files!):
+```
+SIM_LENGTH="1810e6" SOURCE_CONFIG_LOG_ADVERTISEMENTS="n" PROXY_CONFIG_LOG_ADVERTISEMENTS="n" GROUP_NUM_EXECUTIONS=5 GROUP_PARALLEL_RUNS=6 python3 run_group.py "" envs/experiments/kth_walkers_broadcast/ &
+SIM_LENGTH="1810e6" SOURCE_CONFIG_LOG_ADVERTISEMENTS="n" PROXY_CONFIG_LOG_ADVERTISEMENTS="n" GROUP_NUM_EXECUTIONS=5 GROUP_PARALLEL_RUNS=6 python3 run_group.py "" envs/experiments/kth_walkers_unicast/ &
+wait
+echo "All done"
+```
+
+
+
+when Ninja ends in a segmentation fault, restart the container...
+
+
+
 
 ```
 west build -b nrf52840dk_nrf52840 --pristine auto  /app/zephyr/
