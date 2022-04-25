@@ -137,7 +137,7 @@ def export_testbed_calibration_setup_times(db, base_path):
     #ax.legend() # (loc='upper center', bbox_to_anchor=(0.5, -0.5), ncol=2)
 
     # Adapt the figure size as needed
-    fig.set_size_inches(1.75, 2.1)
+    fig.set_size_inches(1.75, 1.9)
     plt.tight_layout()
     plt.savefig(export_dir + slugify(("testbed_calibration_setup_times")) + ".pdf", format="pdf", bbox_inches='tight')
     plt.close()
@@ -218,7 +218,7 @@ def export_testbed_calibration_bundle_transmission_time(db, base_path):
     plt.axis([None, None, 0, None])
 
     # Adapt the figure size as needed
-    fig.set_size_inches(1.75, 2.1)
+    fig.set_size_inches(1.75, 1.9)
     plt.tight_layout()
     plt.savefig(export_dir + slugify(("testbed_calibration_bundle_transmission_time")) + ".pdf", format="pdf", bbox_inches='tight')
     plt.close()
@@ -451,13 +451,13 @@ def export_testbed_calibration_bundle_rssi_per_distance(db, base_path):
     plt.close()
 
 
-def export_broadcast_connection_distance_histogramm(db, export_dir):
+def export_broadcast_histogramms(db, export_dir):
 
     groups = ['kth_walkers_broadcast_001', 'kth_walkers_broadcast_003','kth_walkers_broadcast_005']
     runs = db((db.run.status == 'processed') & (db.run.group.belongs(groups))).select()
-
-    overall_data = []
-
+    
+    # DISTANCE DATA
+    distance_overall_data = []
     for r in runs:
         name = slugify(("export_broadcast_connection_distance_histogramm_per_s_8", str(r.name), str(r.id)))
         print("Handling {}".format(name))
@@ -504,51 +504,14 @@ def export_broadcast_connection_distance_histogramm(db, export_dir):
             return data
 
         run_data = cached(name, proc)
-        overall_data += run_data
+        distance_overall_data += run_data
 
-    plt.clf()
-    #plt.legend()
-
-    fig, ax = plt.subplots()
-    mean = np.mean(np.array(overall_data))
-
-    ci = 1.96 * np.std(np.array(overall_data))/np.sqrt(len(overall_data))
-    cis = [mean-ci, mean+ci]
-    #np.percentile(np.array(overall_data), [2.5, 97.5])
-
-    # plt.gca().yaxis.set_major_formatter(PercentFormatter(1))
-
-    n, bins, patches = ax.hist(overall_data, 50, density=True)
-
-    print("STATS: mean distance broadcast_connection_distance_histogramm", mean)
-
-    plt.axvline(mean, color='k', linestyle='dashed', linewidth=1)
-    plt.text(mean+1, .225, "mean:\n{:.2f}m".format(mean), transform=ax.get_xaxis_transform())
-
-    #plt.axvline(cis[0], color='r', linestyle='dotted', linewidth=1)
-    #plt.axvline(cis[1], color='r', linestyle='dotted', linewidth=1)
-
-    #plt.text(cis[0]+1, .225, "{:.2f}m".format(cis[0]), transform=ax.get_xaxis_transform())
-    #plt.text(cis[1]+1, .225, "{:.2f}m".format(cis[1]), transform=ax.get_xaxis_transform())
-
-    fig.set_size_inches(3.0, 2.1)
-    plt.tight_layout()
-
-    plt.xlabel("Distance [m]")
-    plt.ylabel("Connection Duration Fraction")
-    #plt.axis([0, 30, -100, 0])
-    #plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(export_dir + slugify('broadcast_connection_distance_histogramm') + ".pdf", format="pdf", bbox_inches='tight')
-    plt.close()
-
-def export_broadcast_propagation_time_histogramm(db, export_dir):
-
-    groups = ['kth_walkers_broadcast_001', 'kth_walkers_broadcast_003', 'kth_walkers_broadcast_005']
-    runs = db((db.run.status == 'processed') & (db.run.group.belongs(groups))).select()
-
-    overall_data = []
-
+    dist_mean = np.mean(np.array(distance_overall_data))
+    dist_ci = 1.96 * np.std(np.array(distance_overall_data))/np.sqrt(len(distance_overall_data))
+    dist_cis = [dist_mean-dist_ci, dist_mean+dist_ci]
+        
+    # TIME DATA
+    time_overall_data = []
     for r in runs:
         name = slugify(("export_broadcast_connection_time_histogramm_4", str(r.name), str(r.id)))
         print("Handling {}".format(name))
@@ -576,35 +539,113 @@ def export_broadcast_propagation_time_histogramm(db, export_dir):
             return data
 
         run_data = cached(name, proc)
-        overall_data += run_data
+        time_overall_data += run_data
 
+    time_mean = np.mean(np.array(time_overall_data))
+    time_ci = 1.96 * np.std(np.array(time_overall_data))/np.sqrt(len(time_overall_data))
+    time_cis = [time_mean-time_ci, time_mean+time_ci]
+
+    # Handle Histogram plots!
     plt.clf()
-    #plt.legend()
+    fig = plt.figure()
+    fig.set_size_inches(3.6, 1.2)
+    gs = fig.add_gridspec(ncols=2, nrows=1, width_ratios=[1,1], wspace=0.1)
+    axs = gs.subplots(sharey=True)
 
-    fig, ax = plt.subplots()
-    print(overall_data)
-    mean = np.mean(np.array(overall_data))
+    for ax in axs:
+        ax.label_outer()
 
-    ci = 1.96 * np.std(np.array(overall_data))/np.sqrt(len(overall_data))
-    cis = [mean-ci, mean+ci]
-    #np.percentile(np.array(overall_data), [2.5, 97.5])
 
-    # plt.gca().yaxis.set_major_formatter(PercentFormatter(1))
-
-    hist, bins = np.histogram(overall_data, density=True, bins=50)
+    # Plot Time
+    time_axs = axs[0]
+    time_axs.set_xlabel('Time Since Beacon Reception [s]')
+    hist, bins = np.histogram(time_overall_data, density=True, bins=50)
     # Width of each bin
     bins_w = np.diff(bins)
     # Compute proportion of sample in each bin
     hist_p = hist * bins_w
     # Plot histogram
-    ax.bar(bins[:-1], hist_p, width=bins_w, align='edge')
+    time_axs.bar(bins[:-1], hist_p, width=bins_w, align='edge')
+    #n, bins, patches = ax.hist(time_overall_data, 50, density=True)
+    time_axs.axvline(time_mean, color='k', linestyle='dashed', linewidth=1)
+    plt.text(time_mean+0.1, .5, "mean:\n{:.2f}s".format(time_mean), transform=time_axs.get_xaxis_transform())
+    time_axs.set_xlim([0, 5])
+    time_axs.xaxis.set_major_locator(MultipleLocator(1))
+    time_axs.xaxis.set_minor_locator(MultipleLocator(0.5))
 
-    #n, bins, patches = ax.hist(overall_data, 50, density=True)
 
-    plt.axvline(mean, color='k', linestyle='dashed', linewidth=1)
-    plt.text(mean+0.1, .75, "mean: {:.2f}s".format(mean), transform=ax.get_xaxis_transform())
+    # Plot Distance
+    dist_axs = axs[1]
+    dist_axs.set_xlabel('Distance [m]')
+    n, bins, patches = dist_axs.hist(distance_overall_data, 50, density=True)
+    dist_axs.axvline(dist_mean, color='k', linestyle='dashed', linewidth=1)
+    plt.text(dist_mean+1, .5, "mean:\n{:.2f}m".format(dist_mean), transform=dist_axs.get_xaxis_transform())
+    dist_axs.set_xlim([0, 40])
+    dist_axs.xaxis.set_major_locator(MultipleLocator(10))
+    dist_axs.xaxis.set_minor_locator(MultipleLocator(5))
 
-    print("STATS: mean distance broadcast_propagation_time_histogramm", mean)
+
+
+    print("STATS: dist_mean distance broadcast_histogramms", dist_mean)
+    print("STATS: time_mean distance broadcast_histogramms", time_mean)
+
+    time_axs.set_ylabel("Successful\nConnections [%]")
+    plt.gca().yaxis.set_major_formatter(PercentFormatter(1,decimals=0))
+    #plt.gca().yaxis.set_major_locator(MultipleLocator(5))
+    #plt.gca().yaxis.set_minor_locator(MultipleLocator(2.5))
+
+    plt.tight_layout()
+    plt.savefig(export_dir + slugify('broadcast_histogramms') + ".pdf", format="pdf", bbox_inches='tight')
+    plt.close()
+
+def export_broadcast_propagation_time_histogramm(db, export_dir):
+
+
+    time_overall_data = []
+    for r in runs:
+        name = slugify(("export_broadcast_connection_time_histogramm_4", str(r.name), str(r.id)))
+        print("Handling {}".format(name))
+
+        config = json.loads(r.configuration_json)
+
+        def proc():
+            data = []
+
+            bundles = db((db.bundle.run == r) & (db.bundle.destination_eid == 'dtn://fake')).iterselect()
+            for b in bundles:
+
+                res = db.executesql(
+                    '''
+                         SELECT br.us - ci.client_conn_init_us 
+                         FROM bundle_reception br
+                         JOIN bundle_transmission bt ON bt.id = br.bundle_transmission
+                         JOIN conn_info ci ON ci.id = bt.conn_info
+                         WHERE bundle = {}
+                    '''.format(b.id)
+                )
+
+                for row in res:
+                    data.append(row[0]/1000000.0)
+            return data
+
+        run_data = cached(name, proc)
+        time_overall_data += run_data
+
+    plt.clf()
+    #plt.legend()
+
+    fig, ax = plt.subplots()
+    print(time_overall_data)
+    time_mean = np.mean(np.array(time_overall_data))
+
+    time_ci = 1.96 * np.std(np.array(time_overall_data))/np.sqrt(len(time_overall_data))
+    time_cis = [time_mean-time_ci, time_mean+time_ci]
+    #np.percentile(np.array(time_overall_data), [2.5, 97.5])
+
+    # plt.gca().yaxis.set_major_formatter(PercentFormatter(1))
+
+
+    print("STATS: time_mean distance broadcast_propagation_time_histogramm", time_mean)
 
     #plt.axvline(cis[0], color='r', linestyle='dotted', linewidth=1)
     #plt.axvline(cis[1], color='r', linestyle='dotted', linewidth=1)
@@ -612,11 +653,11 @@ def export_broadcast_propagation_time_histogramm(db, export_dir):
     #plt.text(cis[0]+1, .225, "{:.2f}m".format(cis[0]), transform=ax.get_xaxis_transform())
     #plt.text(cis[1]+1, .225, "{:.2f}m".format(cis[1]), transform=ax.get_xaxis_transform())
 
-    fig.set_size_inches(3.0, 2.1)
+    fig.set_size_inches(1.5, 1.6)
     plt.tight_layout()
 
     plt.xlabel("Time Since Advertisement Reception [s]")
-    plt.ylabel("Fraction of Succ. Connections")
+    plt.ylabel("Succ. Connections [%]")
     plt.axis([0, 5, 0, None])
 
     ax.xaxis.set_major_locator(MultipleLocator(1))
@@ -772,7 +813,7 @@ def export_connection_state_comparison(db, export_dir):
     plt.legend(ncol=1, loc='center right', bbox_to_anchor=(1.5, 0.5), handletextpad=0.2)
 
 
-    fig.set_size_inches(3.8, 2.5)
+    fig.set_size_inches(3.8, 2.0)
     plt.tight_layout()
 
     plt.xlabel("Scenario")
@@ -1402,7 +1443,7 @@ def export_walkers_ict(db, base_path):
     ax.xaxis.set_minor_locator(MultipleLocator(30))
 
 
-    fig.set_size_inches(2.25, 2.325)
+    fig.set_size_inches(2.25, 1.875)
 
     plt.legend()
     plt.grid()
@@ -1424,7 +1465,7 @@ def export_walkers_alive_nodes(db, base_path):
     plt.clf()
 
     fig, ax = plt.subplots()
-    fig.set_size_inches(2.675, 2.4)
+    fig.set_size_inches(2.675, 2.0)
     max_time = 3600
 
     for (i,s) in enumerate(sims):
@@ -1449,6 +1490,9 @@ def export_walkers_alive_nodes(db, base_path):
     ax.xaxis.set_major_locator(MultipleLocator(600))
     # For the minor ticks, use no labels; default NullFormatter.
     ax.xaxis.set_minor_locator(MultipleLocator(300))
+
+    ax.yaxis.set_major_locator(MultipleLocator(100))
+    ax.yaxis.set_minor_locator(MultipleLocator(50))
 
     plt.tight_layout()
     plt.savefig(base_path + "kth_walkers_alive_nodes" + ".pdf", format="pdf", bbox_inches='tight')
@@ -1695,7 +1739,7 @@ def export_filter_bundle_hash_impact_on_conn_times(db, base_path):
 
 def export_broadcast(db, base_path):
 
-    length_s = 1200 #3000 TODO
+    length_s = 1800 #3000 TODO
     step = 1.0
 
     groups = ['kth_walkers_broadcast_001', 'kth_walkers_broadcast_003', 'kth_walkers_broadcast_005']
@@ -1707,7 +1751,7 @@ def export_broadcast(db, base_path):
         overall_reception_steps[g] = []
 
     for r in db((db.run.status == 'processed') & (db.run.group.belongs(groups))).iterselect():
-        name = slugify(("walkers reception rate", str(r.name), str(r.id), str(length_s), str(step)))
+        name = slugify(("walkers reception rate 4", str(r.name), str(r.id), str(length_s), str(step)))
         print("Handling run {}".format(name))
 
         def proc():
@@ -1756,7 +1800,6 @@ def export_broadcast(db, base_path):
                             receptions_steps[x] /= float(num_nodes_at) # we scale all values down to percentages
                         else:
                             receptions_steps[x] = 0.0
-
                 run_reception_steps.append(receptions_steps)
             return run_reception_steps
 
@@ -1804,7 +1847,7 @@ def export_broadcast(db, base_path):
                     receptions_steps[x] = 0.0
             return receptions_steps
 
-        overall_reception_steps[k] = [cached(slugify(('broadcast_ref_sim_', k, dist_limit, setup_time)), proc)]   # we just have a single entry for each sim group
+        overall_reception_steps[k] = [cached(slugify(('broadcast_ref_sim_', k, dist_limit, setup_time, length_s)), proc)]   # we just have a single entry for each sim group
 
     positions = range(0, max_step + 1)
     plt.clf()
@@ -1813,7 +1856,7 @@ def export_broadcast(db, base_path):
     cis = {}
 
     fig, ax = plt.subplots()
-    fig.set_size_inches(3.6, 2.5)
+    fig.set_size_inches(3.6, 2.1)
 
     for g in groups:
         steps = np.array(overall_reception_steps[g], dtype=np.float64)
@@ -1823,8 +1866,8 @@ def export_broadcast(db, base_path):
 
         steps = np.swapaxes(steps, 0, 1)  # we swap the axes to get all t=0 values at the first position together
         steps = steps * 100.0
-        mean[g] = np.mean(steps, axis=1)
-        ci = 1.96 * np.std(steps, axis=1)/np.sqrt(len(steps[0]))
+        mean[g] = np.nanmean(steps, axis=1)
+        ci = 1.96 * np.nanstd(steps, axis=1)/np.sqrt(len(steps[0]))
         cis[g] = [mean[g]-ci, mean[g]+ci]
 
         full_sec = 0
@@ -2075,7 +2118,7 @@ def export_unicast_plots(db, base_path):
     fig = plt.figure()
     gs = fig.add_gridspec(2)#, hspace=0)
     axs = gs.subplots(sharex=True)
-    fig.set_size_inches(3.6, 3.25)
+    fig.set_size_inches(3.6, 2.8)
 
     #for ax in axs:
     #    ax.label_outer()
@@ -2149,7 +2192,12 @@ def export_unicast_plots(db, base_path):
     replica_axs.set_yticks(np.arange(0, 12+1, step=2))
     replica_axs.grid(True)
 
-    reception_axs.legend(ncol=3,handletextpad=0.2, loc='upper center', bbox_to_anchor=(0.5, 1.1))
+    def flip(items, ncol):
+        import itertools
+        return itertools.chain(*[items[i::ncol] for i in range(ncol)])
+
+    handles, labels = reception_axs.get_legend_handles_labels()
+    reception_axs.legend(flip(handles, 3), flip(labels, 3), ncol=3, handletextpad=0.2, loc='upper center', bbox_to_anchor=(0.5, 1.1))
 
     plt.xlabel("Time Since Node Arrival [min]")
 
@@ -2168,7 +2216,7 @@ def export_unicast_plots(db, base_path):
 def export_unicast(db, base_path):
 
     min_s = 60*4
-    length_s = 1200-60*5
+    length_s = 1440-60*5
     step = 1.0
     include_before_time = False
 
@@ -2269,15 +2317,18 @@ def export_unicast(db, base_path):
 
     if 'kth_walkers_unicast_005' in mean:
         plt.plot(positions, mean['kth_walkers_unicast_005'], linestyle='-', label="High", alpha=0.75, color='C0')
-        plt.fill_between(positions, cis['kth_walkers_unicast_005'][0], cis['kth_walkers_unicast_005'][1], color='C0', label='95% CI', alpha=0.25, linewidth=0.0)
-
     if 'kth_walkers_unicast_003' in mean:
         plt.plot(positions, mean['kth_walkers_unicast_003'], linestyle='-', label="Medium", alpha=0.75, color='C1')
-        plt.fill_between(positions, cis['kth_walkers_unicast_003'][0], cis['kth_walkers_unicast_003'][1], color='C1', label='95% CI', alpha=0.25, linewidth=0.0)
+    if 'kth_walkers_unicast_001' in mean:
+        plt.fill_between(positions, cis['kth_walkers_unicast_001'][0], cis['kth_walkers_unicast_001'][1], color='C2', label='95% CI', alpha=0.25, linewidth=0.0)
 
+    if 'kth_walkers_unicast_005' in mean:
+        plt.fill_between(positions, cis['kth_walkers_unicast_005'][0], cis['kth_walkers_unicast_005'][1], color='C0', label='95% CI', alpha=0.25, linewidth=0.0)
+    if 'kth_walkers_unicast_003' in mean:
+        plt.fill_between(positions, cis['kth_walkers_unicast_003'][0], cis['kth_walkers_unicast_003'][1], color='C1', label='95% CI', alpha=0.25, linewidth=0.0)
     if 'kth_walkers_unicast_001' in mean:
         plt.plot(positions, mean['kth_walkers_unicast_001'], linestyle='-', label="Low", alpha=0.75, color='C2')
-        plt.fill_between(positions, cis['kth_walkers_unicast_001'][0], cis['kth_walkers_unicast_001'][1], color='C2', label='95% CI', alpha=0.25, linewidth=0.0)
+
 
     plt.legend(ncol=3,handletextpad=0.2, loc='upper center', bbox_to_anchor=(0.5, 1.25))
     plt.xlabel("Time since Node Arrival [min]")
@@ -2637,16 +2688,17 @@ def export_individual_connection_times(db, export_dir):
 
     axs[0].axis([None, None, 0, 18*60.0])
 
-    fig.set_size_inches(3.9, 2.75)
+    fig.set_size_inches(3.9, 2.0)
     plt.tight_layout()
 
     axs[0].set_xlabel("Scenario")
-    axs[0].set_ylabel("Accumulated\nConnection Time per Device [min]")
+    axs[0].set_ylabel("Accumulated Connection\nTime per Device [min]")
 
-    axs[0].set_xticks(np.arange(1, len(x_labels) + 1), labels=x_labels)
+    axs[0].set_xticks(np.arange(1, len(x_labels) + 1))
+    axs[0].set_xticklabels(x_labels)
 
-
-    axs[1].set_xticks([1], labels=['Time in Area'])
+    axs[1].set_xticks([1])
+    axs[1].set_xticklabels(['Time in Area'])
 
     #plt.yticks(np.arange(0, 1.0+0.1, step=0.2))
     #plt.axis([None, None, 0, 1.2])
@@ -2704,23 +2756,26 @@ if __name__ == "__main__":
 
     db.commit() # we need to commit
     exports = [
-        #export_connection_state_comparison,
-        export_broadcast_connection_distance_histogramm,
-        export_broadcast_propagation_time_histogramm,
+        export_testbed_calibration_bundle_rssi_per_distance,
+        export_testbed_calibration_setup_times,
+        export_testbed_calibration_bundle_transmission_time,
+        export_walkers_alive_nodes,
+        export_walkers_ict,
+        export_broadcast,
+        export_broadcast_histogramms,
+        export_unicast_plots,
+        export_connection_state_comparison,
+        export_individual_connection_times,
+
+        # TODO: Unused:
         #export_unicast_plots,
-        #export_individual_connection_times,
-        #export_broadcast,
         #export_broadcast_reception_per_node,
-        #export_walkers_ict,
         #export_broadcast,
         #export_broadcast,
         #export_unicast_replicas,
         #export_unicast,
         #export_walkers_alive_nodes,
-        #export_testbed_calibration_bundle_rssi_per_distance,
         #export_testbed_calibration_bundle_transmission_success,
-        #export_testbed_calibration_bundle_transmission_time,
-        #export_testbed_calibration_setup_times,
         #export_filter_bundle_hash_impact,
         #export_unicast,
         #export_broadcast,
@@ -2734,8 +2789,6 @@ if __name__ == "__main__":
         #export_filter_connection_impact,
         #export_unicast,
         #export_broadcast_connection_distance_histogramm,
-        # Waiting:         ,
-        # Waiting:         ,
         # shall this be included? export_filter_bundle_hash_impact_on_conn_times,
     ]
 
