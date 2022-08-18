@@ -9,7 +9,11 @@ def create_kth_walkers_reader(model_options, max_time = None):
     # To support offsets, we would introduce a dictionary to translate ids and ignore ids that are destroyed before the offset
     # we would then create all the nodes and set their respective initial positions
     # for all other lines, we need to translate the ids and subtract the offset (also handling the destination time!)
-    with gzip.open(model_options['filepath'],'rt') as f:
+
+    path = model_options['filepath']
+    path = path.replace('/app/sim/data/kth_walkers', 'data/kth_walkers')
+
+    with gzip.open(path,'rt') as f:
         reader = csv.reader(f, delimiter=' ')
         for r in reader:
             if max_time is not None and float(r[0]) > max_time:
@@ -193,7 +197,7 @@ def create_contact_pairs(max_time, model_options, dist_limit=20.0, step_s=1.0):
     return contact_pairs
 
 
-def simulate_broadcast(max_time, model_options, dist_limit=20.0, setup_time=20.0):
+def simulate_broadcast(max_time, model_options, dist_limit=20.0, setup_time=20.0, source_index=0):
     assert 'filepath' in model_options
     assert max_time > 0
 
@@ -203,7 +207,7 @@ def simulate_broadcast(max_time, model_options, dist_limit=20.0, setup_time=20.0
     node_informed = {}
     for k in node_lifetimes:
         node_informed[k] = None
-    node_informed[0] = 0 # source device is informed from the start
+    node_informed[source_index] = 0 # source device is informed from the start
 
     conn_start = {}    # dict with key (a,b) and the second the connection did start (or None)
 
@@ -248,7 +252,6 @@ def simulate_broadcast(max_time, model_options, dist_limit=20.0, setup_time=20.0
             if not newly_informed: # if we informed someone we need to go through all pairs again and check if new ones could get informed
                 break
         t += 1
-    print(node_informed)
     return node_informed
 
 

@@ -2106,6 +2106,64 @@ def export_unicast_plots(db, base_path):
         overall_reception_steps[r.group] += run_reception_steps
         overall_replica_steps[r.group] += run_replica_steps
 
+
+
+    # we now add our simplistic python simulations other groups
+    sims = {
+        #'ref_001_01': "data/kth_walkers/sparse_run1/ostermalm_001_1.tr.gz",
+        #'ref_003_01': "data/kth_walkers/sparse_run1/ostermalm_003_1.tr.gz",
+        #'ref_005_01': "data/kth_walkers/sparse_run1/ostermalm_005_1.tr.gz",
+        ##'ref_001_02': "/app/sim/data/kth_walkers/sparse_run2/ostermalm_001_2.tr.gz",
+        ##'ref_003_02': "/app/sim/data/kth_walkers/sparse_run2/ostermalm_003_2.tr.gz",
+        ##'ref_005_02': "/app/sim/data/kth_walkers/sparse_run2/ostermalm_005_2.tr.gz",
+    }
+
+
+    sim_length = length_s+min_s+60
+
+    for k in sims:
+        print("Handling sim {}".format(k))
+        groups.append(k)
+
+        dist_limit = 20.0
+        setup_time = 20.0
+
+        def proc():
+
+            run_reception_steps = []
+            run_replica_steps = []
+
+            # we loop through every node that has arrived in the corresponding time window and calculate the reception as we do for normal bundles
+            node_lifetimes = kth_walkers.get_node_lifetimes(sim_length+1, {'filepath': sims[k]})
+            del node_lifetimes[0]
+
+            for nid in node_lifetimes:
+                if not include_before_time and node_lifetimes[nid][0] > sim_length-length_s:
+                    continue    # This node was too late to be included, i.e. its unicast message was too late
+                if node_lifetimes[nid][0] < min_s:
+                    continue    # this node was too early for a valid sample (biased!)
+
+                # we simulate a broadcast from this node
+                nodes_informed = kth_walkers.simulate_broadcast(sim_length+1, {'filepath': sims[k]}, dist_limit=dist_limit, setup_time=setup_time, source_index=nid)
+
+                # handle the reception steps
+                receptions_steps = [np.nan]*(max_step+1)
+                end_ts = min(max_step, math.floor((sim_length-node_lifetimes[nid][0]) / step))
+                for x in range(0, end_ts+1):
+                    receptions_steps[x] = 1 if nodes_informed[0] is not None and nodes_informed[0]-node_lifetimes[nid][0] <= x*step else 0
+                # Handle overall replication steps
+                replicas_steps = [np.nan]*(max_step+1)
+                for x in range(0, end_ts+1):
+                    # remove 1 since the source node is informed directly from the beginning
+                    replicas_steps[x] = len([1 for i in nodes_informed if nodes_informed[i] is not None and nodes_informed[i] - node_lifetimes[nid][0] <= x*step]) - 1
+
+                run_reception_steps.append(receptions_steps)
+                run_replica_steps.append(replicas_steps)
+            return run_reception_steps, run_replica_steps
+        run_reception_steps, run_replica_steps = cached(slugify(('unicast_ref_sim_5_', k, dist_limit, setup_time, length_s)), proc)
+        overall_reception_steps[k] = run_reception_steps   # we just have a single entry for each sim group
+        overall_replica_steps[k] = run_replica_steps   # we just have a single entry for each sim group
+
     positions = range(0, max_step + 1)
     plt.clf()
 
@@ -2116,9 +2174,10 @@ def export_unicast_plots(db, base_path):
     replica_steps_cis = {}
 
     fig = plt.figure()
-    gs = fig.add_gridspec(2)#, hspace=0)
+    gs = fig.add_gridspec(2, hspace=0.2)
     axs = gs.subplots(sharex=True)
     fig.set_size_inches(3.6, 2.8)
+    #fig.set_size_inches(3.6, 8)
 
     #for ax in axs:
     #    ax.label_outer()
@@ -2126,7 +2185,6 @@ def export_unicast_plots(db, base_path):
     for g in groups:
         # Reception steps
         reception_steps = np.array(overall_reception_steps[g], dtype=np.float64)
-        replica_steps = np.array(overall_replica_steps[g], dtype=np.float64)
 
         if len(reception_steps) > 0:
             steps = np.swapaxes(reception_steps, 0, 1)  # we swap the axes to get all t=0 values at the first position together
@@ -2171,6 +2229,13 @@ def export_unicast_plots(db, base_path):
         reception_axs.plot(positions, reception_steps_mean['kth_walkers_unicast_001'], linestyle='-', label="Low", alpha=1.0, color='C2')
         reception_axs.fill_between(positions, reception_steps_cis['kth_walkers_unicast_001'][0], reception_steps_cis['kth_walkers_unicast_001'][1], color='C2', label='95% CI', alpha=0.5, linewidth=0.0)
 
+    if 'ref_005_01' in reception_steps_mean:
+        reception_axs.plot(positions, reception_steps_mean['ref_005_01'], linestyle=':', label='High (Ref.)', alpha=1.0, color='C0')
+    if 'ref_003_01' in reception_steps_mean:
+        reception_axs.plot(positions, reception_steps_mean['ref_003_01'], linestyle=':', label='Medium (Ref.)', alpha=1.0, color='C1')
+    if 'ref_001_01' in reception_steps_mean:
+        reception_axs.plot(positions, reception_steps_mean['ref_001_01'], linestyle=':', label='Low (Ref.)', alpha=1.0, color='C2')
+
     reception_axs.set_ylabel('Mean Delivery Rate [%]')
     reception_axs.axis([0, length_s, 0, 100.0])
     reception_axs.grid(True)
@@ -2178,18 +2243,24 @@ def export_unicast_plots(db, base_path):
     if 'kth_walkers_unicast_005' in replica_steps_mean:
         replica_axs.plot(positions, replica_steps_mean['kth_walkers_unicast_005'], linestyle='-', label="High", alpha=1.0, color='C0')
         replica_axs.fill_between(positions, replica_steps_cis['kth_walkers_unicast_005'][0], replica_steps_cis['kth_walkers_unicast_005'][1], color='C0', label='95% CI', alpha=0.5, linewidth=0.0)
+        #if 'ref_005_01' in replica_steps_mean:
+        #    replica_axs.plot(positions, replica_steps_mean['ref_005_01'], linestyle=':', label='High (Ref.)', alpha=1.0, color='C0')
 
     if 'kth_walkers_unicast_003' in replica_steps_mean:
         replica_axs.plot(positions, replica_steps_mean['kth_walkers_unicast_003'], linestyle='-', label="Medium", alpha=1.0, color='C1')
         replica_axs.fill_between(positions, replica_steps_cis['kth_walkers_unicast_003'][0], replica_steps_cis['kth_walkers_unicast_003'][1], color='C1', label='95% CI', alpha=0.5, linewidth=0.0)
+        #if 'ref_003_01' in replica_steps_mean:
+        #    replica_axs.plot(positions, replica_steps_mean['ref_003_01'], linestyle=':', label='Medium (Ref.)', alpha=1.0, color='C0')
 
     if 'kth_walkers_unicast_001' in replica_steps_mean:
         replica_axs.plot(positions, replica_steps_mean['kth_walkers_unicast_001'], linestyle='-', label="Low", alpha=1.0, color='C2')
         replica_axs.fill_between(positions, replica_steps_cis['kth_walkers_unicast_001'][0], replica_steps_cis['kth_walkers_unicast_001'][1], color='C2', label='95% CI', alpha=0.5, linewidth=0.0)
+        #if 'ref_001_01' in replica_steps_mean:
+        #    replica_axs.plot(positions, replica_steps_mean['ref_001_01'], linestyle=':', label='Low (Ref.)', alpha=1.0, color='C0')
 
-    replica_axs.set_ylabel('Mean Replica Amount', labelpad=9.5)
-    replica_axs.axis([0, length_s, 0, 12])
-    replica_axs.set_yticks(np.arange(0, 12+1, step=2))
+    replica_axs.set_ylabel('Mean Replica Amount', labelpad=8.75)
+    replica_axs.axis([0, length_s, 0, 10])
+    replica_axs.set_yticks(np.arange(0, 10+1, step=2))
     replica_axs.grid(True)
 
     def flip(items, ncol):
@@ -2197,6 +2268,7 @@ def export_unicast_plots(db, base_path):
         return itertools.chain(*[items[i::ncol] for i in range(ncol)])
 
     handles, labels = reception_axs.get_legend_handles_labels()
+    #plt.legend(flip(handles, 3), flip(labels, 3), ncol=1, handletextpad=0.2, loc='center right', bbox_to_anchor=(1.45, 1.0))
     reception_axs.legend(flip(handles, 3), flip(labels, 3), ncol=3, handletextpad=0.2, loc='upper center', bbox_to_anchor=(0.5, 1.1))
 
     plt.xlabel("Time Since Node Arrival [min]")
@@ -2756,20 +2828,20 @@ if __name__ == "__main__":
 
     db.commit() # we need to commit
     exports = [
-        export_testbed_calibration_bundle_rssi_per_distance,
-        export_testbed_calibration_setup_times,
-        export_testbed_calibration_bundle_transmission_time,
-        export_walkers_alive_nodes,
-        export_walkers_ict,
-        export_broadcast,
-        export_broadcast_histogramms,
+        #export_testbed_calibration_bundle_rssi_per_distance,
+        #export_testbed_calibration_setup_times,
+        #export_testbed_calibration_bundle_transmission_time,
+        #export_walkers_alive_nodes,
+        #export_walkers_ict,
+        #export_broadcast,
+        #export_broadcast_histogramms,
+        #export_broadcast_reception_per_node,
         export_unicast_plots,
-        export_connection_state_comparison,
-        export_individual_connection_times,
+        #export_connection_state_comparison,
+        #export_individual_connection_times,
 
         # TODO: Unused:
         #export_unicast_plots,
-        #export_broadcast_reception_per_node,
         #export_broadcast,
         #export_broadcast,
         #export_unicast_replicas,

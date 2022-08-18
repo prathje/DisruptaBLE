@@ -142,8 +142,8 @@ make all
 
 Script to run the experiments as in the paper - (TODO: put the 30min duration into env files!):
 ```
-SIM_LENGTH="1810e6" SOURCE_CONFIG_LOG_ADVERTISEMENTS="n" PROXY_CONFIG_LOG_ADVERTISEMENTS="n" GROUP_NUM_EXECUTIONS=5 GROUP_PARALLEL_RUNS=6 python3 run_group.py "" envs/experiments/kth_walkers_broadcast/ &
-SIM_LENGTH="1810e6" SOURCE_CONFIG_LOG_ADVERTISEMENTS="n" PROXY_CONFIG_LOG_ADVERTISEMENTS="n" GROUP_NUM_EXECUTIONS=5 GROUP_PARALLEL_RUNS=6 python3 run_group.py "" envs/experiments/kth_walkers_unicast/ &
+GROUP_NUM_EXECUTIONS=5 GROUP_PARALLEL_RUNS=5 python3 run_group.py "" envs/experiments/kth_walkers_broadcast/ &
+GROUP_NUM_EXECUTIONS=5 GROUP_PARALLEL_RUNS=5 python3 run_group.py "" envs/experiments/kth_walkers_unicast/ &
 wait
 echo "All done"
 ```
