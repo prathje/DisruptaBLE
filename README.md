@@ -23,9 +23,7 @@ satisfy them.
 
 ### Build and run with Zephyr RTOS
 
-We provide a preliminary Docker Image to build and run µD3TN under Zephyr RTOS.
-By default, the minimal TCP convergence layer is used and builds on top of [6LoWPan via Bluetooth Low Energy](https://docs.zephyrproject.org/2.5.0/samples/bluetooth/ipsp/README.html).
-Currently, only the nRF52 platform is tested. This also includes the BLE simulation of multiple devices using [BabbleSim](https://babblesim.github.io/).
+We provide a preliminary Docker Image to build and run µD3TN under Zephyr RTOS. Currently, only the nRF52 platform is tested. This also includes the BLE simulation of multiple devices using [BabbleSim](https://babblesim.github.io/).
 
 First, start the corresponding container and mount the current working direction (the ud3tn project root) to /app:
 
@@ -73,7 +71,7 @@ make all
 ```
 
 
-Script to run the experiments as in the paper - (TODO: put the 30min duration into env files!):
+Script to run the experiments as in the paper:
 ```
 GROUP_NUM_EXECUTIONS=5 GROUP_PARALLEL_RUNS=5 python3 run_group.py "" envs/experiments/kth_walkers_broadcast/ &
 GROUP_NUM_EXECUTIONS=5 GROUP_PARALLEL_RUNS=5 python3 run_group.py "" envs/experiments/kth_walkers_unicast/ &
@@ -81,11 +79,7 @@ wait
 echo "All done"
 ```
 
-
-
 when Ninja ends in a segmentation fault, restart the container...
-
-
 
 
 ```
@@ -112,7 +106,7 @@ west build -b nrf52840dk_nrf52840 /app/zephyr/ --pristine auto --build-dir /app/
 west build -b nrf52840dk_nrf52840 /app/zephyr/ --pristine auto --build-dir /app/build/zephyr/build_proxy -- -DOVERLAY_CONFIG=proxy.conf
 ```
 
-To flash the stuff:
+To flash it:
 ```bash
 nrfjprog -f nrf52 --program build/zephyr/build_source/zephyr/zephyr.hex --sectorerase --reset
 nrfjprog -f nrf52 --program build/zephyr/build_proxy/zephyr/zephyr.hex --sectorerase --reset
@@ -127,16 +121,13 @@ west debug --build-dir build_proxy
 ```
 
 
-
-Running Simulations:
+Running and analyzing simulations:
 ```
 pip3 install python-dotenv pydal progressbar2 matplotlib pymysql scipy seaborn
 cd /app/sim/
 python3 run.py
 python3 eval.py
 ```
-
-
 
 Getting Started with the Implementation
 ---------------------------------------
