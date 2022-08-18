@@ -1,19 +1,13 @@
+DisruptaBLE: Opportunistic BLE Networking
+========================================
 
-µD3TN - A Free and Lean DTN Implementation for Microcontrollers and POSIX
-=======================================================================
-
-See `./LICENSE.txt` and `./LICENSE-3RD-PARTY.txt` for legal information.
-
-**Note:** Currently the documentation does not really deserve its name.
-Additionally, the command line options do not follow the POSIX guidelines so far.
-A basic Manpage can be found in the doc folder (ud3tn.1).
+This repository contains the source code for the paper "DisruptaBLE: Opportunistic BLE Networking". DisruptaBLE is based on [µD3TN](https://d3tn.com/ud3tn.html) and adds [Zephyr RTOS](https://zephyrproject.org/) with BLE support as well as a BLE simulation environment using [BabbleSim](https://babblesim.github.io/).
+Disclaimer: DisruptaBLE was partially derived from µD3TN. See `./LICENSE.txt` and `./LICENSE-3RD-PARTY.txt` for legal information.
 
 Platforms
 ---------
+With Zephyr RTOS support, DisruptaBLE supports numerous boards: [List of Supported Boards in Zephyr](https://docs.zephyrproject.org/boards/index.html)
 
-µD3TN currently supports two platforms:
-1. The STM32F4 embedded platform running FreeRTOS
-2. All POSIX-compliant operating systems (plus Linux ;-))
 
 Quick Start
 -----------
@@ -27,72 +21,11 @@ This project uses git submodules to manage some code dependencies. Use the
 `git submodule init && git submodule update` at a later point in order to
 satisfy them.
 
-#### Run µD3TN with Docker
-
-We provide docker images containing µD3TN at `registry.gitlab.com/d3tn/ud3tn-docker-images/ud3tn`.
-See https://gitlab.com/d3tn/ud3tn-docker-images/container_registry for a list of
-available tags.
-
-```sh
-docker pull registry.gitlab.com/d3tn/ud3tn-docker-images/ud3tn
-docker run registry.gitlab.com/d3tn/ud3tn-docker-images/ud3tn [µD3TN command line options]
-docker run registry.gitlab.com/d3tn/ud3tn-docker-images/ud3tn --help
-```
-
-#### Build and run µD3TN on STM32F4
-
-For this platform only the STM32F4 embedded system is supported currently.
-However, porting to other Cortex-M3/M4 based SoCs should be trivial.
-
-In order to run µD3TN on bare metal (e.g. the STM32F4Discovery board)
-three steps are necessary after connecting the board via STLink-enabled USB:
-
-1. Install or unpack the following dependencies:
-   - The `gcc-arm-none-eabi` toolchain including `newlib`.
-   - The [`st-link` tools](https://github.com/stlink-org/stlink)
-   - The [Open On-Chip Debugger](http://openocd.org/).
-   - `ncat` (from the `nmap` package).
-   - A version of [FreeRTOS](https://www.freertos.org/) (µD3TN is currently tested with version 9).
-   - For debugging and testing you may want to install GDB, a recent version
-     of Python 3 (>= 3.6).
-
-2. Copy `config.mk.example` to `config.mk` and set at least the following
-   variables according to your installation:
-   - Set `TOOLCHAIN_STM32` to the prefix for your *arm-none-eabi* toolchain.
-     If installed with the distribution's package manager, this is commonly
-     `/usr/bin/arm-none-eabi-`.
-   - Set `FREERTOS_PATH` to the path to your FreeRTOS source.
-
-3. Start `openocd`. The config file `openocd.cfg` is loaded automatically.
-
-4. Type `make flash-stm32-openocd` to build the project and to flash `ud3tn.bin`
-   to the board attached via USB.
-   The unittests can be flashed via `make flash-unittest-stm32-openocd`.
-   For convenience, GDB commands are available via `make gdb-stm32` and
-   `make gdb-unittest-stm32`.
-
-#### Build and run µD3TN on POSIX-compliant Operating Systems
-
-1. Install or unpack the following dependencies:
-   - The `gcc` toolchain and `binutils` for your local system.
-   - For building with Clang, install a recent version of Clang and LLVM.
-   - For debugging and testing you may want to install GDB and a recent version
-     of Python 3 (>= 3.6).
-
-2. If the build tools are not located in `/usr/bin` for your system, you may
-   copy `config.mk.example` to `config.mk` and set the
-   `GCC_TOOLCHAIN_PREFIX_POSIX` variable to the prefix for your
-   local `gcc` toolchain (default: `/usr/bin`).
-
-3. Type `make run-posix` to build and execute µD3TN on your local machine.
-
-
-
-#### Build and run µD3TN on Zephyr RTOS
+### Build and run with Zephyr RTOS
 
 We provide a preliminary Docker Image to build and run µD3TN under Zephyr RTOS.
 By default, the minimal TCP convergence layer is used and builds on top of [6LoWPan via Bluetooth Low Energy](https://docs.zephyrproject.org/2.5.0/samples/bluetooth/ipsp/README.html).
-Currently, only the nRF52 platform is supported. This also includes the BLE simulation of multiple devices using [BabbleSim](https://babblesim.github.io/).
+Currently, only the nRF52 platform is tested. This also includes the BLE simulation of multiple devices using [BabbleSim](https://babblesim.github.io/).
 
 First, start the corresponding container and mount the current working direction (the ud3tn project root) to /app:
 
@@ -247,7 +180,6 @@ Via `config.h` at compile time:
 
 For configuring contacts at runtime, the `aap_config.py` script in `tools/aap`
 may be used.
-
 
 Testing
 -------
