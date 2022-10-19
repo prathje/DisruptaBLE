@@ -5,6 +5,12 @@ This repository contains the source code for the paper "DisruptaBLE: Opportunist
 Disclaimer: DisruptaBLE was partially derived from µD3TN. See `./LICENSE.txt` and `./LICENSE-3RD-PARTY.txt` for legal information.
 With Zephyr RTOS support, DisruptaBLE supports (in theory) numerous boards: [List of Supported Boards in Zephyr](https://docs.zephyrproject.org/boards/index.html)
 
+To cite this, please cite the publication:
+
+```
+@INPROCEEDINGS{9843509,  author={Rathje, Patrick and Landsiedel, Olaf},  booktitle={2022 IEEE 47th Conference on Local Computer Networks (LCN)},   title={DisruptaBLE: Opportunistic BLE Networking},   year={2022},  volume={},  number={},  pages={165-172},  doi={10.1109/LCN53696.2022.9843509}}
+```
+
 
 Quick Start
 -----------
