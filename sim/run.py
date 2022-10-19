@@ -200,7 +200,6 @@ if __name__ == "__main__":
 
     # Get access to the database (create if necessary!)
     db = DAL(config['SIM_DB_URI'], folder=logdir, attempts=DB_WAIT_SECS)
-
     tables.init_tables(db)
 
     rseed = int(config['SIM_RANDOM_SEED'])

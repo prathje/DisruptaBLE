@@ -15,7 +15,7 @@ def init_tables(db):
         Field('num_proxy_devices', type='integer', notnull=True),
         Field('configuration_json', type='text', notnull=True),
         redefine=True,
-        migrate=False
+        migrate=True
     )
 
     db.define_table(
@@ -26,7 +26,7 @@ def init_tables(db):
         Field('us', type='bigint', notnull=True),
         Field('data_json', type='text', notnull=True),
         redefine=True,
-        migrate=False
+        migrate=True
     )
 
 
@@ -51,7 +51,7 @@ def init_eval_tables(db):
         Field('eid', notnull=True),
         Field('mac_addr', notnull=True),
         redefine=True,
-        migrate=False
+        migrate=True
     )
 
     db.define_table(
@@ -79,7 +79,7 @@ def init_eval_tables(db):
         Field('peripheral_disconnect_reason', type='bigint'),
         Field('peripheral_idle_disconnect_us', type='bigint'),
         redefine=True,
-        migrate=False
+        migrate=True
     )
 
     db.define_table(
@@ -96,7 +96,7 @@ def init_eval_tables(db):
         Field('lifetime_ms', type='integer'),
         Field('hop_count', type='integer'),
         redefine=True,
-        migrate=False
+        migrate=True
     )
 
     db.define_table(
@@ -109,7 +109,7 @@ def init_eval_tables(db):
         Field('deleted_us', type='bigint', notnull=False),
         Field('remaining_hops', type='integer', notnull=False),
         redefine=True,
-        migrate=False
+        migrate=True
     )
 
     db.define_table(
@@ -121,7 +121,7 @@ def init_eval_tables(db):
         Field('start_us', type='bigint'),
         Field('end_us', type='bigint'),
         redefine=True,
-        migrate=False
+        migrate=True
     )
 
     db.define_table(
@@ -133,7 +133,7 @@ def init_eval_tables(db):
         Field('rssi', type='integer', notnull=True),
         Field('connectable', type='boolean', notnull=True),
         redefine=True,
-        migrate=False
+        migrate=True
     )
 
     db.define_table(
@@ -144,7 +144,7 @@ def init_eval_tables(db):
         Field('pos_x', 'double', notnull=True),
         Field('pos_y', 'double', notnull=True),
         redefine=True,
-        migrate=False
+        migrate=True
     )
 
     # TODO: Extra handling of summary vectors?
