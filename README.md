@@ -12,7 +12,7 @@ Quick Start
 For a quick start, simply run the provided docker image and mount your current directory in it.
 We provide a preliminary Docker Image to build and run DisruptaBLE under Zephyr RTOS. Currently, only the nRF52 platform is tested.
 This also includes the BLE simulation of multiple devices using [BabbleSim](https://babblesim.github.io/).
-First, start the corresponding container and mount the current working direction (the ud3tn project root) to /app:
+First, start the corresponding container and mount the current working direction (the git project root) to /app:
 
 ```
 docker run --rm -it -v ${PWD}:/app prathje/disruptable:latest@sha256:ba202790c45f44792a9aed3de31ce898b184ba34c505f3ff7af3510260afebc2 /bin/bash
